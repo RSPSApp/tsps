@@ -58,6 +58,8 @@ export interface MenuBuildContext {
     localPlayerCombatLevel: number;
     followerOpsLowPriority: boolean; // When true, all options on follower NPCs are deprioritized
     followerIndex?: number; // Active follower NPC server index; follower menus are gated to this NPC only
+    /** Varps and varbits, for an option's conditional name and sub-menu rows. */
+    vars?: OpVarReader;
 }
 
 /**
@@ -86,6 +88,15 @@ export interface MenuActionCallbacks {
     }) => void;
     onFollowPlayer: (serverId: number) => void;
     onTradePlayer: (serverId: number) => void;
+    /** Picks one of an option's cache sub-menu rows (a fairy ring's favourite code). */
+    onLocSubOption?: (params: {
+        locId: number;
+        mapX: number;
+        mapY: number;
+        opNum: number;
+        subOp: number;
+        name: string;
+    }) => void;
     closeMenu: () => void;
 }
 
@@ -182,6 +193,36 @@ function ensureMenuEntry(entry: MenuEntry | undefined): OsrsMenuEntry {
     return entry ? entry : EMPTY_MENU_ENTRY;
 }
 
+/** An option's cache sub-menu rows: a fairy ring's saved favourites, 1-based as the cache ids. */
+export function locSubMenuRows(
+    locType: LocType,
+    actionIndex: number,
+    vars?: OpVarReader,
+): Array<{ subOp: number; name: string }> {
+    return locType.entityOps?.subOpNames(actionIndex, vars) ?? [];
+}
+
+/** Menu entries for a loc option's sub-menu rows, in cache order (an empty list for none). */
+export function buildLocSubEntries(
+    locType: LocType,
+    actionIndex: number,
+    target: { id: number; name: string; mapX: number; mapY: number },
+    vars: OpVarReader | undefined,
+    onPick: (row: { subOp: number; name: string }) => void,
+): OsrsMenuEntry[] {
+    return locSubMenuRows(locType, actionIndex, vars).map(({ subOp, name }) => ({
+        option: name,
+        targetId: target.id,
+        targetType: MenuTargetType.LOC,
+        targetName: target.name,
+        targetLevel: -1,
+        mapX: target.mapX,
+        mapY: target.mapY,
+        opcode: MenuOpcode.Custom,
+        onClick: () => onPick({ subOp, name }),
+    }));
+}
+
 /**
  * Build menu entries for a LOC (location/object in world)
  */
@@ -239,6 +280,23 @@ export function buildLocMenuEntries(
         const option = locType.actions[actionIdx];
         if (!option) continue;
 
+        const subEntries = callbacks.onLocSubOption
+            ? buildLocSubEntries(
+                  locType,
+                  actionIdx,
+                  { id: locType.id, name: locType.name, mapX, mapY },
+                  ctx.vars,
+                  (row) => callbacks.onLocSubOption?.({
+                      locId: locType.id,
+                      mapX,
+                      mapY,
+                      opNum: actionIdx + 1,
+                      subOp: row.subOp,
+                      name: row.name,
+                  }),
+              )
+            : [];
+
         actions.push({
             option,
             targetId: locType.id,
@@ -248,6 +306,7 @@ export function buildLocMenuEntries(
             mapX,
             mapY,
             actionIndex: actionIdx,
+            ...(subEntries.length > 0 ? { subEntries } : {}),
         });
     }
 

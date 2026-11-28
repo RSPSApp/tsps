@@ -15,6 +15,7 @@ const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { Gamevals, GamevalKind } = require("../dist/game/cache/Gamevals");
 const { RegionManager } = require("../dist/game/collision/RegionManager");
 const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
+const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
 const { Location } = require("../dist/game/model/Location");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { TaskManager } = require("../dist/game/task/TaskManager");
@@ -153,11 +154,15 @@ test("both lairs, the landing tiles and the teleport agree with the logs", () =>
   assert.ok(!Common.inPublicLair(new Location(2900, 4385, 0)));
   assert.ok(Common.inTaskLair(new Location(2900, 4385, 0)));
   assert.ok(!Common.inTaskLair(new Location(2900, 4449, 0)));
-  const free = ([x, y]) => !RegionManager.blocked(new Location(x, y, 0), null);
+  const free = ([x, y, z]) => !RegionManager.blocked(new Location(x, y, z), null);
   assert.ok(free(Common.TELEPORT_TILE), "teleport landing blocked");
   assert.ok(free(Common.PUBLIC_SPAWN), "public spawn blocked");
   assert.ok(free(Common.TASK_SPAWN), "task spawn blocked");
   assert.ok(free(Common.OUTSIDE_TILE), "ladder tile blocked");
+  assert.deepEqual(Common.OUTSIDE_TILE, [1910, 4367, 0]);
+  const exitTile = [1912, 4367, 0];
+  assert.ok(free(exitTile), "recorded Climb-up landing blocked");
+  assert.deepEqual(Common.EXIT_TILE, exitTile);
   const entry = Teleports._test.Destinations.byKey("dagannoth-kings");
   assert.ok(entry?.tabs.includes(Teleports._test.TAB.BOSSES), "missing ::teleports entry");
   assert.deepEqual(entry.tile, [1908, 4367, 0]);
@@ -371,10 +376,68 @@ test("the ladder takes players down, gates the task lair, and peeks", () => {
   const seen = [];
   assert.equal(Entrance.peek({ player: { sendMessage: (line) => seen.push(line) }, location: atLadder, objectId: Common.LADDER_ID }), true);
   assert.deepEqual(seen, ["You peek down the ladder and see no adventurers inside."]);
-  // Exit ladders walk back to the dungeon side.
-  const out = [];
-  assert.equal(Entrance.climbOut({ player: { ...player, moveTo: (tile) => out.push(tile) }, location: { x: 2899, y: 4449, z: 0 }, objectId: Common.EXIT_LADDER_ID }), true);
-  assert.deepEqual([out[0].getX(), out[0].getY()], [1910, 4367]);
+});
+
+// RSProx 227/1856: the two Climb-up clicks land on the same tick (3814 and 3821).
+for (const [lair, y] of [["public", 4449], ["Slayer", 4385]]) {
+  test(`Climb-up from the ${lair} lair lands immediately and silently east of the ladder`, () => {
+    const moves = [];
+    const messages = [];
+    const animations = [];
+    const player = {
+      getLocation: () => new Location(2900, y, 0),
+      getPrivateArea: () => null,
+      moveTo: (tile) => moves.push([tile.getX(), tile.getY(), tile.getZ()]),
+      sendMessage: (message) => messages.push(message),
+      performAnimation: (animation) => animations.push(animation),
+    };
+    const click = objectClicks[`${Common.EXIT_LADDER_ID}:1`];
+    assert.equal(click({ player, location: { x: 2899, y, z: 0 }, objectId: Common.EXIT_LADDER_ID }), true);
+    assert.deepEqual(messages, []);
+    assert.deepEqual(animations, []);
+    assert.deepEqual(moves, [[1912, 4367, 0]]);
+  });
+}
+
+test("Climb-up in a private lair keeps the original outside tile", () => {
+  // The Echo room uses the ordinary cache map at the public lair's coordinates.
+  const privateArea = new core.PrivateArea();
+  const location = { x: 2899, y: 4449, z: 0 };
+  const ladder = MapObjects.get(Common.EXIT_LADDER_ID, new Location(location.x, location.y, location.z), privateArea);
+  assert.ok(ladder, "the cache ladder must resolve in the private lair");
+  const moves = [];
+  const player = {
+    getLocation: () => new Location(2900, 4449, 0),
+    getPrivateArea: () => privateArea,
+    moveTo: (tile) => moves.push([tile.getX(), tile.getY(), tile.getZ()]),
+  };
+  const objectId = ladder.getId();
+  assert.equal(objectClicks[`${objectId}:1`]({ player, location, objectId }), true);
+  assert.deepEqual(moves, [[1910, 4367, 0]]);
+});
+
+test("Standard and Slayer still land immediately when entering from the exit tile", () => {
+  const moves = [];
+  const messages = [];
+  const animations = [];
+  const player = {
+    getLocation: () => new Location(1912, 4367, 0),
+    moveTo: (tile) => moves.push([tile.getX(), tile.getY(), tile.getZ()]),
+    sendMessage: (message) => messages.push(message),
+    performAnimation: (animation) => animations.push(animation),
+  };
+  const event = { player, location: { x: 1911, y: 4367, z: 0 }, objectId: Common.LADDER_ID };
+  assert.equal(objectClicks[`${Common.LADDER_ID}:1`](event), true);
+  assert.deepEqual(moves, [[2900, 4449, 0]]);
+  slayerTask = { name: "dagannoths" };
+  try {
+    assert.equal(objectClicks[`${Common.LADDER_ID}:2`](event), true);
+    assert.deepEqual(moves, [[2900, 4449, 0], [2900, 4385, 0]]);
+    assert.deepEqual(messages, []);
+    assert.deepEqual(animations, []);
+  } finally {
+    slayerTask = null;
+  }
 });
 
 test("normal kings show no boss HUD (rsprox.net 1856, 3433)", () => {

@@ -129,4 +129,6 @@ module.exports = function attach(api) {
   api.onCustomEvent("loc-teleports:arrived", arrived);
   api.onCustomEvent("player:world-input", cancel);
 };
+/** A failed pick's numb fingers, shared with the hideout's jail door (HamHideout.Thieving.js). */
+module.exports.fumbled = fumbled;
 module.exports._test = { successChance, fumbled, pickLock, NUMB_MESSAGE };

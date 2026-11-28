@@ -2,7 +2,7 @@
 
 const C = require("./Context.Hunter");
 const { H, ANIM, level, requireLevel, hasTool, distance, nearby, active, available, roll, rewardItems,
-  exchange, catchExchange, catchRefusal, drop, xp, chance, begin, hide, removeObject, questComplete, questStage } = C;
+  exchange, catchExchange, catchRefusal, drop, xp, chance, begin, hide, removeObject, questComplete } = C;
 
 // The trap timer the client draws over a laid trap (cache script add_overlaytimer_loc): coord, loc,
 // shape, timer id, ticks, colour, 1. Yellow while it waits, green on a catch, red when it failed
@@ -64,21 +64,19 @@ function materials(def, player) {
   return [[def.item, 1]];
 }
 
-// The Wiki asks for partial completion of Eagles' Peak: Nickolaus teaches box traps at the camp.
-// EaglesPeak.Quest.js's stage table: 6 (STAGE_RESCUED) puts him at the camp for the ferret lesson,
-// 8 completes the quest. The quest runtime keeps the stage in this attribute, so the stage alone
-// decides (questComplete's ">= 2" fallback would let stages 2-5 through).
+// The Wiki asks for partial completion of Eagles' Peak: Nickolaus teaches box traps at the camp. The quest
+// answers "eagles-peak:box-traps" (unlocked once his lesson is over), so no stage number lives here.
 // ponytail: no captured refusal; the message is ours.
-const EAGLES_PEAK_BOX_TRAP_STAGE = 6;
-
 function boxTrapsUnlocked(player) {
-  return questStage(player, "eagles_peak") >= EAGLES_PEAK_BOX_TRAP_STAGE;
+  const request = { player, unlocked: false };
+  H.api.emitCustomEvent("eagles-peak:box-traps", request);
+  return request.unlocked === true;
 }
 
 function groundTileOccupied(player, kind, location) {
   const area = player.getPrivateArea();
   if (H.core.RegionManager.blocked(location, area)) return true;
-  if (kind === "box") {
+  if (kind === "box" || kind === "bird") {
     return H.core.ObjectManager.objectsAt(location).some(object => object.getPrivateArea() === area
       && !object.getOwner() && (object.getType() === 10 || object.getType() === 22));
   }

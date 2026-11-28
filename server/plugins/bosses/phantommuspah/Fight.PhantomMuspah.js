@@ -29,6 +29,13 @@ const ACTION_GAP_TICKS = 2;
 const SWITCH_GAP_TICKS = 5;
 /** A second special waits this long after the first (captured: 6 ticks between them). */
 const SPECIAL_GAP_TICKS = 6;
+/**
+ * After Lightning clouds lands, the next special or the shockwave waits this long (captured:
+ * 5-9 ticks, mostly 6, in 112 landings).
+ */
+const LANDING_GAP_TICKS = 6;
+/** The HUD starts fading this long after the kill count (captured: script 2889 at +4, cleared at +8). */
+const HUD_HIDE_DELAY_TICKS = 4;
 /** The overlay lifts this long after the Homing spikes' darkness (captured: 5 ticks). */
 const HOMING_DARK_TICKS = 5;
 
@@ -49,6 +56,8 @@ class Fight {
     this.switchDamage = 0;
     this.switchHits = 0;
     this.switchReadyTick = 0;
+    this.switches = 0;
+    this.landedReadyTick = 0;
     this.shockwaveStarted = false;
     this.shieldDone = false;
     this.shield = 0;
@@ -101,7 +110,10 @@ class Fight {
     muspah.setPositionToFace(this.session.tile([...boss.face, 0]));
     Common.animate(muspah, boss.spawnAnim);
     Common.sound(this.player, boss.spawnSound);
-    Common.overlay(this.player, overlay.spawn);
+    // The overlay opens once per trip in; later Muspahs only run its fade (captured).
+    if (this.session.overlayOpen) Common.overlayFade(this.player, overlay.spawn);
+    else Common.overlay(this.player, overlay.spawn);
+    this.session.overlayOpen = true;
     this.spikes.spawnWave();
     this.at(1, () => this.showHitpoints());
     this.at(boss.attackableTicks, () => {
@@ -137,16 +149,19 @@ class Fight {
   turn() {
     const { shockwave, specials } = Common.data;
     const hp = this.muspah.getHitpoints();
-    const free = this.tick - this.lastActionTick >= ACTION_GAP_TICKS;
+    const free = this.tick - this.lastActionTick >= ACTION_GAP_TICKS && this.tick >= this.landedReadyTick;
     const preShield = this.form === "ranged" || this.form === "melee";
-    if (preShield && free && !this.shockwaveStarted && (hp < shockwave.hitpoints || this.pendingSkip)) {
-      this.lastActionTick = this.tick;
-      Shield.shockwave(this);
-      return;
-    }
-    if (preShield && free && this.tick >= this.specialReadyTick && this.specialsDone < specials.thresholds.length && hp <= specials.thresholds[this.specialsDone]) {
+    // Both specials come before the shockwave, even on 0 hitpoints (captured: 160 of 160 kills;
+    // Wiki: "The unused special will always occur at 50% health").
+    const specialDue = this.specialsDone < specials.thresholds.length && hp <= specials.thresholds[this.specialsDone];
+    if (preShield && free && specialDue && this.tick >= this.specialReadyTick) {
       this.lastActionTick = this.tick;
       this.special();
+      return;
+    }
+    if (preShield && free && !specialDue && !this.shockwaveStarted && (hp < shockwave.hitpoints || this.pendingSkip)) {
+      this.lastActionTick = this.tick;
+      Shield.shockwave(this);
       return;
     }
     if (preShield && free && this.switchDue()) {
@@ -172,7 +187,9 @@ class Fight {
     this.specialReadyTick = this.tick + SPECIAL_GAP_TICKS;
     this.resetSwitch();
     if (which === "clouds") {
-      Clouds.teleport(this);
+      Clouds.teleport(this, () => {
+        this.landedReadyTick = this.tick + LANDING_GAP_TICKS;
+      });
       return;
     }
     const { homing, specials, overlay } = Common.data;
@@ -189,7 +206,9 @@ class Fight {
     const { switch: rules } = Common.data;
     if (this.tick < this.switchReadyTick) return false;
     const needed = this.form === "ranged" ? rules.rangedDamage : rules.meleeDamage;
-    return this.switchHits >= rules.minHits && this.switchDamage >= needed;
+    // Wiki: "After switching forms for the first time, it must also take damage at least four times".
+    const hits = this.switches > 0 ? rules.minHits : 0;
+    return this.switchHits >= hits && this.switchDamage >= needed;
   }
 
   resetSwitch() {
@@ -201,10 +220,13 @@ class Fight {
   switchForm() {
     const { switch: rules } = Common.data;
     this.resetSwitch();
+    this.switches++;
     Common.animate(this.muspah, rules.anim);
     this.hold(true);
     this.switchReadyTick = this.tick + SWITCH_GAP_TICKS;
     this.at(1, () => {
+      // A special waits two ticks from the new form, three from seq 9936 (captured: mostly 3).
+      this.lastActionTick = this.tick;
       this.setForm(OTHER_FORM[this.form]);
       this.resetSwitch();
       Common.animate(this.muspah, rules.appearAnim);
@@ -352,7 +374,14 @@ class Fight {
   /** The kill has been counted: spikes sink, the HUD goes, and the next one is on its way. */
   finished() {
     this.spikes.clear();
-    this.hideHud();
+    // Captured: the HUD fades 4 ticks after the kill count and clears 4 ticks after that.
+    if (this.hud) {
+      const { player } = this;
+      this.hud = null;
+      Common.later(HUD_HIDE_DELAY_TICKS, () => {
+        if (player.isRegistered() && !this.session.fight?.hud) Common.api.emitCustomEvent("boss-hud:hide", { player });
+      });
+    }
     Common.overlayFade(this.player, Common.data.overlay.clear);
     this.stopped = true;
     if (this.session.fight === this) this.session.fight = null;

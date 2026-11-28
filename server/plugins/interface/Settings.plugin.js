@@ -177,7 +177,12 @@ const SETTINGS_VALUES_ATTRIBUTE = "settings:values";
 // (127) with no click at all. The Minimenu rows (4503) flip there too, and the spacing slider
 // changes its varbit with no click at all. The rows saved from them are the settings.json rows on
 // these varps; other bits (the collection-log notifications on 2856) belong to their own plugins.
-const TRANSMITTED_SETTING_VARPS = new Set([1224, 1734, 2856, 4503]);
+const TRANSMITTED_SETTING_VARPS = new Set([1224, 1734, 2856, 4503, 3075]);
+// Of varp 3075 only World Switcher confirmation (row 347, varbit 4100) is taken from a
+// transmit. The client's World Switcher asks before a hop with "Yes, and don't ask again", which
+// turns it off in the client and sends the varp (client/game/worldswitcher/WorldSwitcher.ts). The
+// varp's other rows change by their clicks alone, as before.
+const TRANSMITTED_SETTING_VARBITS_ONLY = new Map([[3075, new Set([4100])]]);
 // Cache 241 settings structs3107..3755/4286/2735 and reader script6716.
 /** questlist_hide_in_progress and questlist_hide_completed: toggles before rev 242, dropdowns since. */
 const QUEST_LIST_SHOW_VARBITS = [13775, 13777];
@@ -326,10 +331,10 @@ const DIALOGUE_DISPLAY_SETTING = 303;
 const DIALOGUE_DISPLAY_STRUCT = 4452;
 const SETTINGS_CATALOG_SOURCE = "settings:catalog";
 
-/** Native row303 exists, but rev242's Chat enum omits it. Use the same rows for scripts and clicks. */
-function settingsEnumEntries(enumId) {
+/** Only the browser receives the extra Chat row; native clients keep their actual cache order. */
+function settingsEnumEntries(enumId, native = false) {
   const entries = [...CacheDefinitions.getEnumValues(enumId)].sort(([a], [b]) => a - b);
-  if (enumId !== CHAT_SETTINGS_ENUM) return entries;
+  if (enumId !== CHAT_SETTINGS_ENUM || native) return entries;
   const definition = CacheDefinitions.getStructParams(DIALOGUE_DISPLAY_STRUCT);
   if (definition.get(PARAM_SETTING_ID) !== DIALOGUE_DISPLAY_SETTING
       || definition.get(PARAM_SETTING_TYPE) !== SETTING_TYPE_TOGGLE) {
@@ -344,6 +349,7 @@ function settingsEnumEntries(enumId) {
 }
 
 function sendSettingsCatalog({ player }) {
+  if (player.getAttribute(NATIVE_CLIENT_ATTRIBUTE) === true) return;
   player.getPacketSender().sendContentData(SETTINGS_CATALOG_SOURCE, [{ key: "enumOverrides", rows: [{
     enumId: CHAT_SETTINGS_ENUM, valueType: "J", defaultValue: -1, entries: settingsEnumEntries(CHAT_SETTINGS_ENUM),
   }] }]);
@@ -380,7 +386,7 @@ const ROW_UNLOCKS = new Map([
  * click, a dropdown option, a value the client transmits) goes through this first.
  */
 function refuseLockedSetting(player, settingId) {
-  const lockedText = catalog().settings.get(settingId)?.lockedText;
+  const lockedText = catalog(player).settings.get(settingId)?.lockedText;
   const unlocked = ROW_UNLOCKS.get(settingId);
   if (lockedText === undefined || !unlocked || unlocked(player)) return false;
   player.sendMessage(lockedText);
@@ -397,15 +403,16 @@ const KEYBIND_VARBIT_BY_SETTING = new Map([
   [23, 4684], [24, 4683], [25, 4678], [26, 6517], [27, 4688], [28, 4679], [29, 4689],
 ]);
 
-let settingsCatalog = null;
+const settingsCatalogs = new Map();
 let pluginApi = null;
 
 /**
  * { byCategory: Map<category id, setting ids in row order>, all: every setting id in turn,
  *   settings: Map<setting id, { category, type, optionCount }> }.
  */
-function catalog() {
-  if (settingsCatalog) return settingsCatalog;
+function catalog(player) {
+  const native = player.getAttribute(NATIVE_CLIENT_ATTRIBUTE) === true;
+  if (settingsCatalogs.has(native)) return settingsCatalogs.get(native);
   const byCategory = new Map();
   const all = [];
   const settings = new Map();
@@ -414,7 +421,7 @@ function catalog() {
     const category = CacheDefinitions.getStructParams(Number(structId));
     const categoryId = Number(category.get(PARAM_CATEGORY_ID));
     const rows = [];
-    for (const [, settingStruct] of settingsEnumEntries(Number(category.get(PARAM_CATEGORY_SETTINGS)))) {
+    for (const [, settingStruct] of settingsEnumEntries(Number(category.get(PARAM_CATEGORY_SETTINGS)), native)) {
       const params = CacheDefinitions.getStructParams(Number(settingStruct));
       const settingId = params.get(PARAM_SETTING_ID);
       const options = params.get(PARAM_SETTING_OPTIONS);
@@ -431,14 +438,15 @@ function catalog() {
     byCategory.set(categoryId, rows);
     all.push(...rows);
   }
-  settingsCatalog = { byCategory, all, settings };
-  return settingsCatalog;
+  const result = { byCategory, all, settings };
+  settingsCatalogs.set(native, result);
+  return result;
 }
 
 /** The setting a clicked row is, or -1: a row is read in the category shown, or search. */
 function settingForRow(player, slot) {
   const view = player.getAttribute("settings-view");
-  const rows = view === SEARCH_VIEW ? catalog().all : catalog().byCategory.get(Number.isInteger(view) ? view : 0);
+  const rows = view === SEARCH_VIEW ? catalog(player).all : catalog(player).byCategory.get(Number.isInteger(view) ? view : 0);
   const settingId = Number(rows?.[slot]);
   return Number.isInteger(settingId) ? settingId : -1;
 }
@@ -526,7 +534,7 @@ function getSettingVar(player, row) {
 /** A toggle row clicked: flip its var (and run its script). False for anything else. */
 function toggleSetting(player, settingId) {
   const row = SETTINGS[settingId];
-  if (!row || catalog().settings.get(settingId)?.type !== SETTING_TYPE_TOGGLE) return false;
+  if (!row || catalog(player).settings.get(settingId)?.type !== SETTING_TYPE_TOGGLE) return false;
   if (consumeTransmittedSettingVarp(player, row)) return true;
   setSettingVar(player, varKey(row), getSettingVar(player, row) ? 0 : 1);
   if (row.script !== undefined) player.getPacketSender().sendClientScript(row.script);
@@ -545,7 +553,7 @@ function setSettingValue({ player, settingId, value }) {
 /** A dropdown option chosen: set the option's vars, or the one var to the option's index. */
 function chooseSettingOption(player, settingId, option) {
   const row = SETTINGS[settingId];
-  const setting = catalog().settings.get(settingId);
+  const setting = catalog(player).settings.get(settingId);
   if (setting?.type !== SETTING_TYPE_DROPDOWN || !Number.isInteger(option) || option < 0 || option >= setting.optionCount) return false;
   if (refuseLockedSetting(player, settingId)) return true;
   const request = { player, settingId, option, handled: false };
@@ -603,7 +611,7 @@ function clickSetting({ player, slot, argsData, scriptTrigger }) {
     return true;
   }
   if (player.getAttribute("settings-view") === SEARCH_VIEW) {
-    setSettingVar(player, `varbit:${SETTINGS_CATEGORY_VARBIT}`, catalog().settings.get(settingId).category);
+    setSettingVar(player, `varbit:${SETTINGS_CATEGORY_VARBIT}`, catalog(player).settings.get(settingId).category);
   }
   const request = { player, settingId, handled: false };
   pluginApi.emitCustomEvent("settings:setting-clicked", request);
@@ -845,7 +853,7 @@ function openAllSettings(player, searching = false) {
   // The settings/controls are dynamic children created client-side; without
   // these transmit flags their ops never reach us. Op1 over the used slot range.
   sender.sendInterfaceFlagsRange(ALL_SETTINGS_CATEGORIES_CLICKZONE, 0, 15, TRANSMIT_OP1);
-  sender.sendInterfaceFlagsRange(ALL_SETTINGS_SETTINGS_CLICKZONE, 0, catalog().all.length - 1, TRANSMIT_OP1 | TRANSMIT_TRIGGER);
+  sender.sendInterfaceFlagsRange(ALL_SETTINGS_SETTINGS_CLICKZONE, 0, catalog(player).all.length - 1, TRANSMIT_OP1 | TRANSMIT_TRIGGER);
   sender.sendInterfaceFlagsRange(ALL_SETTINGS_DROPDOWN_BUTTONS, 0, ALL_SETTINGS_LAST_SLOT, TRANSMIT_OP1);
   // It opens on the category shown last; live sends nothing for it.
   player.setAttribute("settings-view", sender.getVarbit(SETTINGS_CATEGORY_VARBIT));
@@ -1028,6 +1036,22 @@ function releaseVolumeSlider({ player, buttonId, argsData, scriptTrigger }) {
   return true;
 }
 
+const settingRowMasks = new Map();
+
+/** The bits of a varp that settings.json rows keep as varbits. */
+function settingRowBits(varp) {
+  if (!settingRowMasks.has(varp)) {
+    let mask = 0;
+    for (const row of Object.values(SETTINGS)) {
+      if (row.varbit === undefined) continue;
+      const { baseVar, startBit, endBit } = CacheDefinitions.getVarbit(row.varbit);
+      if (baseVar === varp) mask |= (endBit - startBit >= 31 ? -1 : ((1 << (endBit - startBit + 1)) - 1)) << startBit;
+    }
+    settingRowMasks.set(varp, mask);
+  }
+  return settingRowMasks.get(varp);
+}
+
 function toggleMute({ player, buttonId }) {
   const mute = VOLUME_MUTE_BUTTONS.get(buttonId);
   const settings = player.getAudioSettings?.();
@@ -1036,7 +1060,12 @@ function toggleMute({ player, buttonId }) {
   const packed = settings[mute.savedVarp] ?? 0;
   const volume = settings[mute.volumeVarp] ?? 0;
   if (volume > 0) {
-    player.setAudioSetting(mute.savedVarp, (packed & ~mask) | (volume << mute.shift));
+    // The varp also holds All Settings rows (3109 bit 31: "Make-X for darts and bolts"), which the
+    // server sets as varbits without touching the audio copy: their bits come from the varp as sent,
+    // the levels from the audio copy (only this button writes them; no client transmits 3109).
+    const rows = settingRowBits(mute.savedVarp);
+    const current = (packed & ~rows) | (player.getPacketSender().getVarp(mute.savedVarp) & rows);
+    player.setAudioSetting(mute.savedVarp, (current & ~mask) | (volume << mute.shift));
     player.getPacketSender().sendConfig(mute.savedVarp, player.getAudioSettings()[mute.savedVarp]);
     player.applyAudioSettingFromClient(mute.volumeVarp, 0);
   } else {
@@ -1179,6 +1208,7 @@ function transmittedSettingRows(varpId) {
     for (const [settingId, row] of Object.entries(SETTINGS)) {
       if (row.varp !== undefined || row.varbit === undefined || row.options) continue;
       const { baseVar, startBit, endBit } = CacheDefinitions.getVarbit(row.varbit);
+      if (TRANSMITTED_SETTING_VARBITS_ONLY.get(baseVar)?.has(row.varbit) === false) continue;
       transmittedRows.get(baseVar)?.push({ settingId: Number(settingId), row, key: varKey(row), startBit, mask: 2 ** (endBit - startBit + 1) - 1 });
     }
   }
@@ -1198,7 +1228,7 @@ function saveTransmittedSettings(transmission) {
     const next = (value >>> startBit) & mask;
     if (next === (saved[key] ?? row.default ?? 0)) continue;
     // Only a toggle's click follows its transmission (a slider or dropdown change has none to stand for).
-    if (catalog().settings.get(settingId)?.type === SETTING_TYPE_TOGGLE) changed = true;
+    if (catalog(player).settings.get(settingId)?.type === SETTING_TYPE_TOGGLE) changed = true;
     if (!refuseLockedSetting(player, settingId)) setSettingVar(player, key, next);
   }
   if (varpId === ESC_CLOSES_VARP) {
@@ -1228,6 +1258,7 @@ function consumeTransmittedSettingVarp(player, row) {
   if (row.varp !== undefined || row.varbit === undefined) return false;
   const { baseVar } = CacheDefinitions.getVarbit(row.varbit);
   if (!TRANSMITTED_SETTING_VARPS.has(baseVar)) return false;
+  if (TRANSMITTED_SETTING_VARBITS_ONLY.get(baseVar)?.has(row.varbit) === false) return false;
   return SettingVarpTransmit.take(player, baseVar, settingVarpTick()) !== undefined;
 }
 

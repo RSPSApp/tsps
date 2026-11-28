@@ -4,7 +4,8 @@ import { CacheIndex } from "../../rs/cache/CacheIndex";
 import { CacheSystem } from "../../rs/cache/CacheSystem";
 import { BitmapFont } from "../../rs/font/BitmapFont";
 import { ClientState } from "../../game/ClientState";
-import { getCanvasCssSize, isLowEndDevice, isTouchDevice } from "../../common/utils/DeviceUtil";
+import { getCanvasCssSize, isTouchDevice } from "../../common/utils/DeviceUtil";
+import { getPerformancePolicy } from "../../game/performance/PerformancePolicy";
 import { mobileHudScale } from "../../game/widgets/MobileHudLayout";
 import { getUiScale } from "../UiScale";
 import { FONT_BOLD_12, FONT_VERDANA_13 } from "../fonts";
@@ -595,12 +596,13 @@ export class WidgetsOverlay implements Overlay {
     private lastDrawMouse = -1;
 
     private getOverlayRenderSize(): { width: number; height: number } {
-        // Low-end: clientWidth/getBoundingClientRect force layout every frame; the host
-        // size only changes on resize, so re-read at most twice a second.
-        if (isLowEndDevice) {
+        // Low/Medium can cache the measured size: clientWidth/getBoundingClientRect force
+        // layout every frame, and the host size only changes on resize.
+        const cacheMs = getPerformancePolicy().hudSizeCacheMs;
+        if (cacheMs > 0) {
             const now = performance.now();
             const c = this.sizeCache;
-            if (c && c.w === this.app.width && c.h === this.app.height && now - c.at < 500) return c.size;
+            if (c && c.w === this.app.width && c.h === this.app.height && now - c.at < cacheMs) return c.size;
             const size = this.computeOverlayRenderSize();
             this.sizeCache = { w: this.app.width, h: this.app.height, at: now, size };
             return size;
@@ -849,14 +851,15 @@ export class WidgetsOverlay implements Overlay {
             return;
         }
 
-        // Low-end: cap HUD redraws at ~25/s, while frame-synchronized input still
-        // reaches the persistent targets on every frame.
-        if (isLowEndDevice) {
+        // Low/Medium can cap HUD redraws, while frame-synchronized input still reaches the
+        // persistent targets on every frame.
+        const hudMaxHz = getPerformancePolicy().hudMaxHz;
+        if (hudMaxHz > 0) {
             const now = performance.now();
             const im: any = this.ctx.getGameContext?.()?.osrsClient?.inputManager;
             const mouse = im ? ((im.mouseX | 0) << 16) | (im.mouseY | 0) : 0;
             const urgent = (this.app.gl.canvas as any)?.__ui?.menu?.open || mouse !== this.lastDrawMouse;
-            if (!urgent && this.hasPresentedFrame && now - this.lastDrawAt < 40) {
+            if (!urgent && this.hasPresentedFrame && now - this.lastDrawAt < 1000 / hudMaxHz) {
                 processWidgetUiInput(this.glRenderer, im);
                 return;
             }

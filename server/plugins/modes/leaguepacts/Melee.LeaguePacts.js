@@ -65,10 +65,13 @@
  * - 23 talent_shield_reflect: with a shield, 0.1% per Defence level (current, with
  *   talent_defence_boost's visible boost) that an NPC's hit is
  *   reflected whole: the player takes 0 and the attacker the damage (`onPlayerHitModify`, after
- *   protection prayers). Ours: not against players, as Thorns.
+ *   protection prayers), shown as live does: hitsplat 18 (19 for others) and `leagues_6_fire_shield`
+ *   on the player, and the reflected hit, like Thorns, as the player's max hit (43). Ours: not
+ *   against players, as Thorns.
  * - 75 talent_shield_block_heal: an attack dealing 0 with Dinh's bulwark (a two-handed shield) or
  *   an off-hand (any shield-slot item, shields included: the Wiki's off-hand page is the shield
- *   slot table) heals 2 (`league:pact-heal`) and restores 2 Prayer. A shield is recognised by name
+ *   slot table) heals 2 (`league:pact-heal`), shown with `leagues_6_health_regen` (and a heal splat when
+ *   it healed: at full or capped hitpoints, the ring alone), and restores 2 Prayer; a reflected hit's 0 doesn't count (238/04190). A shield is recognised by name
  *   for Thorns/reflect, and Dinh's by its bulwark weapon interface, so the "Crate of shields" prop
  *   is not one.
  */
@@ -119,6 +122,16 @@ const REFLECT_CHANCE_PER_LEVEL = 0.001;
 const THORNS_SECOND_FRACTION = 0.5;
 const BLOCK_HEAL = 2;
 const BLOCK_PRAYER = 2;
+/**
+ * What live shows (rsprox 238/04190, a player with Thorns, its double hit, shield reflect and the
+ * block heal): a reflected hit is hitsplat 18 on the player (its pair 19 for everyone else) with
+ * the `leagues_6_fire_shield` spotanim, 57 of 57; a block heal is a heal splat (6) of what it
+ * healed with `leagues_6_health_regen`, as hitsplat 6 has no pair for others.
+ */
+const REFLECT_SPLAT = Object.freeze({ mine: 18, others: 19 });
+const HEAL_SPLAT = Object.freeze({ mine: 6, others: 6 });
+const REFLECT_SPOTANIM = "leagues_6_fire_shield";
+const HEAL_SPOTANIM = "leagues_6_health_regen";
 /** Heavy melee weapons that are no Blindbag weapon (Wiki, 6 May 2026). */
 const NOT_BLINDBAG_WEAPONS = new Set(["Dramen staff"]);
 const RECOIL_RING_NAME = /recoil|suffering/i;
@@ -135,6 +148,8 @@ const chains = new WeakMap();
 const specials = new WeakSet();
 /** Thorns hits (their recoil scaling is already in them). */
 const thornsHits = new WeakSet();
+/** NPC hits the shield reflected (their 0 is no block for the block heal). */
+const reflectedHits = new WeakSet();
 /** The cycle of each player's last attack that rolled the once-per-attack effects. */
 const lastAttack = new WeakMap();
 /** The derived hit being built, read by the roll hooks: { player, kind, uniques }. */
@@ -187,8 +202,18 @@ const isMelee = (combatType) => combatType === core.CombatType.MELEE;
 const isPlayerTarget = (target) => target?.isPlayer?.() === true;
 const chance = (percent) => percent > 0 && Math.random() < percent / 100;
 
+/** A pact's heal (`league:pact-heal`); what it healed. */
 function heal(player, amount) {
-  if (amount > 0) api.emitCustomEvent(PACT_HEAL_EVENT, { player, amount });
+  if (!(amount > 0)) return 0;
+  const request = { player, amount, healed: 0 };
+  api.emitCustomEvent(PACT_HEAL_EVENT, request);
+  return Number(request.healed) || 0;
+}
+
+/** A spotanim on the player, by gameval name (none if the cache lacks it). */
+function graphic(player, name) {
+  const id = core.CacheDefinitions.getSpotanimId(name);
+  if (Number.isInteger(id)) player.performGraphic(new core.Graphic(id));
 }
 
 /** 26: an N% chance to heal the tiles between the player and the target. */
@@ -424,7 +449,9 @@ function thornsExperience(player, attacker, damage) {
  * recoil alone drops nothing (Wiki: Ring of recoil). So only Thorns' caller asks for the credit.
  */
 function reflect(player, attacker, damage, credits = false) {
-  const hit = new core.HitDamage(damage, core.HitMask.RED).markReflected();
+  // Fixed damage is its own maximum: live shows Thorns and the reflected hit as the reflecting
+  // player's max hit (hitsplat 43: 1140 and 4190, every one), within their max hit settings.
+  const hit = new core.HitDamage(damage, core.HitMask.RED).markReflected().setRolledMaximum(damage);
   if (credits) hit.markCreditsSource();
   hit.setSource(player);
   attacker.getCombat().getHitQueue().addPendingDamage([hit]);
@@ -459,8 +486,13 @@ function thorns(player, attacker, hit) {
 /** 75: an attack that dealt 0 with a two-handed shield or an off-hand: heal 2, restore 2 Prayer. */
 function blockHeal(player, hit) {
   const points = value(player, "shieldBlockHeal");
-  if (!points || hit.getTotalDamage() > 0 || !hasTwoHandedShieldOrOffhand(player)) return;
-  heal(player, BLOCK_HEAL * points);
+  // A reflected hit's 0 is no block: on live it never heals (238/04190: 29 of 29 reflects alone).
+  if (!points || hit.getTotalDamage() > 0 || reflectedHits.has(hit) || !hasTwoHandedShieldOrOffhand(player)) return;
+  const healed = heal(player, BLOCK_HEAL * points);
+  // The splat only when something healed; the ring every time, at full or capped hitpoints too
+  // (237/04092: the ring with no heal splat on a full bar; review of #6909).
+  if (healed > 0) player.showHitsplat(healed, HEAL_SPLAT);
+  graphic(player, HEAL_SPOTANIM);
   const skills = player.getSkillManager();
   const { PRAYER } = core.Skill;
   const current = skills.getCurrentLevel(PRAYER);
@@ -510,8 +542,11 @@ function hitModify({ player, hit }) {
   for (const each of hit.getHits()) {
     each.setDamage(0);
     each.setHitmask(core.HitMask.BLUE);
+    each.setSplatTypes(REFLECT_SPLAT.mine, REFLECT_SPLAT.others);
   }
   hit.updateTotalDamage();
+  reflectedHits.add(hit);
+  graphic(player, REFLECT_SPOTANIM);
   if (core.CombatFactory.canReceiveRecoil(attacker)) reflect(player, attacker, damage);
 }
 

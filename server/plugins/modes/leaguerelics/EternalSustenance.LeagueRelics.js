@@ -3,7 +3,7 @@
  * Pacts' tier 6 relic: food is no longer used up when eaten. Food asks `onCanEat` before a bite
  * and says `food:eaten` after it; the inventory as it stood at the ask tells which slot the bite
  * came from, and that slot gets the food back whole (a cake's next slice, or a pie's dish, is
- * undone with it).
+ * undone with it, as is a cocktail glass left in another, earlier free slot).
  */
 const Common = require("./Common.LeagueRelics");
 
@@ -36,6 +36,11 @@ function eaten({ player, itemId, meta }) {
   const inventory = player.getInventory();
   // The food comes back as it was: a preset copy (PvP presets) keeps its untradeable/unbankable/preset meta.
   inventory.setItem(slot, new core.Item(itemId, 1, meta ? JSON.parse(JSON.stringify(meta)) : undefined));
+  // A leftover that went to another slot (a cocktail's glass takes the first free slot, docs/food.md)
+  // is undone too: every slot the bite filled is empty again.
+  now.forEach((id, index) => {
+    if (index !== slot && snapshot[index] < 0 && id >= 0) inventory.setItem(index, new core.Item(-1, 0));
+  });
   inventory.refreshItems();
 }
 

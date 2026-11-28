@@ -3,7 +3,8 @@
  * (237/01098, 1107): the player asks "Do I have any League items to collect?" (chatquiz1); on
  * Continue the item box "You receive some items from the Tutor." and the items into the inventory.
  * The Tutor offers missing starter supplies and items from chosen relics (including Reloaded).
- * Carried, equipped and banked items count as owned. The Talk-to transcript uses the same handover.
+ * Carried, equipped and banked items count as owned, in any form: a closed Knapsack is the Knapsack
+ * (storage:owned), so it isn't owed again. The Talk-to transcript uses the same handover.
  */
 const Common = require("./Common.LeagueRelics");
 const Unlock = require("./Unlock.LeagueRelics");
@@ -16,9 +17,12 @@ function heldRelics(player, type) {
   return held.filter(Boolean);
 }
 
-/** Carried, worn or banked; a bank placeholder (amount 0) isn't owning it. */
+/** Carried, worn or banked, or another form of the same container; a bank placeholder (amount 0) isn't owning it. */
 function owns(player, itemId) {
-  return Common.core.Bank.owns(player, itemId);
+  if (Common.core.Bank.owns(player, itemId)) return true;
+  const query = { player, itemId, owned: false };
+  Common.api.emitCustomEvent("storage:owned", query);
+  return query.owned;
 }
 
 /** Starter supplies and relic items the character owns none of, each once. */

@@ -160,11 +160,13 @@ function planTravel({ from, to, getFlag, transportsAt, doorAt = () => null, usab
       const nx = x + move.dx;
       const ny = y + move.dy;
       const flag = getFlag(nx, ny, z);
-      if (flag & BLOCKED) continue;
-      if (flag & move.wall) {
+      if (flag & FLOOR_BLOCKED) continue;
+      // A closed door blocking its whole tile (a diagonal door, a gate loc) is opened like one in a wall.
+      const onTile = (flag & LOC) !== 0;
+      if (onTile || flag & move.wall) {
         // Through a wall only by a closed door with no transport row of its own.
         if (transportsAt(x, y, z).some(({ to: [tx, ty, tz] }) => tx === nx && ty === ny && tz === z)) continue;
-        const found = doorAt(nx, ny, z) ?? doorAt(x, y, z);
+        const found = onTile ? doorAt(nx, ny, z) : doorAt(nx, ny, z) ?? doorAt(x, y, z);
         const door = found && { ...found, from: [x, y, z], to: [nx, ny, z] };
         if (door && usable(door)) relax(current, key(nx, ny, z), DOOR_COST, door);
         continue;

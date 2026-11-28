@@ -245,27 +245,54 @@ function equippedDestination(piece, event) {
   return name ? null : piece.destinations[event.clickType - FIRST_WORN_OPTION_CLICK] ?? null;
 }
 
-/**
- * A Rub submenu entry that is an action rather than a destination (the slayer ring's Check,
- * Teleport, Master, Partner and Log). Master, Partner and Log aren't built yet.
- */
-function subOp(player, item, entry, action) {
-  if (action === "teleport") {
-    rub(player, item);
-  } else if (action === "check") {
-    player.sendMessage(checkMessage(entry.piece, entry.charges));
-    // The slayer ring's Check also shows the task (Slayer.plugin.js).
-    if (entry.piece.key === "slayer") pluginApi.emitCustomEvent("slayer:check", { player, handled: false });
-  } else {
-    player.sendMessage("Nothing interesting happens.");
-  }
+/** Whether the click that reached here was the piece's Rub option, which rubs before a teleport. */
+function rubbedOption(event, equipped) {
+  const name = event.option ?? (equipped ? wornOptionName(event.itemId, event.clickType) : null);
+  return normalise(name) === "rub";
 }
 
-/** How many charges a piece has now (guessed wording). */
-function checkMessage(piece, charges) {
-  const unit = piece.unit ?? "charge";
-  if (charges === Infinity) return `Your ${piece.noun} has unlimited ${unit}s.`;
-  return `Your ${piece.noun} has ${charges} ${unit}${charges === 1 ? "" : "s"} left.`;
+/**
+ * A submenu row, named by the option it was clicked under: the core resolves it from the cache
+ * (PluginManager.itemActionSubOption, on the event as `subOption`), the inventory's own rows
+ * from `subops` and a worn item's from its params. A row belongs to its option, so the slayer
+ * ring's Teleport rows are destinations while its Rub rows are actions (Contact Master,
+ * Partner, Open Log) — and a dueling ring's Rub rows are destinations. Reading the row's own
+ * label keeps those apart: indexing one flat list with `subOpId` alone sent
+ * Teleport > Slayer Tower into Rub's destination prompt (#6870).
+ */
+function submenuRow(event, entry, equipped) {
+  const { player, item } = event;
+  const { piece } = entry;
+  const destination = destinationNamed(piece, event.subOption);
+  if (destination) {
+    // A Rub row rubs the piece first, as Rub does (rsprox 723, 3170); a Teleport row does not.
+    if (piece.rubMessage && entry.charges > 0 && rubbedOption(event, equipped)) {
+      player.sendMessage(piece.rubMessage);
+    }
+    confirmAndTeleport(player, item, destination);
+    return true;
+  }
+  // Rub's rows here are actions (the cache's Contact Master, Partner, Open Log). Content answers
+  // them ("jewellery:action"); the row is taken either way so it never falls through to Rub's
+  // own destination list, as the slayer helmet's Partner and Log do.
+  const action = actionNamed(piece, event.subOption);
+  if (!action) return false;
+  emitAction(player, item, action, equipped);
+  return true;
+}
+
+/** A slayer ring action row or worn option by name (case-insensitive), or null. */
+function actionNamed(piece, name) {
+  const wanted = normalise(name);
+  if (!wanted) return null;
+  return (piece.actionRows ?? []).find((row) => normalise(row) === wanted) ?? null;
+}
+
+/** "jewellery:action" { player, item, action, equipped, handled }: content answers a ring's row. */
+function emitAction(player, item, action, equipped) {
+  const request = { player, item, action, equipped, handled: false };
+  pluginApi.emitCustomEvent("jewellery:action", request);
+  return request.handled === true;
 }
 
 function handleJewelleryAction(event) {
@@ -275,29 +302,24 @@ function handleJewelleryAction(event) {
   const { piece } = entry;
   const equipped = event.interfaceId === Equipment.INVENTORY_INTERFACE_ID;
 
+  // A submenu row is answered by the option it sits under, never by its position in a list.
+  if (event.subOption) {
+    if (submenuRow(event, entry, equipped)) event.handled = true;
+    return;
+  }
+
   if (equipped) {
     const destination = equippedDestination(piece, event);
-    if (!destination) return;
+    if (!destination) {
+      const worn = actionNamed(piece, wornOptionName(event.itemId, event.clickType));
+      if (!worn) return;
+      event.handled = true;
+      emitAction(player, item, worn, true);
+      return;
+    }
     event.handled = true;
     if (destination === "rub") rub(player, item);
     else confirmAndTeleport(player, item, destination);
-    return;
-  }
-
-  if (Number.isInteger(event.subOpId) && piece.subOps) {
-    event.handled = true;
-    subOp(player, item, entry, piece.subOps[event.subOpId - 1]);
-    return;
-  }
-
-  if (Number.isInteger(event.subOpId)) {
-    const destination = piece.destinations[event.subOpId - 1];
-    if (destination) {
-      event.handled = true;
-      // A Rub submenu teleport rubs first, as Rub does (rsprox 723, 3170).
-      if (piece.rubMessage && entry.charges > 0) player.sendMessage(piece.rubMessage);
-      confirmAndTeleport(player, item, destination);
-    }
     return;
   }
 

@@ -292,15 +292,15 @@ test('Servius completes the stage-74 hand-in once and yields the NPC after compl
     'the post-quest variant selector leaves Servius on his canonical page');
 });
 
-test('the Tapoyauik temple entrance still answers after completion instead of silently doing nothing', () => {
+test('the Tapoyauik temple entrance yields to the generic climb after completion', () => {
   const h = setup();
   h.prerequisites.add('twilights_promise');
   h.setStage(76);
 
-  assert.equal(h.objectOption('Stairs', 'Climb-down', 54525), true);
-  assert.equal(h.transcripts.at(-1)?.variant,
-    'heart-of-the-ruins-attempting-to-re-enter-the-ruins',
-    'post-quest re-entry plays the canonical player line');
+  assert.equal(h.objectOption('Stairs', 'Climb-down', 54525), false,
+    'after completion the quest must not claim the entrance click');
+  assert.equal(h.transcripts.length, 0,
+    'no re-entry line: the declared pair in data/climb-links.json carries the player into the ruins');
 });
 
 test('the Windbreaker resumes Itzla’s briefing before it unlocks the shopkeeper', () => {

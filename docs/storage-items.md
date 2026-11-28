@@ -28,7 +28,7 @@ login, and Mining's `mining:ore` event it listened to is now `storage:gather`.
 
 As with the rune pouch, a container's contents live on the player in the attribute
 `storage-items:<family>` (`coal-bag`, `gem-bag`, `gem-pouch`, `gem-sack`, `fish-barrel`, `log-basket`, `forestry-kit`,
-`plank-sack`, `tackle-box`, `meat-pouch`, `fur-pouch`, `flamtaer-bag`, `coffin`), not on the item. Every copy a player owns shares one store (Wiki: Fish barrel,
+`plank-sack`, `tackle-box`, `meat-pouch`, `fur-pouch`, `flamtaer-bag`, `coffin`, `knapsack`), not on the item. Every copy a player owns shares one store (Wiki: Fish barrel,
 Log basket, Tackle box). The open and closed variants are the same container (`Coal bag` /
 `Open coal bag` and so on); Open and Close swap the item in place.
 
@@ -47,6 +47,7 @@ Log basket, Tackle box). The open and closed variants are the same container (`C
 | Coffin | 3/8/14/20/28 shade remains by bronze/steel/black/silver/gold tier | open: picked-up remains | funeral pyres after the remains are emptied |
 | Small and large meat pouch | 14 / 28 raw hunter meats (`hunterMeat`; no raw bird meat), by the largest carried | open: Hunter catches | - |
 | Small, medium and large fur pouch | 14 / 21 / 28 hunter furs (`hunterFur`; no tatty or combat fur), by the largest carried | open: Hunter catches | - |
+| Knapsack (Barbarian Gathering, Leagues VI) | 3 kinds, 140 in all: logs, raw and cooked fish, metallic ore, coal and clay, bars, pure essence (`knapsack*` lists) | open: whatever its owner gathers, Hotfoot's cooked fish and bars included | - |
 
 Upgrading a tote and real gem bag to a gem sack transfers both family stores to the sack. If no sack
 is owned but its store remains, the upgrade also preserves those gems, combining matching kinds up to
@@ -143,6 +144,34 @@ inventory option, even from the bank panel; it now leaves the bank panel's ops t
 | Fur pouches | the meat pouch's lines with "fur" | Ours (not captured) |
 | Flamtaer bag | "The bag takes timber beams, not planks." | Wiki (trivia); Fill, Check and Empty wording ours |
 | Coffin | "You hand over the coffin and lock to Dampe." / "You hear him clumsily attach the lock to the coffin." / "Finished, take it." / "Dampe hands you a broken coffin." | Wiki Transcript:Dampe; the remaining Fill, Empty, Check, Open/Close and Remove-lock wording is ours |
+
+## The Knapsack
+
+Barbarian Gathering's container in the Demonic Pacts League (Wiki: Knapsack;
+`Knapsack.StorageItems.js`). Both forms are named "Knapsack" (`barbarian_knapsack` open,
+`barbarian_knapsack_closed` closed), so open and closed are told apart by id.
+
+- **Holds:** up to 3 different kinds, 140 in all. The Wiki names wood, raw and cooked fish, metallic
+  ore with coal and clay, metal bars and pure essence. The logs and raw fish are the log basket's and
+  fish barrel's lists, without bark; which ores and bars count as metallic is ours.
+- **Fills itself** while open and not full, and then a full inventory keeps gathering. Its gathering
+  is heard from the relics plugin after Hotfoot's processing (`Knapsack.gathering`), so Hotfoot's
+  cooked fish and bars go in as they are (Wiki). Its `storage:room` answer is for the item it will be
+  handed (Hotfoot's `product`), so a full inventory stops when Hotfoot's cooked fish or bar would be a
+  fourth kind, rather than the catch being lost.
+- **Fill, an item used on it, Open and Close** work as for the other containers.
+- **Check** prints chat lines, as the Forager's pouch's recorded Check does (rsprox 237): "You look in
+  your knapsack and see:", then "N x Item" per kind, or "Your knapsack is empty.".
+- **Dispose** asks which kind to delete and deletes all of it (Wiki, Relics: "dispose option will ask
+  what to destroy").
+- **Taking things out:** only at a bank (Wiki). The bank's "Empty containers" button
+  (`bank:empty-containers`) and the bank panel's Empty (its param 595) bank the contents. There is no
+  Empty op elsewhere.
+- **Lines:** all ours. rsprox.net's database has no recording with either Knapsack item.
+- **A lost Knapsack:** the Leagues Tutor's Collect-items in Yama's Lair gives it back, open (Wiki;
+  `Collect.LeagueRelics.js`). Either form, carried, worn or banked, counts as owning it
+  (`storage:owned`), so a closed one isn't replaced by a second bag. The contents are kept on the
+  player, so a replacement holds them unless the bag was destroyed.
 
 ## Coffins and the Flamtaer bag
 

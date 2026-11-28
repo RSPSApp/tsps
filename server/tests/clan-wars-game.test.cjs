@@ -4,7 +4,7 @@
 process.env.DISABLE_PLAYER_BOTS = '1';
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { before, beforeEach, afterEach, test } = require('node:test');
+const { before, beforeEach, afterEach, after, test } = require('node:test');
 require('../dist/Server').Server.installProductionPathResolver();
 const { PluginManager: PM } = require('../dist/plugins/PluginManager');
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
@@ -54,6 +54,32 @@ function ghastPlayerTurn(p) {
 }
 const errors = [];
 const originalError = console.error;
+
+// A case can start two matches or layer melee and magic observers on the same
+// method. Unwind those replacements in reverse order, without recording calls.
+const restoreFixtureMethods = [];
+function replaceFixtureMethod(target, key, replacement) {
+  const original = target[key];
+  restoreFixtureMethods.push(() => { target[key] = original; });
+  target[key] = replacement;
+}
+afterEach(() => {
+  while (restoreFixtureMethods.length) {
+    const restore = restoreFixtureMethods.pop();
+    restore();
+  }
+});
+
+// Check identity after Node has also disposed each test's own mocks. Running
+// the two-match and Charge recast cases exercises the nested replacements.
+const originalNow = Date.now;
+const originalAddPendingHit = CombatFactory.addPendingHit;
+const originalEmitCustomEvent = PM.emitCustomEvent;
+after(() => {
+  assert.equal(Date.now, originalNow, 'the game clock must not escape its test');
+  assert.equal(CombatFactory.addPendingHit, originalAddPendingHit, 'hit observers must not escape their test');
+  assert.equal(PM.emitCustomEvent, originalEmitCustomEvent, 'Charge observers must not escape their test');
+});
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
@@ -5035,7 +5061,7 @@ function nmTrace(t,a,b,{force=true}={}){
   };
   nmRoll=e=>{if(force&&e.attacker===a&&e.target===b){e.forceAccurate=true;e.forceMaxHit=true;}};
   const add=CombatFactory.addPendingHit.bind(CombatFactory),get=CombatFactory.getMethod.bind(CombatFactory);
-  t.mock.method(CombatFactory,'addPendingHit',hit=>{
+  replaceFixtureMethod(CombatFactory,'addPendingHit',hit=>{
     if(hit.getAttacker()===a&&hit.getTarget()===b){trace.queued.push(hit);for(const h of hit.getHits())h.onApplied(n=>trace.applied.push(n));}
     return add(hit);
   });
@@ -5642,10 +5668,10 @@ function mInventory(p){return contents(p.getInventory());}
 function mCost(p,spell){return spell.itemsToConsume(p).map(i=>[i.getId(),i.getAmount()]);}
 function mAmounts(p,cost){return cost.map(([id])=>p.getInventory().getAmount(id));}
 function mPaid(p,cost,before){for(let n=0;n<cost.length;n++)assert.equal(p.getInventory().getAmount(cost[n][0]),before[n]-cost[n][1],'canonical inventory cost paid exactly once');}
-function mTrace(t,a,b){
+function mTrace(a,b){
   const trace={commits:[],hits:[],resolved:[]};
   const add=CombatFactory.addPendingHit.bind(CombatFactory);
-  t.mock.method(CombatFactory,'addPendingHit',hit=>{
+  replaceFixtureMethod(CombatFactory,'addPendingHit',hit=>{
     if(hit.getAttacker()===a&&hit.getTarget()===b)trace.hits.push(hit);
     return add(hit);
   });
@@ -5662,8 +5688,8 @@ async function mGame(t,{rules={},beforeEntry=null,mode=1,prepare=true}={}){
   if(beforeEntry)await beforeEntry(a,b,game);
   await join(a);await join(b);if(prepare)completePreparation(game);mPosition(game,a,b);
   for(const p of[a,b]){p.setSpellbook(core.MagicSpellbook.NORMAL);mFund(p);}
-  t.mock.method(Date,'now',()=>C.now()*600);
-  magicTurns=true;return{a,b,game,trace:mTrace(t,a,b)};
+  replaceFixtureMethod(Date,'now',()=>C.now()*600);
+  magicTurns=true;return{a,b,game,trace:mTrace(a,b)};
 }
 async function mSpell(a,b,name,label=null){
   const pretty=label??name.toLowerCase().split('_').map(s=>s[0].toUpperCase()+s.slice(1)).join(' ');
@@ -5991,7 +6017,7 @@ mTest('native MagicDisabled control refuses ordinary casts and preserves default
   mInstall();const a=actor(true),b=actor(true);ruleStats(a,99);ruleStats(b,99);channel(a);channel(b);const game=await negotiate(a,b,2,1,{magic:4});
   const queue=a.getCombat().getHitQueue(),generation=queue.getIncomingGeneration();const hit=new core.PendingHit(b,a,CombatFactory.MELEE_COMBAT,{damage:1,rollAccuracy:false,experience:false,delay:500});CombatFactory.addPendingHit(hit);
   await join(a);await join(b);assert.equal(queue.getIncomingGeneration(),generation);assert.equal(queue.hasPendingHit(hit),true,'defaultDisabled does not adopt Standard boundary cancellation');
-  queue.clear();completePreparation(game);mPosition(game,a,b);mFund(a);magicTurns=true;const trace=mTrace(t,a,b),before=mInventory(a);await mSpell(a,b,'WIND_STRIKE');tick(12);
+  queue.clear();completePreparation(game);mPosition(game,a,b);mFund(a);magicTurns=true;const trace=mTrace(a,b),before=mInventory(a);await mSpell(a,b,'WIND_STRIKE');tick(12);
   assert.deepEqual(mInventory(a),before);assert.equal(trace.commits.length,0);assert.equal(trace.hits.length,0);
 });
 
@@ -6837,7 +6863,7 @@ function cObserveTimerWrites(t,p){
 for(const key of Object.keys(C_CURSES))mTest('C '+key+' new healthy opposing target is independent of a drained first target',async t=>{
   let other;const f=await cGame(t,{beforeEntry:async(a,b)=>{other=actor(true);ruleStats(other,99);assert.equal(FC.join(other,b.getUsername(),false),true);await join(other);}});
   const first=await mFire(f,key);bStop(f);mLand(f,first);const before=cStats(f.b);assert.equal(before[C_CURSES[key]],95);
-  mPosition(f.game,f.a,other);tick(10);const next={...f,b:other,trace:mTrace(t,f.a,other)},hit=await mFire(next,key);bStop(next);mLand(next,hit);
+  mPosition(f.game,f.a,other);tick(10);const next={...f,b:other,trace:mTrace(f.a,other)},hit=await mFire(next,key);bStop(next);mLand(next,hit);
   assert.equal(other.getSkillManager().getCurrentLevel(core.Skill[C_CURSES[key]]),95);assert.deepEqual(cStats(f.b),before);
 });
 for(const key of Object.keys(C_CURSES))mTest('C '+key+' applied stat drain is not reversed by departure queue disposal',async t=>{
@@ -7037,7 +7063,7 @@ mTest('E native entry and supplied rejoin preserve self and null-source damage w
 for(const key of Object.keys(C_CURSES))mTest('E '+key+' new healthy opposing target is independent of a drained first target',async t=>{
   let other;const f=await eGame(t,{beforeEntry:async(a,b)=>{other=actor(true);ruleStats(other,99);assert.equal(FC.join(other,b.getUsername(),false),true);await join(other);}});
   const first=await mFire(f,key);bStop(f);mLand(f,first);const before=cStats(f.b);assert.equal(before[C_CURSES[key]],95);
-  mPosition(f.game,f.a,other);tick(10);const next={...f,b:other,trace:mTrace(t,f.a,other)},hit=await mFire(next,key);bStop(next);mLand(next,hit);
+  mPosition(f.game,f.a,other);tick(10);const next={...f,b:other,trace:mTrace(f.a,other)},hit=await mFire(next,key);bStop(next);mLand(next,hit);
   assert.equal(other.getSkillManager().getCurrentLevel(core.Skill[C_CURSES[key]]),95);assert.deepEqual(cStats(f.b),before);
 });
 for(const key of Object.keys(C_CURSES))mTest('E '+key+' applied stat drain is not reversed by departure queue disposal',async t=>{
@@ -7175,7 +7201,7 @@ for(const key of Object.keys(H_CURSES))for(const element of['water','earth'])mTe
 for(const key of Object.keys(H_CURSES))mTest('H '+key+' new healthy opposing target is independent of a drained first target',async t=>{
   let other;const f=await eGame(t,{beforeEntry:async(a,b)=>{other=actor(true);ruleStats(other,99);assert.equal(FC.join(other,b.getUsername(),false),true);await join(other);}});
   const first=await mFire(f,key);bStop(f);mLand(f,first);const before=cStats(f.b);assert.equal(before[H_CURSES[key]],90);
-  mPosition(f.game,f.a,other);tick(10);const next={...f,b:other,trace:mTrace(t,f.a,other)},hit=await mFire(next,key);bStop(next);mLand(next,hit);
+  mPosition(f.game,f.a,other);tick(10);const next={...f,b:other,trace:mTrace(f.a,other)},hit=await mFire(next,key);bStop(next);mLand(next,hit);
   assert.equal(other.getSkillManager().getCurrentLevel(core.Skill[H_CURSES[key]]),90);assert.deepEqual(cStats(f.b),before);
 });
 for(const key of Object.keys(H_CURSES))mTest('H '+key+' applied stat drain is not reversed by departure queue disposal',async t=>{
@@ -7305,9 +7331,14 @@ async function gCharge(t,f){
   assert.deepEqual(meta,{itemId:3323,widgetId:14286919});
   const runes=[I.AIR_RUNE,I.FIRE_RUNE,I.BLOOD_RUNE],before=runes.map(id=>a.getInventory().getAmount(id)),lines=messagesOf(a),events=[],xp=[];
   const emit=PM.emitCustomEvent.bind(PM),add=a.getSkillManager().addExperience.bind(a.getSkillManager());
-  t.mock.method(PM,'emitCustomEvent',(name,e)=>{if(name==='magic:charge-cast'&&e.player===a)events.push({at:C.now(),until:e.until});return emit(name,e);});
-  t.mock.method(a.getSkillManager(),'addExperience',(...args)=>{xp.push(args);return add(...args);});
-  await gChargeButton(a,meta);
+  const eventObserver=t.mock.method(PM,'emitCustomEvent',(name,e)=>{if(name==='magic:charge-cast'&&e.player===a)events.push({at:C.now(),until:e.until});return emit(name,e);});
+  const xpObserver=t.mock.method(a.getSkillManager(),'addExperience',(...args)=>{xp.push(args);return add(...args);});
+  try {
+    await gChargeButton(a,meta);
+  } finally {
+    xpObserver.mock.restore();
+    eventObserver.mock.restore();
+  }
   assert.equal(events.length,1,'native self-cast reaches the actual Charge producer');
   assert.equal(events[0].until,events[0].at+700);
   assert.equal(a.getAttribute(core.CombatSpells.CHARGE_UNTIL),events[0].until);
@@ -7330,7 +7361,7 @@ for(const row of G_ROWS)mTest('G baseline outside canonical '+row.key+' native p
   const b=C.api.spawnNpc({id:core.NpcIdentifiers.GUARD,x:3223,y:3218,z:0,wanderRadius:0});fixtureNpcs.add(b);npcQueues();
   assert.equal(b.isRegistered(),true);assert.equal(b.getId(),core.NpcIdentifiers.GUARD);assert.ok(b.getHitpoints()>0);
   assert.equal(C.matches.has(a),false);assert.equal(a.getPrivateArea(),null);assert.equal(b.getPrivateArea(),null);
-  magicTurns=true;ghastTurns=true;const f={a,b,trace:mTrace(t,a,b)},cost=mCost(a,core.CombatSpells[row.key]),before=mAmounts(a,cost),hp=b.getHitpoints();
+  magicTurns=true;ghastTurns=true;const f={a,b,trace:mTrace(a,b)},cost=mCost(a,core.CombatSpells[row.key]),before=mAmounts(a,cost),hp=b.getHitpoints();
   tick();await gNpcSpell(a,b,row);assert.equal(a.getCombat().getCastSpell(),core.CombatSpells[row.key]);assert.equal(a.getCombat().getTarget(),b);
   for(let n=0;n<30&&!f.trace.commits.length;n++)tick();
   assert.equal(f.trace.commits.length,1,'actual canonical god paid commit outside Clan Wars');
@@ -7385,7 +7416,7 @@ for(const row of G_ROWS)mTest('G '+row.key+' paid repeat damage and nonstacking 
 for(const row of G_ROWS)mTest('G '+row.key+' impact race and independent new target remain canonical',async t=>{
   const f=await gGame(t,row),sm=f.b.getSkillManager(),skill=core.Skill[row.skill],hit=await gFire(f,row);
   sm.setCurrentLevel(skill,row.skill==='PRAYER'?2:94,false);mLand(f,hit);assert.equal(sm.getCurrentLevel(skill),row.skill==='PRAYER'?1:94);
-  const next=await bowAlly(f.b,f.game);next.setHitpoints(99);mPosition(f.game,f.a,next);tick(10);const old=f.b;f.b=next;f.trace=mTrace(t,f.a,next);
+  const next=await bowAlly(f.b,f.game);next.setHitpoints(99);mPosition(f.game,f.a,next);tick(10);const old=f.b;f.b=next;f.trace=mTrace(f.a,next);
   const stats=gStats(next),fresh=await gFire(f,row);mLand(f,fresh);assert.deepEqual(gStats(next),gEffect(stats,row));
   assert.equal(old.getSkillManager().getCurrentLevel(skill),row.skill==='PRAYER'?1:94);
 });
@@ -7589,7 +7620,7 @@ for(const row of S_ROWS)mTest('S baseline outside canonical '+row.key+' native p
   const at=new core.Location(3222,3218,0);core.RegionManager.loadMapFiles(at.getX(),at.getY());a.moveTo(at);a.setNeedsPlacement(false);AreaManager.process(a);
   const b=C.api.spawnNpc({id:core.NpcIdentifiers.GUARD,x:3223,y:3218,z:0,wanderRadius:0});fixtureNpcs.add(b);npcQueues();
   assert.equal(b.isRegistered(),true);assert.equal(b.getId(),core.NpcIdentifiers.GUARD);assert.ok(b.getHitpoints()>0);assert.equal(C.matches.has(a),false);assert.equal(a.getPrivateArea(),null);assert.equal(b.getPrivateArea(),null);
-  magicTurns=true;ghastTurns=true;const f={a,b,trace:mTrace(t,a,b)},cost=mCost(a,core.CombatSpells[row.key]),before=mAmounts(a,cost),hp=b.getHitpoints(),charges=row.key==='IBAN_BLAST'?sCharges(a):null;
+  magicTurns=true;ghastTurns=true;const f={a,b,trace:mTrace(a,b)},cost=mCost(a,core.CombatSpells[row.key]),before=mAmounts(a,cost),hp=b.getHitpoints(),charges=row.key==='IBAN_BLAST'?sCharges(a):null;
   tick();await sNpcSpell(a,b,row);assert.equal(a.getCombat().getCastSpell(),core.CombatSpells[row.key]);assert.equal(a.getCombat().getTarget(),b);
   for(let n=0;n<30&&!f.trace.commits.length;n++)tick();assert.equal(f.trace.commits.length,1,'native canonical staff spell pays outside Clan Wars');assert.equal(f.trace.hits.length,1);
   const hit=f.trace.hits[0];bStop(f);mPaid(a,cost,before);if(charges!=null)assert.equal(sCharges(a),charges-1,'actual NPC target costs one charge');
@@ -7772,7 +7803,7 @@ async function wOutside(t){
   const at=new core.Location(3222,3218,0);core.RegionManager.loadMapFiles(at.getX(),at.getY());a.moveTo(at);a.setNeedsPlacement(false);AreaManager.process(a);
   const b=C.api.spawnNpc({id:core.NpcIdentifiers.GUARD,x:3223,y:3218,z:0,wanderRadius:0});fixtureNpcs.add(b);npcQueues();
   assert.equal(b.isRegistered(),true);assert.equal(b.getId(),core.NpcIdentifiers.GUARD);assert.ok(b.getHitpoints()>0);assert.equal(C.matches.has(a),false);assert.equal(a.getPrivateArea(),null);assert.equal(b.getPrivateArea(),null);
-  magicTurns=true;ghastTurns=true;return{a,b,trace:mTrace(t,a,b)};
+  magicTurns=true;ghastTurns=true;return{a,b,trace:mTrace(a,b)};
 }
 mTest('W baseline outside exact6914 native manual paid positive',async t=>{
   const f=await wOutside(t),cost=mCost(f.a,core.CombatSpells.WIND_STRIKE),amounts=mAmounts(f.a,cost),hp=f.b.getHitpoints();tick();
@@ -7938,7 +7969,7 @@ async function aOutside(t){
   const at=new core.Location(3222,3218,0);core.RegionManager.loadMapFiles(at.getX(),at.getY());a.moveTo(at);a.setNeedsPlacement(false);AreaManager.process(a);
   const b=C.api.spawnNpc({id:core.NpcIdentifiers.GUARD,x:3223,y:3218,z:0,wanderRadius:0});fixtureNpcs.add(b);npcQueues();
   assert.equal(b.isRegistered(),true);assert.equal(b.getId(),core.NpcIdentifiers.GUARD);assert.ok(b.getHitpoints()>0);assert.equal(C.matches.has(a),false);assert.equal(a.getPrivateArea(),null);assert.equal(b.getPrivateArea(),null);
-  magicTurns=true;ghastTurns=true;return{a,b,trace:mTrace(t,a,b)};
+  magicTurns=true;ghastTurns=true;return{a,b,trace:mTrace(a,b)};
 }
 mTest('A baseline outside exact6910 native manual paid positive',async t=>{
   const f=await aOutside(t),cost=mCost(f.a,core.CombatSpells.WIND_STRIKE),amounts=mAmounts(f.a,cost),hp=f.b.getHitpoints();tick();
@@ -8104,7 +8135,7 @@ async function bwOutside(t){
   const at=new core.Location(3222,3218,0);core.RegionManager.loadMapFiles(at.getX(),at.getY());a.moveTo(at);a.setNeedsPlacement(false);AreaManager.process(a);
   const b=C.api.spawnNpc({id:core.NpcIdentifiers.GUARD,x:3223,y:3218,z:0,wanderRadius:0});fixtureNpcs.add(b);npcQueues();
   assert.equal(b.isRegistered(),true);assert.equal(b.getId(),core.NpcIdentifiers.GUARD);assert.ok(b.getHitpoints()>0);assert.equal(C.matches.has(a),false);assert.equal(a.getPrivateArea(),null);assert.equal(b.getPrivateArea(),null);
-  magicTurns=true;ghastTurns=true;return{a,b,trace:mTrace(t,a,b)};
+  magicTurns=true;ghastTurns=true;return{a,b,trace:mTrace(a,b)};
 }
 mTest('BW baseline outside exact6908 native manual paid positive',async t=>{
   const f=await bwOutside(t),cost=mCost(f.a,core.CombatSpells.WIND_STRIKE),amounts=mAmounts(f.a,cost),hp=f.b.getHitpoints();tick();

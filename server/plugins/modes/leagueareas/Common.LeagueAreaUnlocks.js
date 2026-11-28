@@ -9,6 +9,11 @@ const path = require("path");
 
 /** Unlocked areas: area ids in unlock order (slot 0 Misthalin, 1 Karamja, then the picks). */
 const AREAS_ATTRIBUTE = "league:areas";
+/**
+ * A league character whose starting areas include Varlamore has visited it at creation (the
+ * varbit the fairy rings and charter ships gate on); saved, since varbits are not.
+ */
+const VISITED_ATTRIBUTE = "league:varlamore-visited";
 
 let api = null;
 let core = null;
@@ -18,6 +23,8 @@ let leagues = null;
 const areas = new Map();
 /** league type -> area id -> the league's unlock spotanim for it. */
 const spotanims = new Map();
+/** The Varlamore area id (key "varlamore" in the region data). */
+let varlamoreId = null;
 
 function init(pluginApi) {
   api = pluginApi;
@@ -27,6 +34,10 @@ function init(pluginApi) {
   leagues = JSON.parse(fs.readFileSync(path.join(dir, "leagues.json"), "utf8")).leagues;
   loadAreas();
   loadSpotanims();
+  for (const entry of areas.values()) {
+    if (entry.key === "varlamore") varlamoreId = entry.id;
+  }
+  if (varlamoreId == null) throw new Error("league areas: the region data has no varlamore area");
 }
 
 /** A packed coord (plane << 28 | x << 14 | y) as a tile. */
@@ -124,6 +135,30 @@ function unlocked(player) {
   return Array.isArray(value) ? value.map(Number).filter((id) => areas.has(id)) : [];
 }
 
+/** Whether the league's starting areas include Varlamore (its characters are born there). */
+function startsInVarlamore(type) {
+  const rules = league(type);
+  return !!rules && Array.isArray(rules.defaults) && rules.defaults.includes(varlamoreId);
+}
+
+/**
+ * A league character whose starting areas include Varlamore (Wiki: the Demonic Pacts character
+ * "begins restricted to the area of Varlamore") has visited it at creation: `varlamore_visited`
+ * is set (saved, since varbits are not) and sent again at every league login, so the Varlamore
+ * fairy rings and charter ships work for it. Leagues that do not start there are left alone, and
+ * a first visit by any other character still comes from the quetzals' first Fortis landing.
+ */
+function leagueLogin({ player, league: type }) {
+  if (startsInVarlamore(Number(type))) player.setAttribute(VISITED_ATTRIBUTE, 1);
+  if (player.getAttribute(VISITED_ATTRIBUTE) === 1) sendVarlamoreVisited(player);
+}
+
+/** The visited-Varlamore varbit (the fairy rings' AIS/AJP/CKQ lock; the quetzals' first Fortis landing). */
+function sendVarlamoreVisited(player) {
+  const id = core.CacheDefinitions.getVarbitId("varlamore_visited");
+  if (id != null) player.getPacketSender().sendVarbit(id, 1);
+}
+
 /** Completed tasks (LeaguePoints answers `league:points`). */
 function tasks(player) {
   const query = { player, points: 0, tasks: 0 };
@@ -168,8 +203,9 @@ function uid(group, child) {
 }
 
 module.exports = {
-  init, leagueOf, league, leagueInfo, area, areaByName, spotanim, unlocked, tasks, thresholdFor, nextSlot, available,
-  colourHex, message, uid, unpackCoord, AREAS_ATTRIBUTE,
+  init, leagueOf, league, leagueInfo, area, areaByName, spotanim, unlocked, startsInVarlamore, leagueLogin, sendVarlamoreVisited,
+  tasks, thresholdFor, nextSlot, available,
+  colourHex, message, uid, unpackCoord, AREAS_ATTRIBUTE, VISITED_ATTRIBUTE,
   get areas() { return areas; },
   get data() { return data; },
   get api() { return api; },

@@ -168,7 +168,7 @@ function throwBlobs(npc, from, tiles, shape) {
         const pos = player.getLocation();
         if (pos.getX() !== x || pos.getY() !== y) continue;
         player.getCombat().getHitQueue().addPendingDamage([Shared.venomHit(core, Shared.SPLAT_IMPACT_DAMAGE)]);
-        CombatAchievements.avoidableDamage(player, Shared.SPLAT_IMPACT_DAMAGE);
+        CombatAchievements.avoidableDamage(player, Shared.SPLAT_IMPACT_DAMAGE, CombatAchievements.FAILURE.pool);
         envenom(player);
       }
       spawnPool(npc, x, y);
@@ -222,7 +222,7 @@ function startBall(npc, target, landing) {
       if (!alive(player)) continue;
       const damage = Shared.randomBetween(Shared.BALL_DAMAGE_MIN, Shared.BALL_DAMAGE_MAX);
       player.getCombat().getHitQueue().addPendingDamage([Shared.venomHit(core, damage)]);
-      CombatAchievements.avoidableDamage(player, damage);
+      CombatAchievements.avoidableDamage(player, damage, CombatAchievements.FAILURE.ball);
       envenom(player);
     }
   });
@@ -345,7 +345,7 @@ function tickPools(npc, fight, players) {
     if (!fight.pools.has(Shared.tileKey(pos.getX(), pos.getY()))) continue;
     const damage = Shared.poolDamage();
     player.getCombat().getHitQueue().addPendingDamage([Shared.venomHit(core, damage)]);
-    CombatAchievements.avoidableDamage(player, damage);
+    CombatAchievements.avoidableDamage(player, damage, CombatAchievements.FAILURE.pool);
     // The pools inflict venom too (Wiki).
     envenom(player);
   }

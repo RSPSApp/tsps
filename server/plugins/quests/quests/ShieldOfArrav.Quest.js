@@ -438,6 +438,9 @@ module.exports = function registerShieldOfArravQuest(api) {
         const first = reldoFirstTalk.has(player) ? reldoFirstTalk.get(player) : !attr(player, RELDO_MET_ATTRIBUTE);
         return value.includes("first time ever") ? first : !first;
       }
+      // The Wise Old Man's message for Reldo (Old man's message, one of his Draynor errands); his page
+      // guards that option of his menu with it.
+      if (value.includes("has a message for him")) return hasItem(player, api.core.ItemIdentifiers.OLD_MANS_MESSAGE);
       return null;
     }
 

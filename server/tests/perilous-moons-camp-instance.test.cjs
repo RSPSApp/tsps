@@ -29,7 +29,7 @@ const SUPPLIES = 28968; // pmoon_camp_supplies (item)
 const RAW_BREAM = 29216; // bream_fish_raw: a Neypotzli resource that fizzles outside it
 const CAMPS_ATTRIBUTE = "perilous-moons:camps";
 const O = { TELEBOX: 51375, TELEBOX_3X3: 51377, DIAGONAL: 51376, CAMP_SPOT: 50858, RANGE_NOT_BUILT: 53007, RANGE: 51362, STOOL: 42092, CRATE: 51371, BARREL: 52425, BARRIER: 51364 };
-const ITEMS = { KNIFE: 946, ROPE: 954, BIG_NET: 305, BUTTERFLY_NET: 10010, PESTLE: 233, VIAL: 227, GRUB: 29078, INFUSED_WATER: 28966, INFUSED_EARTH: 28967 };
+const ITEMS = { KNIFE: 946, ROPE: 954, BIG_NET: 305, BUTTERFLY_NET: 10010, PESTLE: 233, VIAL: 227, GRUB: 29078, INFUSED_WATER: 28966, INFUSED_EARTH: 28967, ESSENCE: 29087 };
 const SAPLING = 51365;
 const TEA = "You drink some tea from the newly built camp and find yourself feeling energised!";
 let core;
@@ -351,6 +351,36 @@ test("the grubby sapling keeps giving grubs while some are held, with Hunter xp 
   assert.ok(xp() - before >= first * 0.05 * 99 - 1, "0.05 xp per Hunter level for each grub (stored in whole xp)");
   await click(f, SAPLING, [1517, 9690, 0], [1517, 9689, 0], 6);
   assert.ok(amount(f, ITEMS.GRUB) > first, "a second visit adds to the grubs already held");
+});
+
+test("the sapling plays the player's searching animation (#6843, rec 1104 rev 237)", async (t) => {
+  const f = gatherer(t, 23, [1517, 9689, 0]);
+  const seqs = [];
+  const perform = f.player.performAnimation;
+  t.mock.method(f.player, "performAnimation", function (animation) {
+    seqs.push(animation?.getId?.());
+    return perform.apply(this, arguments);
+  });
+  await click(f, SAPLING, [1517, 9690, 0], [1517, 9689, 0], 6);
+  assert.ok(amount(f, ITEMS.GRUB) >= 1, "a grub");
+  assert.ok(seqs.includes(13149), "hunting_searching_bushes_norestart");
+  assert.equal(seqs.includes(10792), false, "not the rev 226 id, a thrall walk in this cache");
+});
+
+test("leaving Neypotzli fizzles sulphurous essence with its other resources (#6843, rec 1001301 tick 2048)", async (t) => {
+  const f = gatherer(t, 23, [1510, 9693, 0]);
+  const inventory = f.player.getInventory();
+  inventory.add(new core.Item(ITEMS.ESSENCE, 42), true);
+  inventory.add(new core.Item(RAW_BREAM, 1), true);
+  inventory.add(new core.Item(ITEMS.KNIFE, 1), true);
+  ticks(f, 2);
+  assert.equal(amount(f, ITEMS.ESSENCE), 42, "kept inside Neypotzli");
+  f.player.moveTo(new core.Location(1529, 3289, 0));
+  ticks(f, 2);
+  assert.equal(amount(f, ITEMS.ESSENCE), 0, "the essence fizzles");
+  assert.equal(amount(f, RAW_BREAM), 0);
+  assert.equal(amount(f, ITEMS.KNIFE), 1, "the player's own items stay");
+  assert.equal(f.messages.filter((m) => m.text.includes("fizzle to dust")).length, 1);
 });
 
 test("before the camps the sapling only brings Jessamine's warning", async (t) => {

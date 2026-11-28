@@ -43,7 +43,7 @@ export type GuestRefusal = "aboard" | "not-aboard" | "not-here" | "full";
 /** How far from a dock's landing (a mooring point's own tile) a boat still counts as moored there, in tiles. */
 const MOORED_RANGE = 15;
 
-type SailingEvent = "sailing:boarded" | "sailing:left" | "sailing:guest-boarded" | "sailing:guest-left";
+type SailingEvent = "sailing:boarded" | "sailing:left" | "sailing:guest-boarded" | "sailing:guest-left" | "sailing:boat-sunk";
 
 /** Lets content (the sidepanel, varbits) follow boarding and leaving without core knowing it. */
 function emit(event: SailingEvent, payload: object): void {
@@ -446,6 +446,13 @@ export class Sailing {
         const boat = Sailing.activeBoat(player);
         if (boat) boat.location = { kind: "sunk" };
         Sailing.leave(player, instance, "sunk");
+        // What the hold carried goes down with it (Wiki, Sailing → Death & Capsizing: a death at
+        // sea, a capsize or a teleport from the boat loses courier crates, bounty items, salvage
+        // and trawling fish and keeps supplies). The cargo plugin owns that drop and tells port
+        // tasks what left, so a lost courier crate stops being counted as taken and can be
+        // collected again — the same routine every other loss path (capsize, Summon Boat, the
+        // cape, a shipwright's recovery) calls.
+        if (boat) emit("sailing:boat-sunk", { player, boat });
     }
 
     /**

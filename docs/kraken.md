@@ -1,10 +1,10 @@
 # Kraken
 
 Kraken and Cave krakens in the Kraken Cove, built from the OSRS Wiki
-([Kraken](https://oldschool.runescape.wiki/w/Kraken),
-[Cave kraken](https://oldschool.runescape.wiki/w/Cave_kraken)). No rsprox capture
-covers this fight yet; tiles and animations below are from the cache and
-`data/definitions`, timings marked estimate are guesses.
+([Kraken](https://oldschool.runescape.wiki/w/Special:PermanentLink/15383981),
+[Cave kraken](https://oldschool.runescape.wiki/w/Cave_kraken)) and two revision 237
+RSProx recordings of one player in a private room on a Leagues VI world.
+[237/1150](https://rsprox.net/download/1150) · [237/1151](https://rsprox.net/download/1151)
 
 The plugin is `server/plugins/bosses/Kraken.plugin.js`, with its units in
 `server/plugins/bosses/kraken/`.
@@ -12,7 +12,7 @@ The plugin is `server/plugins/bosses/Kraken.plugin.js`, with its units in
 | File | What it owns |
 | --- | --- |
 | `Shared.Kraken.js` | Ids (cache gamevals via `NpcIdentifiers`), surfacing animations, small helpers. |
-| `Disturb.Kraken.js` | Disturbing whirlpools to surface them; the boss also wakes nearby tentacles. |
+| `Disturb.Kraken.js` | Disturb interactions and the fishing explosive throw and wake. |
 | `MagicOnly.Kraken.js` | Style rules: Ranged 1/7th, Melee immune with the Wiki message; Magic unaffected. |
 | `Typeless.Kraken.js` | Boss + tentacles ignore Protect from Magic (Wiki typeless); cave krakens stay prayable. |
 | `Crevice.Kraken.js` | Crevice 537 Enter into the boss pool (2280, 10022), Crevice 538 Use back out (2280, 10016). No squeeze animation captured, so none plays (estimate). |
@@ -37,18 +37,30 @@ teleports (`loc-teleports.json`: cave entrance/exit 30177/30178), kill tracking
   Fishing explosives do nothing here (Wiki).
 - **Reach:** the pools sit in water with no adjacent tile, past the engine's 2-tile water fallback, so Disturb works from up to 10 tiles with line of sight (estimate; the engine still enforces the sight line).
 - **Whirlpool (5534)** Disturb: becomes **Enormous Tentacle (5535)**, anim 3860, aggros.
-- **Whirlpool (496)** two ways to wake (Wiki): use a **fishing explosive** (6660/6664, one
-  consumed — estimate) on it for an instant wake, or Disturb it once all four tentacle
-  whirlpools are disturbed. Disturbing it early says "Nothing happens." (estimate).
-  Either way it becomes **Kraken (494)**, anim 7135, aggros, with nearby tentacle whirlpools
-  (~10 tiles, estimate) surfacing with it (boss at (2278, 10034), its four whirlpools at
-  (2275/2284, 10034/10038)).
+- **Whirlpool (496)** wakes from a fishing explosive or from Disturb after the four
+  nearby tentacle whirlpools have surfaced. Disturbing the boss early says "Nothing happens."
+  (estimate). The boss starts at (2278, 10034) and its four tentacle whirlpools are
+  at (2275/2284, 10034/10038).
+- **Fishing explosive:** spend one from the selected inventory slot on the throw. The player plays sequence 385
+  (`human_throw`) with spotanim 50 (`vial_launch`) at height 96. Projectile 49
+  (`vial_travel`) starts at the player's tile and targets the centre of the whirlpool.
+  It starts at cycle 28 with angle 50, progress 32 and heights 163/0. Its end cycle
+  is 46 + 35 per tile to the nearest tile of the 5×5 whirlpool. Sound 2379 plays
+  with the same delay. TSPS implements the throw mechanics and omits the recorded game message.
+- **Wake from three tiles:** all four tentacles rise eight ticks after the throw
+  with sequence 3860 and begin attacking with sequence 3618 the following tick.
+  The boss rises with sequence 7135 two ticks after the tentacles. That gap is two
+  ticks in 109 observed throws and one in R1150 (11519–11520). R1151 (3623–3633)
+  shows the usual timing. The Wiki's immediate-wake wording describes bypassing
+  the four Disturb interactions. [Fishing explosive](https://oldschool.runescape.wiki/w/Special:PermanentLink/15347755) · [Enormous Tentacle](https://oldschool.runescape.wiki/w/Special:PermanentLink/15368757)
 - **Styles:** Magic is the only reliable damage (Wiki). Ranged deals 1/7th on 492/494/5535;
   Melee lands for 0 with "You can't attack it properly like that." (Wiki).
 - **Typeless:** the Kraken and its tentacles ignore Protect from Magic (Wiki); cave krakens
   stay prayable.
-- **Respawn:** deaths come back as whirlpools via the engine (transformation cleared before
-  the respawn is queued).
+- **Respawn:** the boss whirlpool and all four tentacle whirlpools return together
+  10–14 ticks after the boss is removed. The public cove uses the
+  [Kraken infobox](https://oldschool.runescape.wiki/w/Special:PermanentLink/15383981).
+  A lone tentacle killed while the boss is down uses its own definition's delay.
 
 ## Private room
 
@@ -63,16 +75,30 @@ Floor items in the private room last 30 minutes, as specified in the
 [17 August 2017 update](https://oldschool.runescape.wiki/w/Update:Runes_and_Ammunition_%26_Log_In_Screen_Competition!).
 Leaving the room still destroys its remaining floor items.
 
-Respawn: live OSRS respawns the Kraken more slowly in a private instance (Wiki: "The boss
-respawns more slowly in a private instance than the public arena"), but no figure is
-documented, and the public infobox gives 10-14 ticks. This server uses the public delay in
-private rooms because no private figure is known; it is an estimate, not retail timing.
+TSPS uses the same 10–14 tick joint respawn in the private room. All 108 observed
+private respawns across the two Leagues VI recordings were in that range, including
+R1150 11304–11315 and R1151 3610–3621 and 3717–3731. The Kraken Wiki prose says the
+private respawn is slower than the public respawn and gives no private figure.
+Timing in an ordinary-world private room remains unverified.
 
 Peek remains unimplemented: it reports the number of players in the public boss
 room on OSRS, but this server's broad Kraken Cove area also includes the exterior.
 The boss-room membership boundary has not been established here. The cove's
 attack hook checks the player's Kraken task; the existing Slayer combat checks
 also apply.
+
+## Estimates
+
+- **Longer throws.** Tentacles rise two ticks after the projectile's end cycle
+  rounded up to a game tick, and the boss follows two ticks later. The formula
+  matches R1151 3538–3553 at eight tiles and R1150 11209–11227 at ten tiles as
+  well as the repeated three-tile throws. Other distances were unobserved.
+- **Respawn selection.** TSPS draws uniformly from the five ticks for each boss
+  respawn. The observed counts for 10 through 14 ticks were 13, 22, 26, 24 and 23.
+- **Overlapping throws and exit.** A second explosive while a wake is pending
+  has no effect and costs no item. Leaving before the tentacles rise cancels
+  the wake and the thrown explosive stays spent. The captures show one throw
+  per spawn and no departure with a throw in flight.
 
 ## Combat Achievements
 

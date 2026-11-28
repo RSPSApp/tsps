@@ -94,7 +94,7 @@ test("a kill under 3:00 adds Charged ice, unless the player has one", () => {
   };
   const quick = fakePlayer();
   assert.deepEqual(roll(quick, 299), [ITEMS.CHARGED_ICE]);
-  assert.match(quick.messages[0], /Untradeable drop: Charged ice/);
+  assert.deepEqual(quick.messages, [], "the loot drop notification announces it, not the Muspah");
   assert.deepEqual(roll(fakePlayer(), 300), []);
   assert.deepEqual(roll(fakePlayer({ ownsIce: true }), 100), []);
 });
@@ -434,6 +434,8 @@ test("the actual form and shield callbacks preserve then reset the drained Defen
   assert.ok(f.npc.getHitpoints() < wave.hitpoints);
   assert.equal(f.fight.pendingSkip, null);
   f.fight.events.length = 0;
+  f.fight.specialsDone = Common.data.specials.thresholds.length; // both specials come first
+  f.fight.lastActionTick = -Infinity; // past the switch's own pause
   f.fight.turn(); // actual below-threshold branch schedules the shockwave sequence
   assert.equal(f.fight.shockwaveStarted, true);
   const due = f.fight.tick + wave.teleportTicks + wave.windupTicks + wave.releaseTicks + wave.shieldTicks;
@@ -654,4 +656,118 @@ test("a landed Clear Mind drains the prayer shield, including its last points, i
   for (const entry of nextTick) entry.action();
   assert.equal(fight.form, "final");
   assert.equal(growthWave.mock.callCount(), 1);
+});
+
+test("the unused special still comes before the shockwave, even far below 127 hitpoints", t => {
+  const { fight, npc } = nativeFight(t);
+  fight.startForm = "ranged"; // clouds first, so the second special is Homing spikes
+  fight.specialsDone = 1;
+  t.mock.method(fight.spikes, "playerTile", () => Common.data.boss.centre.slice());
+  t.mock.method(fight, "underBoss", () => false);
+  npc.setHitpoints(9);
+  fight.turn();
+  assert.equal(fight.specialsDone, 2, "the second special ran");
+  assert.equal(fight.shockwaveStarted, false);
+  fight.tick += 2;
+  fight.turn();
+  assert.equal(fight.shockwaveStarted, true, "then the shockwave");
+});
+
+test("after Lightning clouds lands, nothing else starts for six ticks", t => {
+  const { fight } = nativeFight(t);
+  fight.startForm = "ranged";
+  fight.muspah.setHitpoints(600);
+  const form = fight.form;
+  fight.events.length = 0;
+  fight.turn();
+  assert.equal(fight.specialsDone, 1);
+  const { clouds } = Common.data;
+  const landing = fight.events.find((event) => event.tick === fight.tick + clouds.transformTicks + clouds.jumps);
+  assert.ok(landing);
+  fight.events.length = 0;
+  fight.tick = landing.tick;
+  landing.action();
+  assert.equal(fight.form, form, "back in the form it left");
+  t.mock.method(fight.spikes, "playerTile", () => Common.data.boss.centre.slice());
+  t.mock.method(fight, "underBoss", () => false);
+  fight.muspah.setHitpoints(400);
+  fight.specialReadyTick = 0;
+  fight.nextAttackTick = Infinity; // only the special's own wait is under test
+  for (let i = 1; i < 6; i++) {
+    fight.tick++;
+    fight.turn();
+    assert.equal(fight.specialsDone, 1, `still waiting ${i} ticks after landing`);
+  }
+  fight.tick++;
+  fight.turn();
+  assert.equal(fight.specialsDone, 2, "Homing spikes six ticks after landing");
+});
+
+test("the first form switch needs only the damage; later ones also four hits", t => {
+  const { fight } = nativeFight(t);
+  fight.form = "ranged";
+  fight.switchDamage = Common.data.switch.rangedDamage;
+  fight.switchHits = 1;
+  assert.equal(fight.switchDue(), true);
+  fight.switches = 1;
+  assert.equal(fight.switchDue(), false);
+  fight.switchHits = Common.data.switch.minHits;
+  assert.equal(fight.switchDue(), true);
+});
+
+test("homing spikes sink one a tick and each comes back two ticks after its sink", t => {
+  const { fight } = nativeFight(t);
+  const spikes = fight.spikes;
+  const tiles = [[2840, 4250], [2850, 4250], [2840, 4265], [2855, 4262]];
+  for (const tile of tiles) spikes.spikes.set(`${tile[0]},${tile[1]}`, { tile, state: "up", object: null, rotation: 0 });
+  t.mock.method(spikes, "playerTile", () => [2847, 4258]);
+  t.mock.method(fight, "underBoss", () => false);
+  t.mock.method(Math, "random", () => 0.999); // four of them
+  const sunk = [], followed = [];
+  t.mock.method(spikes, "sink", (tile) => {
+    sunk.push(fight.tick);
+    spikes.spikes.delete(`${tile[0]},${tile[1]}`);
+  });
+  t.mock.method(spikes, "follow", () => followed.push(fight.tick));
+  fight.events.length = 0;
+  const start = fight.tick;
+  spikes.startHoming();
+  for (let i = 0; i < 8; i++) {
+    fight.tick++;
+    const due = fight.events.filter((event) => event.tick <= fight.tick);
+    fight.events = fight.events.filter((event) => event.tick > fight.tick);
+    for (const event of due) event.action();
+  }
+  assert.deepEqual(sunk.map((tick) => tick - start), [1, 2, 3, 4]);
+  assert.deepEqual(followed.map((tick) => tick - start), [3, 4, 5, 6]);
+});
+
+test("the shockwave hits and corrupts on its release tick", t => {
+  const { fight, player } = nativeFight(t);
+  const Hits = require("../plugins/bosses/phantommuspah/Hits.PhantomMuspah");
+  const Corruption = require("../plugins/bosses/phantommuspah/Corruption.PhantomMuspah");
+  const Shield = require("../plugins/bosses/phantommuspah/Shield.PhantomMuspah");
+  const [cx, cy] = Common.data.boss.centre;
+  t.mock.method(fight.spikes, "playerTile", () => [cx + 4, cy]);
+  t.mock.method(fight, "moveMuspah", () => {});
+  const damage = t.mock.method(Hits, "damage", () => 0);
+  const corrupt = t.mock.method(Corruption, "corrupt", () => {});
+  t.mock.method(Common, "tileGraphic", () => {});
+  fight.events.length = 0;
+  Shield.shockwave(fight);
+  const wave = Common.data.shockwave;
+  const releaseTick = fight.tick + wave.teleportTicks + wave.windupTicks + wave.releaseTicks;
+  const release = fight.events.find((event) => event.tick === releaseTick);
+  assert.ok(release);
+  release.action();
+  assert.equal(damage.mock.callCount(), 1);
+  assert.equal(damage.mock.calls[0].arguments[0], player);
+  assert.equal(corrupt.mock.callCount(), 1);
+  assert.equal(corrupt.mock.calls[0].arguments[1], Common.data.corruption.shockwaveBase);
+});
+
+test("fight durations follow the precise timing setting", () => {
+  assert.equal(Loot.formatTicks(58, false), "0:35");
+  assert.equal(Loot.formatTicks(108, false), "1:05");
+  assert.equal(Loot.formatTicks(108, true), "1:04.80");
 });

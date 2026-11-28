@@ -7,6 +7,7 @@
  *   later, leaving an icy pool where it stood (captured).
  * - In the ordinary post-quest fight, any left 14 ticks after forming shatter, each healing her
  *   16-25 with a hitsplat (R1140 ticks 7912-7927, 8788-8803) and leaving a 3x3 square of icy pools (Wiki).
+ *   2 ticks before they shatter she winds up (11534; R1140 ticks 7924, 8800, 12433).
  */
 const Common = require("./Common.Amoxliatl");
 
@@ -62,7 +63,12 @@ function launch(fight) {
   }
   fight.at(ice.spawnTicks, () => {
     const formed = tiles.map(([x, y]) => form(fight, x, y)).filter(Boolean);
-    if (formed.length > 0) fight.at(shatterTicks, () => shatter(fight, formed));
+    if (formed.length === 0) return;
+    const { shatterWindupAnim, shatterWindupTicks } = Common.data.unstableIce;
+    fight.at(shatterTicks - shatterWindupTicks, () => {
+      if (!fight.over && standing(fight, formed).length > 0) fight.boss.performAnimation(new Animation(shatterWindupAnim));
+    });
+    fight.at(shatterTicks, () => shatter(fight, formed));
   });
 }
 
@@ -91,9 +97,12 @@ function burst(fight, block) {
   Common.areaSound(fight.player, ice.breakSound, block.getLocation());
 }
 
+/** The blocks of a throw still standing. */
+const standing = (fight, formed) => formed.filter((block) => fight.blocks.has(block) && block.isRegistered() && block.getHitpoints() > 0);
+
 /** The remaining blocks burst and heal her. Their models disappear on the next tick. */
 function shatter(fight, formed) {
-  const left = formed.filter((block) => fight.blocks.has(block) && block.isRegistered() && block.getHitpoints() > 0);
+  const left = standing(fight, formed);
   if (left.length === 0 || fight.over) return;
   fight.stats.shattered = true;
   const { shatterHeal: [min, max], postQuest, removeAfterBreakTicks } = Common.data.unstableIce;

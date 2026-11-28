@@ -225,6 +225,45 @@ test("both supported area leagues initialize defaults and restore saved unlocks 
   }
 });
 
+test("a league character born in Varlamore starts with varlamore_visited; other leagues and main characters do not", () => {
+  const visited = core.CacheDefinitions.getVarbitId("varlamore_visited");
+  assert.ok(visited != null, "the cache has the varlamore_visited varbit");
+  const previousLeague = worldLeague;
+  try {
+    worldLeague = 6;
+    const born = character("varlamore-born");
+    assert.equal(born.getAttribute("league:varlamore-visited"), 1);
+    assert.equal(born.sent.varbits.get(visited), 1);
+
+    const restored = character("varlamore-born", "league", { restore: PlayerSave.fromPlayer(born) });
+    assert.equal(restored.getAttribute("league:varlamore-visited"), 1);
+    assert.equal(restored.sent.varbits.get(visited), 1, "the varbit is sent again at login");
+
+    // A character made before this rule: no saved flag, backfilled at its next login.
+    const previous = character("varlamore-previous", "league", { login: false });
+    previous.setAttribute("league:type", 6);
+    hooks.onPlayerLogin({ player: previous, username: "varlamore-previous", isNewAccount: false, profile: "league" });
+    assert.equal(previous.getAttribute("league:varlamore-visited"), 1, "backfilled at the next login");
+    assert.equal(previous.sent.varbits.get(visited), 1);
+
+    worldLeague = 4;
+    const reloaded = character("reloaded-born");
+    assert.equal(reloaded.getAttribute("league:varlamore-visited"), undefined);
+    assert.ok(!reloaded.sent.varbits.has(visited), "Trailblazer Reloaded has no Varlamore (Wiki)");
+
+    worldLeague = 5;
+    const echoes = character("echoes-born");
+    assert.equal(echoes.getAttribute("league:varlamore-visited"), undefined);
+    assert.ok(!echoes.sent.varbits.has(visited));
+
+    worldLeague = 6;
+    const main = character("main-in-varlamore-world", "main");
+    assert.ok(!main.sent.varbits.has(visited), "a main character is never asked");
+  } finally {
+    worldLeague = previousLeague;
+  }
+});
+
 test("the map squares follow the Wiki's areas; instances and the places open to everyone belong to none", () => {
   const landmarks = [
     ["Lumbridge Castle", 3222, 3218, MISTHALIN], ["Varrock", 3212, 3428, MISTHALIN], ["Edgeville", 3093, 3493, MISTHALIN],
@@ -727,6 +766,46 @@ test("Demonic Pacts: Varlamore to start, Misthalin shut but Zanaris and the Abys
   core.TaskManager.process();
   assert.ok(!pacts.getLocation().equals(from), "landed at +23");
   pacts.setRegistered(false);
+});
+
+test("League Yama selects the exported introduction and rank greetings only at his League actor", () => {
+  const player = character("yamadialogue", "league", { login: false });
+  player.setAttribute("league:type", 6);
+  const npcId = core.NpcIdentifiers.YAMA_4;
+  const event = { player, npcId };
+  const variants = require("../data/definitions/npc-dialogues.json").Yama.variants;
+  let rank = 0;
+  custom["league:rank"] ??= [];
+  const setRank = query => { if (query.player === player) query.rank = rank; };
+  custom["league:rank"].push(setRank);
+  try {
+    const intro = hooks.onNpcDialogueVariant(event);
+    assert.equal(intro.page, "Yama");
+    assert.match(intro.variant, /initial-dialogue$/);
+    assert.ok(variants[intro.variant]);
+    assert.equal(hooks.onNpcDialogueVariant({ ...event, npcId: core.NpcIdentifiers.YAMA }), null);
+    assert.equal(hooks.onNpcDialogueVariant({ ...event, npcId: core.NpcIdentifiers.YAMA_2 }), null);
+    assert.equal(hooks.onNpcDialogueCondition({ ...event, playing: intro, text: "Unknown condition - seen when unranked" }), true);
+    for (const option of ["Why am I here?", "Goodbye."]) {
+      for (const handler of custom["npc-dialogue:choice"]) handler({ ...event, playing: intro, option });
+      if (option !== "Goodbye.") assert.deepEqual(hooks.onNpcDialogueVariant(event), intro);
+    }
+    const lower = hooks.onNpcDialogueVariant(event);
+    assert.match(lower.variant, /iron-or-lower-rank$/);
+    rank = 2;
+    assert.deepEqual(hooks.onNpcDialogueVariant(event), lower);
+    rank = 3;
+    const higher = hooks.onNpcDialogueVariant(event);
+    assert.match(higher.variant, /steel-or-higher-rank$/);
+    assert.ok(variants[lower.variant] && variants[higher.variant]);
+    player.setAttribute("league:type", 5);
+    assert.equal(hooks.onNpcDialogueVariant(event), null);
+    player.setProfile("main");
+    player.setAttribute("league:type", 6);
+    assert.equal(hooks.onNpcDialogueVariant(event), null);
+  } finally {
+    custom["league:rank"].pop();
+  }
 });
 
 test("Yama's Lair's Glowing portal leads to Civitas through the recorded fade", () => {

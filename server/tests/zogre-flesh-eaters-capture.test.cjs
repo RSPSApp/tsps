@@ -579,3 +579,51 @@ test("the journal reproduces the capture's two pages (ticks 777 and 1158)", () =
     portraitureFound: true, hamFound: true, necroFound: true,
   }), fixture.tick1158);
 });
+
+// Wiki Cup of tea (Zogre Flesh Eaters): Sithik prevents both ways of stealing his tea.
+test("Sithik refuses taking his placed tea before, during and after the quest", (t) => {
+  for (const value of [0, S.SITHIK, S.COMPLETE]) {
+    const f = actor(t, {at:[2593,3103,1], stage:value});
+    const ground = h.core.ItemOnGroundManager.registerLocation(f.player, new h.core.Item(I.CUP_OF_TEA_8,1), new h.core.Location(2593,3103,1));
+    t.after(() => h.core.ItemOnGroundManager.deregister(ground));
+    h.core.ItemOnGroundManager.pickup(f.player,ground);
+    assert.equal(count(f,I.CUP_OF_TEA_8),0);
+    assert.ok(h.core.World.getItems().includes(ground));
+    assert.equal(h.shown(f)?.who,"Sithik Ints");
+    assert.equal(h.shown(f)?.text,"Hey! What do you think you're doing? Leave my tea alone!");
+    assert.equal(stage(f),value);
+  }
+});
+
+test("Sithik refuses a real Telegrab cast before runes, XP or the tea are consumed", (t) => {
+  const f = actor(t, {at:[2593,3104,1],stage:S.SITHIK,items:[[I.LAW_RUNE,2],[I.AIR_RUNE,2]]});
+  f.player.getSkillManager().setMaxLevels(Sk.MAGIC,99);
+  f.player.getSkillManager().setCurrentLevel(Sk.MAGIC,99,false);
+  const ground = h.core.ItemOnGroundManager.registerLocation(f.player,new h.core.Item(I.CUP_OF_TEA_8,1),new h.core.Location(2593,3103,1));
+  t.after(() => h.core.ItemOnGroundManager.deregister(ground));
+  const before=f.player.getSkillManager().getExperience(Sk.MAGIC);
+  new (require('../dist/net/packet/impl/MagicOnItemPacketListener').MagicOnItemPacketListener)().castGroundItem(f.player,I.CUP_OF_TEA_8,2593,3103,1168);
+  assert.equal(count(f,I.LAW_RUNE),2);assert.equal(count(f,I.AIR_RUNE),2);
+  assert.equal(f.player.getSkillManager().getExperience(Sk.MAGIC),before);
+  assert.equal(count(f,I.CUP_OF_TEA_8),0);assert.ok(h.core.World.getItems().includes(ground));
+  assert.equal(h.shown(f)?.who,"Sithik Ints");
+  assert.equal(h.shown(f)?.text.replace(/\s+/g,' '),"Hey! What do you think you're doing? Don't go casting that kind of spell anywhere near my tea! Leave my tea alone you telegrabbing fiend!");
+});
+
+test("tea protection is scoped to Sithik's cup at its original tile", (t) => {
+  const f=actor(t,{at:[2593,3104,1],stage:S.SITHIK});
+  for(const [id,at] of [[I.CUP_OF_TEA,[2593,3103,1]],[I.CUP_OF_TEA_8,[2594,3103,1]],[I.CUP_OF_TEA_8,[2593,3103,0]]]) {
+    const ground=h.core.ItemOnGroundManager.registerLocation(f.player,new h.core.Item(id,1),new h.core.Location(...at));
+    t.after(()=>h.core.ItemOnGroundManager.deregister(ground));
+    const pickup={player:f.player,groundItem:ground,groundItemId:id,clickType:1,location:{x:at[0],y:at[1],z:at[2]},handled:false};
+    h.PM.emitGroundItemPickup(pickup);assert.equal(pickup.handled,false);
+    const spell={player:f.player,groundItem:ground,allow:true};h.PM.emitCustomEvent('magic:can-telekinetic-grab',spell);assert.equal(spell.allow,true);
+  }
+});
+
+test("the guarded tea still accepts the strange potion on the ground",(t)=>{
+  const f=actor(t,{at:[2593,3104,1],stage:S.SITHIK,items:[[I.STRANGE_POTION,1]]});
+  const request={player:f.player,inventoryItem:f.player.getInventory().getItems().find(i=>i.getId()===I.STRANGE_POTION),inventoryItemId:I.STRANGE_POTION,groundItemId:I.CUP_OF_TEA_8,location:{x:2593,y:3103,z:1},handled:false};
+  h.PM.emitItemOnGroundItem(request);
+  assert.equal(request.handled,true);assert.equal(stage(f),S.POTION);assert.equal(count(f,I.STRANGE_POTION),0);
+});

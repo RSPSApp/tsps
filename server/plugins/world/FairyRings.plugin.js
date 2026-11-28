@@ -376,9 +376,21 @@ function cancelPendingTeleport(player, pending = pendingTeleports.get(player)) {
   return true;
 }
 
+/**
+ * The dials opened by a league relic's fairy mushroom ("fairy-rings:configure" with `relic`): no staff
+ * or quest is asked, and its Confirm keeps the relic's rules: `refuse(destination)` (a message, or
+ * null to go: its league area locks), `wildernessLevel` (as far as it reaches) and `chosen(ring)`
+ * (its last destination), and while `active()` says the relic is still held. The grant lasts only while
+ * these dials are open: Confirm or their closing ends it. Live opens these same dials from the mushroom
+ * (rsprox 234/3275).
+ */
+const relicDials = new WeakMap();
+
 /** OSRS sets busy the tick after the dials open (not on a dial click). */
-function openDial({ player, location }) {
-  if (!player || !canUse(player)) return;
+function openDial({ player, location, relic = null }) {
+  if (!player || (!relic && !canUse(player))) return;
+  if (relic) relicDials.set(player, relic);
+  else relicDials.delete(player);
   configuredRing.set(player, ringTile(location));
   setDials(player, "");
   sendTravelLog(player);
@@ -608,7 +620,11 @@ function hasLightSource(player) {
 }
 
 function confirmDial(player) {
-  if (!canUse(player)) return;
+  const granted = relicDials.get(player) ?? null;
+  relicDials.delete(player);
+  // A relic given up since (relics reset, a re-pick) grants nothing: the ring's own rules apply.
+  const relic = granted && granted.active?.() !== false ? granted : null;
+  if (!relic && !canUse(player)) return;
   const ring = resolveRing(player, rings.get(codeFromDials(player)), configuredRing.get(player));
   if (!ring?.destination) {
     pluginApi.emitCustomEvent("fairy-rings:invalid", { player, code: codeFromDials(player) });
@@ -635,10 +651,17 @@ function confirmDial(player) {
     if (!refuseLockedCode(player, ring, configuredRing.get(player), true, locked)) sender.sendVarbit(BUSY_VARBIT, 0);
     return;
   }
-  if (!core.TeleportHandler.checkReqs(player, ring.destination, 20)) {
+  const refused = relic?.refuse?.(ring.destination) ?? null;
+  if (refused) {
+    player.sendMessage(refused);
     sender.sendVarbit(BUSY_VARBIT, 0);
     return;
   }
+  if (!core.TeleportHandler.checkReqs(player, ring.destination, relic?.wildernessLevel ?? 20)) {
+    sender.sendVarbit(BUSY_VARBIT, 0);
+    return;
+  }
+  relic?.chosen?.(ring);
   sendLastDestination(player, ring);
   player.setAttribute(LAST_CODE_ATTRIBUTE, ring.code);
   if (ring.code === DARK_WARNING_CODE && !hasLightSource(player)) {
@@ -728,6 +751,8 @@ function interfaceAction(event) {
  */
 function interfaceClosed({ player, interfaceId }) {
   if (interfaceId !== DIALS_INTERFACE) return;
+  // A relic's grant ends with its dials (a later Confirm is a ring's own).
+  relicDials.delete(player);
   const sender = player.getPacketSender();
   sender.closeSubInterface(SIDE_MODAL);
   sender.sendClientScript(MESLAYER_CLOSE_SCRIPT, SEARCH_MESLAYER);
@@ -766,12 +791,27 @@ function useExitRing({ player, objectId, location }) {
 }
 
 /**
- * The ring's "Favourites" picks a favourite from its sub-menu; chosen without one (the option
- * itself), it only says so.
+ * The ring's "Favourites" picks a favourite from its sub-menu (sub-ops 1-10, one per saved slot)
+ * and teleports there at once; chosen without one (the option itself), it only says so.
  */
-function favouritesOption({ player }) {
-  if (!player) return;
-  player.sendMessage("You will need to select a favourite from the sub-menu.");
+function favouritesOption({ player, location, subOpId }) {
+  if (!player || !canUse(player)) return;
+  const slot = Number(subOpId) - 1;
+  const slots = favouriteSlots(player);
+  const code = Number.isInteger(slot) && slot >= 0 && slot < MAX_FAVOURITES ? slots[slot] : "";
+  if (!code) {
+    player.sendMessage("You will need to select a favourite from the sub-menu.");
+    return;
+  }
+  const ring = resolveRing(player, rings.get(code), ringTile(location));
+  if (!ring?.destination) return;
+  const locked = codeLockRefusal(player, ring.code);
+  if (locked) {
+    refuseLockedCode(player, ring, ringTile(location), false, locked);
+    return;
+  }
+  if (!core.TeleportHandler.checkReqs(player, ring.destination, 20)) return;
+  fairyTeleport(player, ring, ringTile(location), false);
 }
 
 /** At login: the last destination and the favourite slots. */

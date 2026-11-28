@@ -75,6 +75,7 @@ const SCRIPT = {
   FADE_WHITE: 2308,
   /** Party information: a member's line (slot, text), an applicant's line, the footer. */
   PARTY_MEMBER: 2317,
+  PARTY_ARROWS: 5239,
   PARTY_APPLICANT: 2321,
   PARTY_FOOTER: 2323,
   /** The party list: one row (index, text). */
@@ -323,6 +324,10 @@ function displayName(player) {
   return player.getDisplayName();
 }
 
+function partyDisplayName(player) {
+  return displayName(player).replaceAll(" ", "\u00a0");
+}
+
 /** "him" or "her", as the theatre's messages about another member say it. */
 function objectPronoun(player) {
   return player.getAppearance?.()?.isMale?.() === false ? "her" : "him";
@@ -563,5 +568,5 @@ module.exports = {
   THEATRE, THEATRE_PLANES, VER_SINHAZA, OUTSIDE, NPC, OBJECT, ITEM, INTERFACE, SCRIPT, VARP, VARBIT,
   HEALTH_BAR, MAX_PARTY_SIZE, MAX_APPLICANTS, LIST_ROWS, OVERLAY_HUD_UID, MODES, ROOMS, ROOM_ORDER,
   loc, tileOf, inBox, inTheatre, inVerSinhaza, cycle, later, repeat, statement, npcSay, options,
-  fade, fadeRed, fadeMove, facing, displayName, objectPronoun, formatTicks, byMode, onObject,
+  fade, fadeRed, fadeMove, facing, displayName, partyDisplayName, objectPronoun, formatTicks, byMode, onObject,
 };

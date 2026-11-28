@@ -75,8 +75,35 @@ museum room..." shows at 1527, and its continue completes the quest (1529): 1383
 and "3 Quest Points", "1,000 Prayer XP", "1,000 Crafting XP", "750 Coins", "The Enchanted Key". The
 key stays in the inventory (it was never handed back).
 
+## Reading the journal and the museum
+
+Issue [#6776](https://github.com/RSPSApp/tsps/issues/6776). No rsprox capture reads the journal or
+studies a display: the rsprox.net index has no recorded action on `makinghistory_journal`,
+`makinghistory_shield_display`, `makinghistory_large_display1`/`2` or `makinghistory_bookcase`, and
+the quest capture above never opens them. Everything here is the Wiki's
+(`server/plugins/quests/makinghistory/data/museum.json`, unit `Museum.MakingHistory.js`).
+
+- **Drozal's Journal** (obj 6755, Read) opens the two-page book (392) titled "Drozal's Journal": four
+  spreads, line for line as the Wiki's interface pictures 1-4 show them (Journal (Making History)).
+  Other items named "Journal" (Filliman's) fall through.
+- The displays exist once `makinghistory_objloc` 1390 = 1 (the multilocs 10266/10268/10270/10272 turn
+  into 10267/10269/10271/10273), so Study needs nothing else.
+- **Shield Display** (10267): one message box, the Wiki's Shield Display line.
+- **Large Display** (10269 ground floor, 10271 first floor): three message boxes each
+  (Transcript:Large Display).
+- **Bookcase** (10273): "There's a great variety of books. Which shall you choose?", then a menu of
+  "The History of the Outpost.", "The Times of Lathas.", "The Mysterious Adventurer." (the RuneScape
+  Wiki's Transcript:Bookcase (Outpost); the OSRS Wiki has none). The History of the Outpost (4 spreads)
+  and The Mysterious Adventurer (2 spreads) open in the book with the reader's name (and He has /
+  She has / They have) in the lines the Wiki's pictures show; The Times of Lathas is one message box,
+  its Song of the Elves wording once that quest is complete.
+
 ## Not covered
 
+- Reading the journal and the museum (above) have no capture; the Shield Display's line as a message
+  box and the bookcase's prompt as a message box before the menu are ours.
+- The book lines with the player's name keep the Wiki pictures' breaks; a long name can run past the
+  page edge, where live may wrap it differently.
 - The capture never feels the key before the chest, so the hot/cold messages follow the transcript.
 - The scroll's "You are awarded:" line and the reward-scroll layout are the shared quest runtime's.
 - Jorral's line before the cutscene is joined with a space: the Wiki parser keeps no forced break.

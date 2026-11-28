@@ -4,7 +4,6 @@ import type { SdMapData } from "../../render/loader/SdMapData";
 import type { SdMapLoaderInput } from "../../render/loader/SdMapLoaderInput";
 import type { VarManager } from "../../rs/config/vartype/VarManager";
 import { Scene } from "../../rs/scene/Scene";
-import { isLowEndDevice } from "../../common/utils/DeviceUtil";
 import { BaseTypeLoader } from "../../rs/config/TypeLoader";
 
 /**
@@ -17,7 +16,12 @@ import { BaseTypeLoader } from "../../rs/config/TypeLoader";
 export const CACHE_FORMAT = 7;
 // Desktop HD scenes can cover 64 squares before walking into the next scene.
 // Retain several scene windows rather than evicting the previous login's squares.
-export const MAX_SQUARES = isLowEndDevice ? 64 : 256;
+// The Performance preset overrides this through setMapSquareCacheLimit (handhelds cap at 64).
+export let MAX_SQUARES = 256;
+
+export function setMapSquareCacheLimit(limit: number): void {
+    MAX_SQUARES = Math.max(1, Math.min(256, limit | 0));
+}
 
 const DB_NAME = "map-square-cache";
 

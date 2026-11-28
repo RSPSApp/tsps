@@ -19,7 +19,7 @@ const Lobby = require('../plugins/minigames/tob/Lobby.TheatreOfBlood');
 const RaidUnit = require('../plugins/minigames/tob/Raid.TheatreOfBlood');
 const Retrieval = require('../plugins/minigames/tob/Retrieval.TheatreOfBlood');
 
-const hooks = { prompts: [] };
+const hooks = { prompts: [], commands: {} };
 
 /** Any hook registration the units make that a test doesn't need is a no-op. */
 function fakeApi() {
@@ -44,7 +44,11 @@ function fakeApiBase() {
     onObjectInteraction: (handler) => {
       if (typeof handler === 'function') (hooks.objects ??= []).push(handler);
     },
-    onInterfaceActionButton: (uid, handler) => { (hooks.buttons ??= {})[uid] = handler; },
+    onInterfaceActionButton: (uids, handler) => {
+      hooks.buttons ??= {};
+      for (const uid of [uids].flat()) hooks.buttons[uid] = handler;
+    },
+    onInterfaceActionClick: (handler) => (hooks.clicks ??= []).push(handler),
     onZoneEnter() {},
     onZoneExit: (area, handler) => (hooks.zoneExits ??= []).push(handler),
     onPlayerLogout: (handler) => (hooks.logout ??= []).push(handler),
@@ -53,6 +57,7 @@ function fakeApiBase() {
     onPlayerDeath() {},
     onCanTeleport() {},
     onItemAction() {},
+    registerCommand: (name, handler) => { hooks.commands[name] = handler; },
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push({ player, title, args }),
     spawnNpc: () => null,
     removeNpc() {},
@@ -108,7 +113,7 @@ function fakePlayer(name) {
   const index = nextIndex++;
   const p = {
     name, location: new Location(3667, 3219, 0), area: null, hp: 99, blocked: false, untargetable: false, render: null,
-    messages: [], scripts: [], interfaces: [], opened: [], inventories: [], subs: new Map(), statements: [], texts: {}, sounds: [], songs: [],
+    messages: [], scripts: [], interfaces: [], opened: [], flags: [], inventories: [], subs: new Map(), statements: [], texts: {}, sounds: [], songs: [],
     inventory: fakeContainer(28), equipment: fakeContainer(14),
     getUsername: () => name, getDisplayName: () => name,
     getIndex: () => index,
@@ -128,6 +133,7 @@ function fakePlayer(name) {
     getInventory: () => p.inventory,
     getEquipment: () => p.equipment,
     getBank: () => fakeContainer(10),
+    getBanks: () => [],
     getSkillManager: () => ({
       getMaxLevel: () => 99,
       getCurrentLevel: (skill) => (skill.getIndex?.() === 3 ? p.hp : 99),
@@ -162,10 +168,11 @@ function fakePlayer(name) {
         sendInterfaceScript: (id, args = []) => { p.scripts.push([id, ...args]); p.opened.push(['script', id, args]); return sender; },
         sendSubInterface: (uid, id) => { p.subs.set(uid, id); return sender; },
         closeSubInterface: (uid) => { p.subs.delete(uid); return sender; },
-        sendInterfaceRemoval: () => sender,
-        sendClientScript: (id, ...args) => { p.scripts.push([id, ...args]); return sender; },
-        sendInterfaceFlagsRange: () => sender,
-        sendInterfaceFlags: () => sender,
+        sendInterfaceRemoval: () => { p.interfaceId = -1; return sender; },
+        getChatboxGroupId: () => -1,
+        sendClientScript: (id, ...args) => { p.scripts.push([id, ...args]); p.opened.push(['script', id, args]); return sender; },
+        sendInterfaceFlagsRange: (...args) => { p.flags.push(args); p.opened.push(['flags', ...args]); return sender; },
+        sendInterfaceFlags: (...args) => { p.flags.push(args); p.opened.push(['flags', ...args]); return sender; },
         sendInventory: (inv, size, items) => { p.inventories.push({ inv, size, items }); return sender; },
         sendString: (text, uid) => { p.texts[uid] = text; return sender; },
         sendEnterAmountPrompt: () => sender,
@@ -197,7 +204,10 @@ before(() => {
   RaidUnit(api);
   Retrieval(api);
   require('../plugins/minigames/tob/Rewards.TheatreOfBlood')(api);
+  require('../plugins/minigames/tob/Bloat.TheatreOfBlood')(api);
   require('../plugins/minigames/tob/Verzik.TheatreOfBlood')(api);
+  require('../plugins/minigames/tob/Books.TheatreOfBlood')(api);
+  require('../plugins/minigames/tob/Commands.TheatreOfBlood')(api);
   require('../plugins/minigames/tob/Entry.TheatreOfBlood')(api);
   require('../plugins/minigames/tob/InfoBoard.TheatreOfBlood')(api);
   require('../plugins/minigames/tob/Stats.TheatreOfBlood')(api);
@@ -410,7 +420,7 @@ test('accepting an application tells its applicant and updates the party HUD on 
   ticks(1);
   assert.equal(accepted.varbits.get(6440), 1);
   Lobby.resumeButton({ player: leader, buttonId: 50 << 16, action: 22 });
-  assert.deepEqual(declined.messages, ['Your application to the party of Leader Display has been declined.']);
+  assert.deepEqual(declined.messages, ['Your application to the party of Leader\u00a0Display has been declined.']);
 
   const singleNameLeader = fakePlayer('Captain');
   const otherParty = Parties.create(singleNameLeader);
@@ -467,9 +477,10 @@ for (const status of ['disbanded', 'inside the Theatre']) {
 
 // ------------------------------------------------------------------ the raid
 
-function startRaid(names = ['Solo']) {
+function startRaid(names = ['Solo'], mode = 'normal') {
   const players = names.map(fakePlayer);
   const party = Parties.create(players[0]);
+  party.mode = mode;
   for (const other of players.slice(1)) {
     party.apply(other);
     party.accept(other);
@@ -1074,15 +1085,216 @@ test('the lobby answers the components and pause-button slots the cache scripts 
     'Back, Refresh, Unblock, size, level, Apply/Leave, Mode resume children 0-6 of 50:0');
 });
 
-test('a row\'s View party opens that party\'s information', () => {
-  const leader = fakePlayer('RowLeader');
+const listButtons = (364 << 16) | 3;
+const listComponent = (364 << 16) | 17;
+
+function resumeList(player, action, buttonId = listComponent) {
+  const event = { player, buttonId, action, handled: false };
+  for (const handler of hooks.clicks) {
+    handler(event);
+    if (event.handled) break;
+  }
+  return event.handled;
+}
+
+function resetPartyList(t) {
+  for (const party of Parties.parties.values()) party.dispose();
+  t.after(() => {
+    for (const party of Parties.parties.values()) party.dispose();
+  });
+}
+
+function partyListFixture(t) {
+  resetPartyList(t);
+  let now = 100;
+  t.mock.method(Shared, 'cycle', () => now);
+  const older = Parties.create(fakePlayer('Older'));
+  now = 110;
+  const middle = Parties.create(fakePlayer('Middle'));
+  now = 120;
+  const newer = Parties.create(fakePlayer('Newer'));
+  now = 130;
+  return { older, middle, newer, viewer: fakePlayer('Viewer') };
+}
+
+function listPayloads(viewer) {
+  return viewer.scripts.filter(([id]) => id === 2340).slice(-45).map(([, , payload]) => payload);
+}
+
+function listLeaders(viewer) {
+  return listPayloads(viewer).map((payload) => payload.split('|')[0]);
+}
+
+function beginListRaid(t, party) {
+  const raid = Raid.begin(party.leader);
+  t.after(() => raid.dispose());
+  return raid;
+}
+
+test('the party list opens and refreshes with all 45 rows followed by both pause-button ranges', (t) => {
+  resetPartyList(t);
+  const viewer = fakePlayer('Viewer');
+  const expected = [
+    ['interface', 364],
+    ...Array.from({ length: 45 }, (_, row) => ['script', 2340, [row, '']]),
+    ['flags', listButtons, 0, 2, 1],
+    ['flags', listComponent, 0, 44, 1],
+  ];
+  Lobby.openOverview(viewer);
+  assert.deepEqual(viewer.opened, expected);
+  assert.ok(Lobby.LIST_ROW_UIDS.every((uid) => !hooks.buttons[uid]), 'rows have no server-side button ops');
+  viewer.opened.length = 0;
+  assert.equal(resumeList(viewer, 0, listButtons), true);
+  assert.deepEqual(viewer.opened, expected);
+});
+
+test('the party list sends the newest parties first with their age in ticks', (t) => {
+  const { viewer } = partyListFixture(t);
+  Lobby.openOverview(viewer);
+  const rows = listPayloads(viewer);
+  assert.deepEqual(rows.slice(0, 3).map((row) => [row.split('|')[0], row.split('|').at(-1)]),
+    [['Newer', '10'], ['Middle', '20'], ['Older', '30']]);
+  assert.deepEqual(rows.slice(3), Array(42).fill(''));
+});
+
+test('the party list sends age zero for a party created this tick', (t) => {
+  resetPartyList(t);
+  t.mock.method(Shared, 'cycle', () => 100);
+  Parties.create(fakePlayer('New'));
+  const viewer = fakePlayer('Viewer');
+  Lobby.openOverview(viewer);
+  assert.equal(listPayloads(viewer)[0].split('|').at(-1), '0');
+});
+
+test('the party list keeps a raid as an empty row, including when the list reaches 45 rows', (t) => {
+  const { middle, viewer } = partyListFixture(t);
+  beginListRaid(t, middle);
+  Lobby.openOverview(viewer);
+  assert.deepEqual(listLeaders(viewer).slice(0, 4), ['Newer', '', 'Older', '']);
+  assert.equal(listPayloads(viewer)[2].split('|').at(-1), '30');
+  // These were all created at the same tick. The creation order breaks the tie.
+  for (let i = 0; i < 43; i++) Parties.create(fakePlayer('Extra' + i));
+  Lobby.openOverview(viewer);
+  const leaders = listLeaders(viewer);
+  assert.equal(leaders[0], 'Extra42');
+  assert.equal(leaders[42], 'Extra0');
+  assert.deepEqual(leaders.slice(43), ['Newer', '']);
+});
+
+test('a row\'s View party opens that party\'s information', (t) => {
+  const { older, middle, viewer } = partyListFixture(t);
+  beginListRaid(t, middle);
+  Lobby.openOverview(viewer);
+  assert.equal(resumeList(viewer, 2), true);
+  assert.equal(viewer.getInterfaceId(), 50);
+  assert.equal(viewer.getAttribute(Lobby.ATTR.VIEWING), older.id);
+});
+
+test('a party list click still selects the sent party after a newer party is made', (t) => {
+  resetPartyList(t);
+  const shown = Parties.create(fakePlayer('Shown'));
+  const viewer = fakePlayer('Viewer');
+  Lobby.openOverview(viewer);
+  assert.equal(listLeaders(viewer)[0], 'Shown');
+  Parties.create(fakePlayer('BrandNew'));
+  assert.equal(resumeList(viewer, 0), true);
+  assert.equal(viewer.getInterfaceId(), 50);
+  assert.equal(viewer.getAttribute(Lobby.ATTR.VIEWING), shown.id);
+});
+
+for (const change of ['starts its raid before opening', 'starts its raid after opening', 'disbands after opening']) {
+  test(`the party list reopens silently when the selected party ${change}`, (t) => {
+    resetPartyList(t);
+    const party = Parties.create(fakePlayer('Recruiting'));
+    const viewer = fakePlayer('Viewer');
+    if (change === 'starts its raid before opening') beginListRaid(t, party);
+    Lobby.openOverview(viewer);
+    assert.equal(listLeaders(viewer)[0], change === 'starts its raid before opening' ? '' : 'Recruiting');
+    if (change === 'starts its raid after opening') beginListRaid(t, party);
+    if (change === 'disbands after opening') Lobby.leaveParty(party.leader);
+    assert.equal(resumeList(viewer, 0), true);
+    assert.deepEqual(viewer.interfaces, [364, 364]);
+    assert.equal(viewer.getAttribute(Lobby.ATTR.VIEWING), null);
+    assert.deepEqual(viewer.messages, []);
+    assert.deepEqual(viewer.statements, []);
+  });
+}
+
+for (const ending of ['disposal', 'the last member leaving', 'the last member logging out', 'the last away member being forgotten']) {
+  test(`a party list blank closes up after ${ending}`, (t) => {
+    const { middle, viewer } = partyListFixture(t);
+    const leader = middle.leader;
+    const away = fakePlayer('Away');
+    if (ending === 'the last away member being forgotten') {
+      middle.apply(away);
+      assert.equal(middle.accept(away), true);
+    }
+    const raid = beginListRaid(t, middle);
+    Lobby.openOverview(viewer);
+    const before = listLeaders(viewer).slice(0, 3);
+    if (ending === 'disposal') raid.dispose();
+    if (ending === 'the last member leaving') raid.remove(leader);
+    if (ending === 'the last member logging out') raid.onAreaLeave(leader, true);
+    if (ending === 'the last away member being forgotten') {
+      raid.onAreaLeave(away, true);
+      raid.remove(leader);
+      assert.equal(raid.over, false);
+      assert.equal(Parties.byId(middle.id), middle);
+      raid.forget(away);
+    }
+    assert.equal(raid.over, true);
+    assert.equal(Parties.byId(middle.id), null);
+    Lobby.openOverview(viewer);
+    assert.deepEqual(before, ['Newer', '', 'Older']);
+    assert.deepEqual(listLeaders(viewer).slice(0, 3), ['Newer', 'Older', '']);
+  });
+}
+
+test('a lobby disband removes its party list row immediately', (t) => {
+  const { middle, viewer } = partyListFixture(t);
+  Lobby.openOverview(viewer);
+  const before = listLeaders(viewer).slice(0, 3);
+  Lobby.leaveParty(middle.leader);
+  assert.equal(Parties.byId(middle.id), null);
+  Lobby.openOverview(viewer);
+  assert.deepEqual(before, ['Newer', 'Middle', 'Older']);
+  assert.deepEqual(listLeaders(viewer).slice(0, 3), ['Newer', 'Older', '']);
+});
+
+test('party list names use non-breaking spaces inside and outside the leader highlight', (t) => {
+  resetPartyList(t);
+  const leader = fakePlayer('Ann Lee');
   const party = Parties.create(leader);
-  const viewer = fakePlayer('RowViewer');
-  const row = Parties.listed().indexOf(party);
-  Lobby.selectRow({ player: viewer, buttonId: Lobby.LIST_ROW_UIDS[row] });
-  assert.ok(viewer.interfaces.includes(50));
-  assert.equal(viewer.getAttribute(Lobby.ATTR.VIEWING), party.id);
-  party.dispose();
+  const member = fakePlayer('Bob Ray');
+  party.apply(member);
+  assert.equal(party.accept(member), true);
+  const viewer = fakePlayer('Viewer');
+  Lobby.openOverview(viewer);
+  assert.deepEqual(listPayloads(viewer)[0].split('|').slice(0, 2), ['Ann\u00a0Lee', 'Bob\u00a0Ray']);
+  Lobby.openOverview(member);
+  assert.deepEqual(listPayloads(member)[0].split('|').slice(0, 2), ['<col=ffffff>Ann\u00a0Lee</col>', 'Bob\u00a0Ray']);
+});
+
+test('the party entry message and the barrier refusal use non-breaking spaces in the leader name', (t) => {
+  resetPartyList(t);
+  const { raid, players: [, member] } = startRaid(['Ann Lee', 'Member']);
+  t.after(() => raid.dispose());
+  assert.ok(member.messages.includes('Ann\u00a0Lee has entered the Theatre of Blood (Normal Mode). Step inside to join him...'));
+  member.location = new Location(3186, 4446, 0);
+  raid.room.passBarrier(member, barrierObject(3185, 4446, 0));
+  assert.equal(member.statements.at(-1).getDialogues().get(0).getText(), 'Your leader, Ann\u00a0Lee, must go first.');
+});
+
+test('the already-joined applicant message uses a non-breaking space in the name', (t) => {
+  resetPartyList(t);
+  const leader = fakePlayer('Leader');
+  const applicant = fakePlayer('Bob Ray');
+  const party = Parties.create(leader);
+  party.apply(applicant);
+  Parties.create(applicant);
+  Lobby.openInformation(leader, party);
+  Lobby.resumeButton({ player: leader, buttonId: 50 << 16, action: 12 });
+  assert.equal(leader.statements.at(-1).getDialogues().get(0).getText(), 'Bob\u00a0Ray appears to have joined another party.');
 });
 
 test('every party-information click redraws it, so the client\'s pause button clears', () => {
@@ -1095,6 +1307,155 @@ test('every party-information click redraws it, so the client\'s pause button cl
   Lobby.resumeButton({ player: leader, buttonId: 50 << 16, action: 8, handled: false });
   assert.equal(leader.interfaces.length, before + 2, 'kicking an empty member row');
   party.dispose();
+});
+
+const partyInfoId = 50;
+const partyHudNames = (28 << 16) | 12;
+const memberRows = (player) => player.scripts.filter(([script]) => script === 2317).slice(-5);
+const footerRights = (player) => player.scripts.findLast(([script]) => script === 2323)[1];
+
+function reorderFixture(t) {
+  const leader = fakePlayer('Lead');
+  const member = fakePlayer('Ann Lee');
+  const applicant = fakePlayer('Bob Ray');
+  const outsider = fakePlayer('Outsider');
+  const party = Parties.create(leader);
+  t.after(() => party.dispose());
+  party.apply(member);
+  assert.equal(party.accept(member), true);
+  party.apply(applicant);
+  for (const player of [leader, member, applicant, outsider]) Lobby.openInformation(player, party);
+  return { leader, member, applicant, outsider, party };
+}
+
+function clickPartyArrow(player, component, opId = 1) {
+  const buttonId = (partyInfoId << 16) | component;
+  assert.equal(typeof hooks.buttons[buttonId], 'function', `registered action for 50:${component}`);
+  hooks.buttons[buttonId]({ player, buttonId, action: opId, opId, slot: 0xffff, handled: false });
+}
+
+test('party ordering enables the ten arrows on each opening for every viewer', (t) => {
+  const { leader, member, applicant, outsider, party } = reorderFixture(t);
+  const flags = Array.from({ length: 10 }, (_, index) => [(partyInfoId << 16) | (63 + index), -1, -1, 1 << 1]);
+  for (const player of [leader, member, applicant, outsider]) {
+    Lobby.openInformation(player, party);
+    assert.deepEqual(player.flags, [...flags, ...flags]);
+    assert.deepEqual(player.scripts.filter(([script]) => script === 5239), [[5239], [5239]]);
+    assert.ok(player.scripts.findIndex(([script]) => script === 5239) <
+      player.scripts.findIndex(([script]) => script === 2317), 'arrows script precedes member rows');
+  }
+});
+
+test('party ordering writes viewer rights and non-breaking spaces to the details screen', (t) => {
+  const { leader, member, applicant, outsider } = reorderFixture(t);
+  for (const [player, rights] of [[leader, 2], [member, 1], [applicant, 3], [outsider, 0]]) {
+    assert.equal(footerRights(player), rights);
+    const rows = memberRows(player);
+    assert.equal(rows.length, 5);
+    assert.ok(rows.every(([, value]) => value === rights));
+    assert.equal(rows[1][2].split('|')[0], 'Ann\u00a0Lee');
+  }
+  assert.equal(member.scripts.findLast(([script]) => script === 2321)[1].split('|')[0], 'Bob\u00a0Ray');
+});
+
+test('party ordering writes five lobby HUD names with non-breaking spaces and no final break', (t) => {
+  const { leader } = reorderFixture(t);
+  Lobby.refreshHud(leader);
+  assert.equal(leader.texts[partyHudNames], 'Lead<br>Ann\u00a0Lee<br>-<br>-<br>-');
+});
+
+test('party ordering shows the recorded leadership warning (A3)', {
+  skip: 'The mechanics-only implementation opens the confirmation menu directly.',
+}, () => {});
+
+test('party ordering confirms a hand-over before swapping, then redraws the screen and HUD', (t) => {
+  const { leader, member, applicant, party } = reorderFixture(t);
+  const blocked = fakePlayer('Blocked');
+  party.blocked.add(blocked.getUsername());
+  party.mode = 'entry';
+  party.preferredSize = 3;
+  party.preferredCombat = 100;
+  Lobby.refreshHud(leader);
+  clickPartyArrow(leader, 65);
+  assert.equal(leader.getInterfaceId(), -1);
+  assert.deepEqual(party.members, [leader, member]);
+  const prompt = hooks.prompts.at(-1);
+  assert.equal(prompt.player, leader);
+  assert.equal(prompt.title, 'Continue?');
+  assert.deepEqual(prompt.args.filter((arg) => typeof arg === 'string'), ['Yes', 'No']);
+  choose('Yes');
+  assert.equal(party.leader, member);
+  assert.deepEqual(party.members, [member, leader]);
+  assert.deepEqual(party.applicants, [applicant]);
+  assert.ok(party.blocked.has(blocked.getUsername()));
+  assert.deepEqual([party.mode, party.preferredSize, party.preferredCombat, party.raid], ['entry', 3, 100, null]);
+  assert.equal(Parties.byId(party.id), party);
+  assert.equal(leader.getInterfaceId(), partyInfoId);
+  assert.equal(footerRights(leader), 1);
+  assert.deepEqual(memberRows(leader).map(([, rights, row]) => [rights, row.split('|')[0]]),
+    [[1, 'Ann\u00a0Lee'], [1, 'Lead'], [1, ''], [1, ''], [1, '']]);
+  assert.equal(leader.texts[partyHudNames], 'Lead<br>Ann\u00a0Lee<br>-<br>-<br>-', 'details precede HUD');
+  ticks(1);
+  assert.equal(leader.texts[partyHudNames], 'Ann\u00a0Lee<br>Lead<br>-<br>-<br>-');
+  assert.equal(member.texts[partyHudNames], leader.texts[partyHudNames]);
+  assert.deepEqual(leader.messages, []);
+  Lobby.useEntrance({ player: leader });
+  assert.match(leader.statements.at(-1).getDialogues().get(0).getText(), /leader, Ann\u00a0Lee, must go first/);
+});
+
+test('party ordering can cancel a down-arrow hand-over with No or by closing the menu', (t) => {
+  const { leader, member, party } = reorderFixture(t);
+  clickPartyArrow(leader, 64);
+  assert.equal(hooks.prompts.at(-1).title, 'Continue?');
+  choose('No');
+  assert.deepEqual(party.members, [leader, member]);
+  assert.equal(leader.getInterfaceId(), partyInfoId);
+  clickPartyArrow(leader, 64);
+  assert.equal(leader.getInterfaceId(), -1);
+  hooks.api.emitCustomEvent('interface:closed', { player: leader, interfaceId: 219 });
+  ticks(1);
+  assert.deepEqual(party.members, [leader, member]);
+  assert.equal(leader.getInterfaceId(), partyInfoId);
+});
+
+test('party ordering swaps non-first rows immediately without opening a menu', (t) => {
+  const { leader, member, applicant, outsider, party } = reorderFixture(t);
+  t.mock.method(PluginManager.getCoreApi().World, 'getPlayers', () => [outsider]);
+  assert.equal(party.accept(applicant), true);
+  clickPartyArrow(leader, 67);
+  assert.deepEqual(party.members, [leader, applicant, member]);
+  assert.deepEqual(hooks.prompts, []);
+  assert.deepEqual(leader.statements, []);
+  for (const player of party.members) {
+    assert.equal(player.texts[partyHudNames], 'Lead<br>Bob\u00a0Ray<br>Ann\u00a0Lee<br>-<br>-');
+    assert.equal(memberRows(player)[1][2].split('|')[0], 'Bob\u00a0Ray');
+  }
+  assert.equal(memberRows(outsider)[1][2].split('|')[0], 'Bob\u00a0Ray');
+  assert.equal(footerRights(outsider), 0);
+});
+
+test('party ordering redraws invalid or unauthorized arrow clicks without changing the party', (t) => {
+  const { leader, member, applicant, party } = reorderFixture(t);
+  for (const [player, component] of [[member, 65], [applicant, 65], [leader, 63], [leader, 66], [leader, 67]]) {
+    const openings = player.interfaces.length;
+    clickPartyArrow(player, component);
+    assert.equal(player.interfaces.length, openings + 1);
+  }
+  party.raid = {};
+  clickPartyArrow(leader, 65);
+  assert.deepEqual(party.members, [leader, member]);
+  assert.deepEqual(hooks.prompts, []);
+  assert.equal(Parties.byId(party.id), party);
+});
+
+test('party ordering does not confirm a hand-over after the selected member leaves', (t) => {
+  const { leader, member, applicant, party } = reorderFixture(t);
+  clickPartyArrow(leader, 65);
+  party.remove(member);
+  assert.equal(party.accept(applicant), true);
+  choose('Yes');
+  assert.deepEqual(party.members, [leader, applicant]);
+  assert.equal(leader.getInterfaceId(), partyInfoId);
 });
 
 test('no theatre NPC plays a player animation: no blocks but Verzik\'s first form, no default attack or death', () => {
@@ -1192,6 +1553,162 @@ test('the strategy table outside a raid is left alone', (t) => {
   assert.equal(InfoBoard.read({ player: reader, objectId: 33014, option: 'Read' }), false);
   assert.deepEqual(reader.sent.interfaces, []);
 });
+
+// ------------------------------------------------------------------ books
+
+function captureBookDrops(t) {
+  const drops = [];
+  const { ItemOnGroundManager } = PluginManager.getCoreApi();
+  t.mock.method(ItemOnGroundManager, 'registerLocation', (player, item, position, area, options) => {
+    drops.push({
+      player, area, options,
+      id: item.getId(),
+      count: item.getAmount(),
+      tile: [position.getX(), position.getY(), position.getZ()],
+      tick: Shared.cycle(),
+      messages: [...player.messages],
+    });
+  });
+  return drops;
+}
+
+function assertBookDrop(drop, raid, player, id, tile) {
+  assert.ok(drop, 'the book was registered');
+  assert.equal(drop.player, player);
+  assert.equal(drop.id, id);
+  assert.equal(drop.count, 1);
+  assert.deepEqual(drop.tile, tile);
+  assert.equal(drop.area, raid.area);
+  assert.deepEqual(drop.options, { goesGlobal: false, despawnDelay: 200 });
+}
+
+const fixedBookTiles = [
+  ['MAIDEN', 22504, [3168, 4447, 0]],
+  ['NYLOCAS', 22508, [3295, 4248, 0]],
+  ['SOTETSEG', 22510, [3279, 4328, 0]],
+  ['XARPUS', 22512, [3170, 4387, 1]],
+];
+
+for (const mode of ['entry', 'normal', 'hard']) {
+  test(`Theatre books: fixed tiles, private lifetime and completion order in ${mode}`, (t) => {
+    const { raid, players: [solo] } = startRaid(['BookHunter'], mode);
+    t.after(() => raid.dispose());
+    const drops = captureBookDrops(t);
+    for (const [key, id, tile] of fixedBookTiles) {
+      const room = raid.buildRoom(key);
+      solo.location = Shared.loc(room.def.entrance);
+      const tick = Shared.cycle();
+      room.complete();
+      assertBookDrop(drops.at(-1), raid, solo, id, tile);
+      assert.equal(drops.at(-1).tick, tick);
+      assert.ok(drops.at(-1).messages.at(-1).startsWith(
+        `Wave '${room.def.name}' ${Shared.MODES[mode].tag} complete!`,
+      ));
+      room.complete(); // Replaying completion must not register another stack.
+    }
+    assert.equal(drops.length, fixedBookTiles.length);
+  });
+}
+
+test('Theatre books: separate drops for eligible players, including a jailed player', (t) => {
+  const { raid, players: [ann, bob, carrying, banked] } = startRaid(['BookAnn', 'BookBob', 'BookBag', 'BookBank']);
+  t.after(() => raid.dispose());
+  const drops = captureBookDrops(t);
+  carrying.inventory.setItem(0, new Item(22504, 1));
+  const bank = fakeContainer(10);
+  bank.setItem(0, new Item(22504, 1));
+  banked.getBanks = () => [bank];
+  raid.room.start();
+  raid.member(ann).inFight = true;
+  raid.member(bob).inFight = true;
+  bob.hp = 0;
+  raid.onPlayerDied(bob);
+  assert.equal(raid.member(bob).jailed, true);
+
+  raid.room.complete();
+
+  assert.equal(drops.length, 2);
+  assertBookDrop(drops[0], raid, ann, 22504, [3168, 4447, 0]);
+  assertBookDrop(drops[1], raid, bob, 22504, [3168, 4447, 0]);
+});
+
+for (const [x, y] of [[3299, 4448], [3288, 4441]]) {
+  test(`Theatre books: Bloat's centre at ${x},${y} after its three-tick death`, (t) => {
+    const { raid, players: [solo] } = startRaid();
+    t.after(() => raid.dispose());
+    const drops = captureBookDrops(t);
+    const room = raid.buildRoom('BLOAT');
+    const bloat = fakeVerzik();
+    bloat.location = new Location(x, y, 0);
+    bloat.hp = 0;
+    room.bloat = bloat;
+    room.state = {};
+    room.npcs.add(bloat);
+    room.start();
+
+    room.tick();
+    assert.equal(room.state.dying, true);
+    ticks(2);
+    assert.equal(drops.length, 0);
+    ticks(1);
+
+    assert.equal(room.isCompleted(), true);
+    assert.equal(room.npcs.has(bloat), false);
+    assert.equal(drops.length, 1);
+    assertBookDrop(drops[0], raid, solo, 22506, [x + 2, y + 2, 0]);
+    assert.match(drops[0].messages.at(-1), /^Wave 'The Pestilent Bloat'/);
+  });
+}
+
+test('Theatre books: Verzik drops from her post-transition tile after the final lines', (t) => {
+  const { raid, players: [solo] } = startRaid();
+  t.after(() => raid.dispose());
+  const drops = captureBookDrops(t);
+  const room = raid.buildRoom('VERZIK');
+  const verzik = fakeVerzik();
+  verzik.location = new Location(3168, 4306, 0);
+  room.verzik = verzik;
+  room.npcs.add(verzik);
+  room.phase = 3;
+  room.stage = 'started';
+
+  room.endPhase();
+  ticks(2);
+  assert.deepEqual(Shared.tileOf(verzik), { x: 3170, y: 4308, z: 0 });
+  ticks(5);
+  assert.equal(drops.length, 0);
+  ticks(1);
+
+  assert.equal(room.isCompleted(), true);
+  assert.equal(room.npcs.has(verzik), false);
+  assert.equal(drops.length, 1);
+  assertBookDrop(drops[0], raid, solo, 22514, [3171, 4309, 0]);
+  const lines = drops[0].messages.filter((line) => /Final Challenge|total completion|count is/.test(line));
+  assert.equal(lines.length, 3);
+  assert.match(lines[0], /^Wave 'The Final Challenge'/);
+  assert.match(lines[1], /^Theatre of Blood total completion time:/);
+  assert.match(lines[2], /^Your completed Theatre of Blood count is:/);
+});
+
+for (const [key, id, tile] of [['BLOAT', 22506, [3301, 4447, 0]], ['VERZIK', 22514, [3166, 4312, 0]]]) {
+  test(`Theatre books: tobcomplete uses the ${key} fallback without a boss death`, (t) => {
+    const { raid, players: [solo] } = startRaid();
+    t.after(() => raid.dispose());
+    const drops = captureBookDrops(t);
+    const room = raid.buildRoom(key);
+    const npc = fakeVerzik();
+    room.npcs.add(npc);
+    if (key === 'VERZIK') room.verzik = npc;
+    else room.bloat = npc;
+
+    assert.equal(hooks.commands.tobcomplete({ player: solo }), true);
+
+    assert.equal(room.isCompleted(), true);
+    assert.equal(room.npcs.has(npc), false);
+    assert.equal(drops.length, 1);
+    assertBookDrop(drops[0], raid, solo, id, tile);
+  });
+}
 
 // ------------------------------------------------------------------ modes, records, tasks
 

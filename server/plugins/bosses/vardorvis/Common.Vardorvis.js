@@ -149,17 +149,38 @@ function lifesteal(npc, dealt) {
   npc.showHitsplat?.(amount, { mine: data.boss.healSplat, others: data.boss.healSplat });
 }
 
-/** A fight's length as the kill messages print it: m:ss. */
-function formatTicks(ticks) {
-  const seconds = Math.round(ticks * 0.6);
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+/** Whether the player has precise timing on (the "option_precise_timing" varbit). */
+function preciseTiming(player) {
+  const id = core?.CacheDefinitions?.getVarbitId?.("option_precise_timing");
+  return Number.isInteger(id) && player?.getPacketSender?.()?.getVarbit?.(id) === 1;
+}
+
+/**
+ * A fight's length as the kill messages print it: m:ss, or m:ss.cc with precise timing on
+ * (rsprox 1156: "Fight duration: 0:35.40 (new personal best)").
+ */
+function formatTicks(ticks, precise = false) {
+  const pad = (value) => String(value).padStart(2, "0");
+  if (!precise) {
+    const seconds = Math.round(ticks * 0.6);
+    return `${Math.floor(seconds / 60)}:${pad(seconds % 60)}`;
+  }
+  const centis = Math.round(ticks * 60);
+  return `${Math.floor(centis / 6000)}:${pad(Math.floor((centis % 6000) / 100))}.${pad(centis % 100)}`;
+}
+
+/** A filterable chat line (message type 105), as live sends the tendril escape. */
+function spam(player, text) {
+  const sender = player.getPacketSender?.();
+  if (sender?.sendTypedMessage && core?.ChatType?.SPAM !== undefined) sender.sendTypedMessage(core.ChatType.SPAM, text);
+  else player.sendMessage(text);
 }
 
 const count = (player, key) => Math.max(0, Math.trunc(Number(player.getAttribute(key)) || 0));
 
 module.exports = {
   init, later, randomInt, pick, shuffle, toWorld, facing, tile, siteTile, graphic, sound, areaSound,
-  protectedFrom, strike, damage, lifesteal, formatTicks, count,
+  protectedFrom, strike, damage, lifesteal, formatTicks, preciseTiming, spam, count,
   CYCLES_PER_TICK,
   INSIDE_ATTRIBUTE, KILLS_ATTRIBUTE, AWAKENED_KILLS_ATTRIBUTE, BEST_TICKS_ATTRIBUTE, AWAKENED_BEST_TICKS_ATTRIBUTE,
   get api() { return api; },

@@ -384,6 +384,9 @@ function openJournal(player, quest, row = questMetadata(quest, coreApi?.CacheDef
       openOverview(player, { name: row.displayname?.[0] ?? quest.name }, row, start);
       return;
     }
+    // A quest that asks for it (`hideEmptyJournal`: The Enchanted Key before Making History) opens
+    // nothing while it has no start text and no journal lines, rather than an empty journal.
+    if (quest.hideEmptyJournal && lines.length === 0) return;
   }
   const packet = player.getPacketSender();
   const updater = player.getFrameUpdater?.();
@@ -730,9 +733,13 @@ function showIndexedBookPage(player) {
     for (let line = 0; line < INDEXED_BOOK_LINES; line++) {
       const entry = lines[line];
       const index = typeof entry === "object" && entry ? entry.index : null;
-      packet.sendInterfaceDisplayState(indexedUid(side.model + line), true);
+      // `{ model: objId, zoom? }`: the line's slot shows that item's model, as live draws the bird book's birds
+      // (Eagles' Peak capture t247: if_setobject on page_*_model_4, zoom 200).
+      const model = typeof entry === "object" && entry && Number.isInteger(entry.model) ? entry.model : null;
+      packet.sendInterfaceDisplayState(indexedUid(side.model + line), model === null);
+      if (model !== null) packet.sendItemOnInterfaces(indexedUid(side.model + line), model, entry.zoom ?? 200);
       packet.sendInterfaceDisplayState(indexedUid(side.index + line), !index);
-      packet.sendString(index ? "" : (entry ?? ""), indexedUid(side.text + line));
+      packet.sendString(index || model !== null ? "" : (entry ?? ""), indexedUid(side.text + line));
       if (index) packet.sendString(index, indexedUid(side.index + line));
     }
   }
@@ -834,6 +841,7 @@ function sendQuestVarps({ player }) {
  *               rewardOrder? (the scroll's groups after the points: "xp", "item", "other"),
  *               scrollItemId? (item id or function of player),
  *               buildJournal?(player, quest, { row }?), onReward?(player, quest),
+ *               hideEmptyJournal? (open nothing while not started with no start text or journal lines),
  *               varpValue?(stage, player) }
  */
 function registerQuest(api, def) {

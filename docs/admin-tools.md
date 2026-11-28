@@ -70,10 +70,14 @@ three-column order and cache skill icons with readable names and current/base
 levels. Click a skill for a target-named level prompt; selected details show XP and
 adjustments by 1 or 5. Max/reset presets retain typed confirmation. Restore leaves
 base levels and XP unchanged. Quests Complete and Reset apply directly without a
-typed confirmation. Reset keeps rewards and quest-specific state; completing again
-can grant rewards again. Staff changes retain typed confirmation. Owners can
-change lower ranks below Owner, and Developers can also grant Owner. Neither can
-change their own rank, a peer/higher rank, or grant their own/higher rank.
+typed confirmation. Unlock all quests and Reset all quests both require typed
+confirmation for the selected player. Unlock all follows `::quest all`, including
+supported miniquests and bulk reward routing. Reset all returns registered quests
+to stage 0 and adjusts quest points. Reset keeps rewards and separate miniquest
+progress, and may keep quest-specific progress. Completing a reset quest can
+grant rewards again. Staff changes retain typed confirmation. Owners can change
+lower ranks below Owner, and Developers can also grant Owner. Neither can change
+their own rank, a peer/higher rank, or grant their own/higher rank.
 
 Inventory, Equipment and Bank read the selected player's live containers. Inventory
 uses the native four-column, seven-row layout. Equipment uses the cache's worn-slot

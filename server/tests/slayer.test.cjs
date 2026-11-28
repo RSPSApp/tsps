@@ -60,6 +60,8 @@ Slayer.register({
   onItemOnNpc() {},
   onItemOnItem() {},
   registerCommand: (name, fn) => { commands[name] = fn; },
+  registerDefinitionSource() {},
+  onCanShop() {},
   spawnNpc: (definition) => { spawned.push(definition); return { getCombat: () => ({ attack() {} }) }; },
   onCustomEvent: (name, fn) => handlers.events.set(name, [...(handlers.events.get(name) ?? []), fn]),
   emitCustomEvent: (name, payload) => {
@@ -393,7 +395,9 @@ test("Konar's Taverley Dungeon hellhounds count Cerberus in her lair, the task's
 });
 
 test("every Konar task has spawns inside each of its areas", () => {
-  const spawns = require("../data/definitions/npc-spawns.json");
+  // A dormant spawn (a zygomite's Fungi, a crab's rocks) is fought as its awake form.
+  const awakeIds = Object.assign({}, ...require("../data/definitions/dormant-npcs.json").families.map((family) => family.awake));
+  const spawns = require("../data/definitions/npc-spawns.json").map((spawn) => ({ ...spawn, id: Number(awakeIds[spawn.id] ?? spawn.id) }));
   const missing = [];
   for (const entry of master(8).tasks) {
     const own = spawns.filter((spawn) => Data.npcCountsFor(entry.task.id, spawn.id, CacheDefinitions.getNpc(spawn.id)?.name));
@@ -652,6 +656,26 @@ test("monsters with a Slayer level can't be attacked below it", () => {
   assert.equal(event.message, "You need a higher Slayer level to know how to wound this monster.");
   assert.deepEqual(player.messages, [], "the core says it on the player's own attack, not the check (cannons, scanners)");
   const able = { attacker: createPlayer({ slayer: 85 }), target: npcNamed("Abyssal demon"), allow: null };
+  Combat.canAttack(able);
+  assert.equal(able.allow, null);
+});
+
+test("a zygomite turned back into its Fungi forgets its last-legs line (issue 6867)", () => {
+  const attributes = new Map([[Finishers.LAST_LEGS_ATTRIBUTE, true]]);
+  const zygomite = { getAttribute: (key) => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value) };
+  assert.ok((handlers.events.get("dormant-npcs:slept") ?? []).length > 0, "Finishers listens for it");
+  handlers.events.get("dormant-npcs:slept").forEach((fn) => fn({ npc: zygomite }));
+  assert.equal(attributes.get(Finishers.LAST_LEGS_ATTRIBUTE), false);
+});
+
+test("a zygomite's refusal names its Slayer level (rsprox captures, issue 6867)", () => {
+  for (const id of [537, 1024]) {
+    const event = { attacker: createPlayer({ slayer: 56 }), target: npc(id), allow: null };
+    Combat.canAttack(event);
+    assert.equal(event.allow, false, `${id}`);
+    assert.equal(event.message, "You need a Slayer level of 57 to know how to wound this monster.");
+  }
+  const able = { attacker: createPlayer({ slayer: 57 }), target: npc(1024), allow: null };
   Combat.canAttack(able);
   assert.equal(able.allow, null);
 });
@@ -1007,6 +1031,10 @@ test("protective gear: a dust devil hits a bare face for 16 and drains", () => {
   let damage = 3;
   Equipment.incomingDamage(player, { setDamage: (value) => { damage = value; } }, { attacker: devil });
   assert.equal(damage, 16);
+  // It never lowers a bigger hit (the Leagues VI Echo Thermonuclear smoke devil's 48-62 shots).
+  let big = 52;
+  Equipment.incomingDamage(player, { getDamage: () => big, setDamage: (value) => { big = value; } }, { attacker: devil });
+  assert.equal(big, 52, "a hit above the unprotected max stands");
 
   const masked = equip(createPlayer(), { 0: 4164 }); // facemask
   const safe = { attacker: devil, target: masked, forceAccurate: false };
@@ -1014,6 +1042,26 @@ test("protective gear: a dust devil hits a bare face for 16 and drains", () => {
   assert.equal(safe.forceAccurate, false);
   const helmet = equip(createPlayer(), { 0: core.ItemIdentifiers.SLAYER_HELMET });
   assert.equal(Equipment.protectedFrom(helmet, Equipment.GEAR.monsters[0]), true, "a Slayer helmet covers earmuffs");
+});
+
+test("a Slayer helmet shields from sourhogs once A Porcine of Interest is complete", () => {
+  const sourhog = Equipment.GEAR.monsters.find((monster) => monster.names.includes("Sourhog"));
+  assert.ok(sourhog, "the Sourhog protection rule is loaded");
+  let complete = false;
+  handlers.events.set("quest:is-complete", [(request) => {
+    if (request.key === "a_porcine_of_interest") request.complete = complete;
+  }]);
+  try {
+    const helmeted = equip(createPlayer(), { 0: core.ItemIdentifiers.SLAYER_HELMET });
+    assert.equal(Equipment.protectedFrom(helmeted, sourhog), false, "before the quest a helmet has no goggles");
+    complete = true;
+    assert.equal(Equipment.protectedFrom(helmeted, sourhog), true, "after the quest every helmet carries them");
+    // The goggles themselves protect whether or not a helmet is worn, and before the quest.
+    const goggled = equip(createPlayer(), { 0: core.ItemIdentifiers.REINFORCED_GOGGLES });
+    assert.equal(Equipment.protectedFrom(goggled, sourhog), true);
+  } finally {
+    handlers.events.delete("quest:is-complete");
+  }
 });
 
 test("every recolour of the Slayer helmet protects like the plain one", () => {
@@ -1066,13 +1114,22 @@ test("a sourhog without reinforced goggles hits 20-30, drains Attack and Defence
   assert.equal(player.current.get("DEFENCE"), 10);
   assert.equal(player.current.get("STRENGTH"), 99, "only Attack and Defence drain");
   assert.equal(player.said[0], "Argh! My eyes!");
-  for (const slots of [{ 0: core.ItemIdentifiers.REINFORCED_GOGGLES }, { 0: core.ItemIdentifiers.RED_SLAYER_HELMET_I_ }]) {
-    const safe = gearVictim(slots);
-    const { roll, damage } = landedHit("Sourhog", safe);
-    assert.equal(roll.forceAccurate, false);
-    assert.equal(damage, 2);
-    assert.equal(safe.current.get("ATTACK"), 99);
-    assert.deepEqual(safe.said, []);
+  // A helmet carries the goggles' protection once A Porcine of Interest is complete (Wiki,
+  // A Porcine of Interest: "Existing slayer helmets will have reinforced goggles added to them").
+  handlers.events.set("quest:is-complete", [(request) => {
+    if (request?.key === "a_porcine_of_interest") request.complete = true;
+  }]);
+  try {
+    for (const slots of [{ 0: core.ItemIdentifiers.REINFORCED_GOGGLES }, { 0: core.ItemIdentifiers.RED_SLAYER_HELMET_I_ }]) {
+      const safe = gearVictim(slots);
+      const { roll, damage } = landedHit("Sourhog", safe);
+      assert.equal(roll.forceAccurate, false);
+      assert.equal(damage, 2);
+      assert.equal(safe.current.get("ATTACK"), 99);
+      assert.deepEqual(safe.said, []);
+    }
+  } finally {
+    handlers.events.delete("quest:is-complete");
   }
 });
 
@@ -1167,6 +1224,34 @@ test("a gargoyle waits at 0 hitpoints for the rock hammer", () => {
   const auto = { npc: fresh, preventDeath: false };
   Finishers.beforeDeath(auto);
   assert.equal(auto.preventDeath, false, "Gargoyle Smasher with a hammer finishes it");
+
+  // Wiki (Gargoyle, Granite hammer): the granite hammer smashes it by itself while wielded, with
+  // no Gargoyle Smasher unlock and no hammer in the pack.
+  const wieldedPlayer = equip(createPlayer(), { 3: 21742 });
+  wieldedPlayer.performAnimation = () => {};
+  const smashed = npcNamed("Gargoyle");
+  Object.assign(smashed, {
+    getAttribute: () => undefined, setAttribute() {},
+    getHitpoints: () => 0, setHitpoints() {},
+    getCombat: () => ({ getKiller: () => wieldedPlayer }),
+  });
+  const wielded = { npc: smashed, preventDeath: false };
+  Finishers.beforeDeath(wielded);
+  assert.equal(wielded.preventDeath, false, "a wielded granite hammer smashes a gargoyle without the unlock");
+  assert.equal(wieldedPlayer.messages.at(-1), "The gargoyle cracks apart.");
+  assert.equal(wieldedPlayer.inventory.length, 0, "the wielded hammer is not an inventory item");
+
+  // The granite maul is not a finishing item (Wiki: Gargoyle lists rock/granite hammer and
+  // thrownhammer only), so a maul-wielding player without the unlock still leaves it waiting.
+  const mauledPlayer = equip(createPlayer(), { 3: 4153 });
+  const mauled = npcNamed("Gargoyle");
+  Object.assign(mauled, {
+    getAttribute: () => undefined, setAttribute() {},
+    getCombat: () => ({ getKiller: () => mauledPlayer }),
+  });
+  const maul = { npc: mauled, preventDeath: false };
+  Finishers.beforeDeath(maul);
+  assert.equal(maul.preventDeath, true, "a granite maul alone does not finish it");
 });
 
 test("a bag of salt or ice cooler is consumed when used too early, and salt works from 4 hitpoints", () => {

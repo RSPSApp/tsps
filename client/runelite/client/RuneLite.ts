@@ -31,6 +31,7 @@ import { bindNpcEvents } from "../impl/NpcEventSource";
 import { syncWorldMapPoints } from "./ui/overlay/worldmap/worldMapLayout";
 import { bindContainerEvents, WidgetSourceBinder } from "../impl/ContainerEventSource";
 import { runLegacyConfigMigrations } from "../impl/LegacyConfigMigration";
+import { initPerformancePolicy } from "../../game/performance/PerformancePolicy";
 import { migrateTileMarkersConfig } from "../../game/plugins/tilemarkers/migrateTileMarkers";
 import { migrateTimersConfig } from "../../game/plugins/statustimer/TimersPlugin";
 
@@ -152,6 +153,8 @@ export class RuneLite {
         runLegacyConfigMigrations(LEGACY_CONFIG_MIGRATIONS, this.configManager);
         migrateTimersConfig(this.configManager);
         migrateTileMarkersConfig(this.configManager);
+        // Resolve Auto/Low/Medium/High before anything reads worker counts or map budgets.
+        initPerformancePolicy(this.configManager);
         this.pluginManager.loadCorePlugins(CORE_PLUGINS);
 
         // Engine hooks (shader, camera, gameframe) follow each loaded plugin.

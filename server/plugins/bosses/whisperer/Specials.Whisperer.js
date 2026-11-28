@@ -5,6 +5,9 @@ function spam(player, text) {
   player.getPacketSender().sendTypedMessage(Common.core.ChatType.SPAM, text);
 }
 const centre = fight => [Common.data.site.boss[0] - (fight.shadow ? Common.data.site.realmOffset : 0), Common.data.site.boss[1]];
+/** Ticks after the teleport (10247) at which each special pulses the fragment.
+ * Capture 3281: seeds +6, screech +5, souls +3 (with 10257 and the soul projectiles). */
+const ACTIVATION = { seeds: 6, screech: 5, souls: 3 };
 /** Tile-grid transcription of the four route diagrams on the Wiki strategy page.
  * The first layout's camera is rotated: transform its diagonal grid into world tiles.
  * Normal capture3285 corroborates every tile/color of all four Wiki patterns. */
@@ -33,16 +36,20 @@ function start(fight, kind) {
   fight.boss.performAnimation(new Common.core.Animation(Common.data.animations.teleport));
   Common.fragment(fight, false);
 }
+function soulProjectile(fight, from, to, geometry, id) {
+  fight.player.getPacketSender().sendProjectile(from, to, 0, geometry.cycles, id, geometry.startHeight, geometry.endHeight, 0, 0, geometry.angle, geometry.progress);
+}
 function activate(fight, kind) {
   const [x, y] = centre(fight);
-  Object.assign(fight.special, { active: true, switchAllowed: true, left: kind === 'souls' ? 17 : kind === 'seeds' ? 40 : 12 });
+  const special = fight.special;
+  Object.assign(special, { active: true, switchAllowed: true, activeAge: special.age, left: kind === 'souls' ? 18 : kind === 'seeds' ? 40 : 12 });
   if (kind === 'seeds') {
     const pattern = Common.random(0, 3);
-    fight.special.seeds = seedLayout(pattern).map(({ dx, dy, light }) => ({ x: x + 1 + dx, y: y + 1 + dy, light, active: true, materialX: x + 1 + dx + (fight.shadow ? Common.data.site.realmOffset : 0), object: null }));
-    fight.special.clean = true;
+    special.seeds = seedLayout(pattern).map(({ dx, dy, light }) => ({ x: x + 1 + dx, y: y + 1 + dy, light, active: true, materialX: x + 1 + dx + (fight.shadow ? Common.data.site.realmOffset : 0), object: null }));
+    special.clean = true;
   }
   else if (kind === 'screech') {
-    fight.special.blasts = 3;
+    special.blasts = 3;
     const health = Array(8).fill(20), strongest = Common.random(0, 7);
     health[strongest] = 60;
     health[strongest === 7 ? 6 : strongest + 1] = 40;
@@ -50,38 +57,56 @@ function activate(fight, kind) {
       const candidates = health.flatMap((hp, index) => hp === 20 ? [index] : []);
       health[candidates[Common.random(0, candidates.length - 1)]] = 40;
     }
-    fight.special.columns = Common.data.specials.columns.map(([columnX, columnY], index) => {
+    const looks = Common.data.models.columnNormal;
+    special.columns = Common.data.specials.columns.map(([columnX, columnY], index) => {
       const hp = health[index];
       const worldX = columnX - (fight.shadow ? Common.data.site.realmOffset : 0);
       const npc = fight.session.spawn(Common.data.npcs.column, worldX, columnY);
       npc.setMaxHitpoints(60);
       npc.setHitpoints(hp);
-      return { materialX: columnX, x: worldX, y: columnY, hp, active: true, npc };
+      // Capture 3281: every column rises with 10226 and graphic 2450 on its 2x2 footprint.
+      npc.performAnimation(new Common.core.Animation(Common.data.animations.columnSpawn));
+      for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]])
+        Common.graphicAt(fight.player, Common.data.graphics.columnSpawn, worldX + dx, columnY + dy);
+      return { materialX: columnX, x: worldX, y: columnY, hp, active: true, npc, look: looks[Common.random(0, looks.length - 1)] };
     });
   }
   else {
-    fight.special.souls = [];
-    fight.special.rewarded = new Set();
+    special.souls = [];
+    special.rewarded = new Set();
     const groups = Common.data.soulSets.flatMap((set, group) => Array(set.size).fill(group));
     for (let index = groups.length - 1; index > 0; index--) {
       const other = Common.random(0, index);
       [groups[index], groups[other]] = [groups[other], groups[index]];
     }
+    // Capture 3281: the souls fly out of the boss on 668 now and appear next tick.
+    const from = Common.core.Projectile.centreOf(fight.boss);
     Common.data.specials.souls.forEach(([soulX, soulY], index) => {
-      const group = groups[index];
-      const npc = fight.session.spawn(Common.data.npcs.soul, soulX - (fight.shadow ? Common.data.site.realmOffset : 0), soulY);
-      npc.setMaxHitpoints(1);
-      npc.setHitpoints(1);
-      npc.__whispererFight = fight;
-      npc.__whispererSoul = group;
-      fight.special.souls.push({ npc, group, materialX: soulX, dead: false });
+      const tileX = soulX - (fight.shadow ? Common.data.site.realmOffset : 0);
+      soulProjectile(fight, from, new Common.core.Location(tileX, soulY, 0), Common.data.soulProjectiles.spawn, Common.data.projectiles.soulSpawn);
+      special.souls.push({ npc: null, group: groups[index], materialX: soulX, y: soulY, dead: false });
     });
   }
-  fight.player.sendMessage(Common.data.messages[kind]);
   fight.player.sendMessage(Common.data.messages.pulse);
   Common.sound(fight.player, Common.data.sounds.pulse);
   Common.fragment(fight, true);
   render(fight);
+  if (kind === 'seeds')
+    for (const seed of special.seeds)
+      Common.graphicAt(fight.player, Common.data.graphics.seedSpawn, seed.x, seed.y);
+}
+function spawnSouls(fight) {
+  for (const soul of fight.special.souls) {
+    const npc = fight.session.spawn(fight.shadow ? Common.data.npcs.soulShadow : Common.data.npcs.soul, soul.materialX - (fight.shadow ? Common.data.site.realmOffset : 0), soul.y);
+    if (!npc)
+      continue;
+    npc.setMaxHitpoints(1);
+    npc.setHitpoints(1);
+    npc.__whispererFight = fight;
+    npc.__whispererSoul = soul.group;
+    npc.performAnimation(new Common.core.Animation(Common.data.animations.soulSpawn));
+    soul.npc = npc;
+  }
 }
 function render(fight) {
   const special = fight.special;
@@ -110,31 +135,66 @@ function render(fight) {
     }
   if (special.kind === 'souls')
     for (const soul of special.souls) {
-      if (soul.dead)
+      if (soul.dead || !soul.npc)
         continue;
       const p = soul.npc.getLocation(), x = soul.materialX - (fight.shadow ? Common.data.site.realmOffset : 0);
       soul.npc.moveTo(new Common.core.Location(x, p.getY(), 0));
       soul.npc.setNpcTransformationId(fight.shadow ? Common.data.npcs.soulShadow : Common.data.npcs.soul);
-      if (fight.shadow)
-        soul.npc.forceChat(Common.data.soulSets[soul.group].phrase);
     }
 }
+/** Shadow columns show their HP in the headbar and the model (49311/49308/49309 for
+ * 60/40/20, capture 3281); normal columns keep one of three looks for the whole special. */
 function columnHealth(fight, column) {
   const bar = Common.data.specials.columnHeadbar;
-  if (fight.shadow)
+  if (fight.shadow) {
     column.npc.showHeadbar(bar.id, { fill: Math.ceil(column.hp * bar.width / bar.maximum) });
-  else
+    const hp = column.hp >= 60 ? 60 : column.hp >= 40 ? 40 : 20;
+    Common.models(column.npc, [Common.data.models.columnShadowByHp[hp]]);
+  }
+  else {
     column.npc.removeHeadbar(bar.id);
+    if (column.look)
+      Common.models(column.npc, [column.look]);
+  }
 }
-function finish(fight, result) {
+/** The boss's countdown bar for the active special (headbar 35, 80 wide), recorded every
+ * tick from the pulse: seeds 40 ticks, screech 11, souls 17 starting a tick later. */
+function specialTimer(fight, special) {
+  const timer = Common.data.specialTimer;
+  const start = special.activeAge + (special.kind === 'souls' ? 1 : 0), span = timer.ticks[special.kind];
+  if (special.age <= start || special.timerDone)
+    return;
+  const remaining = start + span - special.age;
+  if (remaining <= 0) {
+    fight.boss.removeHeadbar(timer.headbar);
+    special.timerDone = true;
+    return;
+  }
+  special.timerShown = true;
+  fight.boss.showHeadbar(timer.headbar, { fill: Math.round(timer.width * remaining / span) });
+}
+/** `exitTicks`: how long the player stays in the Shadow Realm after the special ends.
+ * Recorded: seeds 2 (3281: 2668 -> 2670), souls timeout 7 (2933 -> 2940). */
+function finish(fight, result, exitTicks = 0) {
   // Recorded: the depletion (58) and both "deter" lines are spam; "Leeches from the shadows hatch..." is a game message.
-  spam(fight.player, Common.data.messages.deplete);
+  if (!fight.special?.depleted)
+    spam(fight.player, Common.data.messages.deplete);
   if (result === "seedsPerfect" || result === "seedsDone")
     spam(fight.player, Common.data.messages[result]);
   else if (result)
     fight.player.sendMessage(Common.data.messages[result]);
   clear(fight);
   fight.completed++;
+  if (exitTicks > 0 && fight.shadow) {
+    // Hold the fight until the realm exit; the end effects play for the realm the player is in.
+    fight.transitionUntil = fight.tick + exitTicks;
+    fight.nextAttack = fight.transitionUntil + 15;
+    fight.at(exitTicks, () => resume(fight));
+    return;
+  }
+  resume(fight);
+}
+function resume(fight) {
   fight.nextAttack = fight.tick + 15;
   fight.setShadow(false);
   // A crossed health threshold replaces the bind with the next special.
@@ -143,6 +203,58 @@ function finish(fight, result) {
     return;
   }
   fight.bind();
+}
+function realm(fight) {
+  return fight.shadow ? 'shadow' : 'normal';
+}
+/** A light seed that hatches: hatch graphic and a leech (2456) flying from it into the player. */
+function hatch(fight, seed) {
+  const { Location } = Common.core, geometry = Common.data.soulProjectiles.hatch;
+  Common.graphicAt(fight.player, Common.data.graphics.seedsHatch[realm(fight)], seed.x, seed.y);
+  const from = new Location(seed.x, seed.y, fight.player.getLocation().getZ());
+  fight.player.getPacketSender().sendProjectile(from, fight.player.getLocation(), 0, geometry.cycles, Common.data.projectiles.leechHatch, geometry.startHeight, geometry.endHeight, fight.player, geometry.delay, geometry.angle, geometry.progress);
+}
+/** Seeds end: the boss blasts (10252). Standing dark seeds vanish; light seeds still standing
+ * at the timeout hatch, and so does the last light seed when its stomp ends the special.
+ * Ids depend on the player's realm: shadow 2461/2462 + sound 7311 (3281: 2668, 3285: 23397),
+ * normal 2464/2465 + sound 7480 (3285: 20965, 21848). Each hatch sends leech projectile 2456. */
+function seedsEnd(fight, special, last = null) {
+  fight.boss.performAnimation(new Common.core.Animation(Common.data.animations.screechBlast));
+  for (const seed of special.seeds) {
+    if (!seed.active)
+      continue;
+    if (seed.light)
+      hatch(fight, seed);
+    else
+      Common.graphicAt(fight.player, Common.data.graphics.seedsVanish[realm(fight)], seed.x, seed.y);
+  }
+  if (last)
+    hatch(fight, last);
+  Common.sound(fight.player, Common.data.sounds.seedsEnd[realm(fight)]);
+}
+/** Chant timeout (capture 3281, 2933): the souls still standing go quiet, fade (5542) and fly
+ * into the boss: 2458 in the Shadow Realm, 2457 in the normal realm (3285: 21476, 3299: 15330). They leave three ticks later, with the result message and the
+ * Strange Whisper naming the sets the player didn't finish. */
+function soulsEnd(fight, special, result) {
+  const target = Common.core.Projectile.centreOf(fight.boss);
+  for (const soul of special.souls) {
+    if (soul.dead || !soul.npc)
+      continue;
+    const npc = soul.npc;
+    npc.forceChat('');
+    npc.performAnimation(new Common.core.Animation(Common.data.animations.soulFade));
+    soulProjectile(fight, npc.getLocation(), target, Common.data.soulProjectiles.absorb, Common.data.projectiles.soulAbsorb[realm(fight)]);
+    npc.__whispererSoul = null;
+    soul.npc = null;
+    Common.later(Common.data.whisper.delayTicks, () => Common.remove(npc));
+  }
+  const whisper = Common.data.whisper;
+  const words = whisper.order.filter(group => !special.rewarded.has(group)).map(group => whisper.words[group]);
+  fight.at(whisper.delayTicks, () => {
+    fight.player.sendMessage(Common.data.messages[result]);
+    if (words.length)
+      fight.player.getPacketSender().sendTypedMessage(Common.core.ChatType.NPC_SAY, `${whisper.from}| ${words.join(' ')}.`);
+  }, true);
 }
 function screechWave(fight, special) {
   const { Graphic, Location, Projectile } = Common.core;
@@ -191,8 +303,10 @@ function screechImpact(fight, special) {
         column.active = false;
         column.removeAt = special.age + 1;
       }
-      if (fight.shadow)
+      if (fight.shadow && column.active)
         columnHealth(fight, column);
+      else if (fight.shadow)
+        column.npc.showHeadbar(Common.data.specials.columnHeadbar.id, { fill: 0 });
     }
   special.pendingBlast = null;
   if (!special.blasts)
@@ -209,24 +323,35 @@ function process(fight) {
     const [x, y] = centre(fight);
     fight.boss.moveTo(new Common.core.Location(x, special.kind === 'screech' ? Common.data.specials.screechY : y, 0));
     animate(special.kind === 'souls' ? Common.data.animations.souls : Common.data.animations.appear);
+    // Capture 3281: the announcement goes with the appearance, a tick after the teleport.
+    fight.player.sendMessage(Common.data.messages[special.kind]);
   }
-  if (special.age === 3)
+  if (special.age === 3) {
     animate(special.kind === 'souls' ? Common.data.animations.soulChant : special.kind === 'seeds' ? Common.data.animations.seeds : Common.data.animations.screech);
+    if (special.kind === 'screech')
+      Common.sounds(fight.player, Common.data.sounds.screechCharge);
+  }
   if (special.kind === 'seeds' && special.age === 8)
     animate(Common.data.animations.screech);
   if (special.kind === 'seeds' && special.age === 10)
     animate(Common.data.animations.screechHold);
   if (!special.active) {
-    if (special.age === { seeds: 6, screech: 5, souls: 4 }[special.kind]) {
+    if (special.age === ACTIVATION[special.kind]) {
       activate(fight, special.kind);
       if (special.kind === 'screech')
         animate(Common.data.animations.screechHold);
     }
     return;
   }
+  if (special.kind === 'souls' && special.age === special.activeAge + 1)
+    spawnSouls(fight);
+  specialTimer(fight, special);
   if (special.kind === 'screech' && special.age === 14) {
     special.switchAllowed = false;
     Common.fragment(fight, false);
+    // Recorded at +14 (3281: 2685), not when the last blast lands.
+    spam(fight.player, Common.data.messages.deplete);
+    special.depleted = true;
   }
   if (special.kind === 'screech' && [21, 27].includes(special.age))
     animate(Common.data.animations.screech);
@@ -248,24 +373,33 @@ function process(fight) {
       seed.active = false;
       if (seed.object)
         fight.player.getPacketSender().sendObjectRemoval(seed.object);
+      const last = seed.light && special.seeds.every(s => !s.light || !s.active);
+      // The stomp that ends the special shows the hatch instead (3281: 2668, 3285: 21848).
+      if (!last) {
+        Common.graphicAt(fight.player, Common.data.graphics.seedStomp, seed.x, seed.y);
+        Common.sound(fight.player, Common.data.sounds.seedStomp);
+      }
       if (!seed.light) {
         special.clean = false;
         Common.damage(fight, Common.random(15, 25));
       }
-      if (special.seeds.every(s => !s.light || !s.active)) {
+      if (last) {
         if (special.clean)
           fight.changeSanity(15);
-        finish(fight, special.clean ? 'seedsPerfect' : 'seedsDone');
+        seedsEnd(fight, special, seed);
+        finish(fight, special.clean ? 'seedsPerfect' : 'seedsDone', Common.data.shadowExitTicks.seeds);
         return;
       }
     }
     if (special.left <= 0) {
       Common.damage(fight, 75, 75);
-      finish(fight, 'seedsFailed');
+      seedsEnd(fight, special);
+      finish(fight, 'seedsFailed', Common.data.shadowExitTicks.seeds);
     }
   }
   else if (special.kind === 'screech' && special.left <= 0) {
     animate(Common.data.animations.screechBlast);
+    Common.sounds(fight.player, Common.data.sounds.screechBlast);
     fight.boss.performGraphic(new Common.core.Graphic(Common.data.graphics.screech, 0, 125));
     screechWave(fight, special);
     const p = fight.player.getLocation();
@@ -275,17 +409,23 @@ function process(fight) {
     special.left = --special.blasts ? 6 : Infinity;
   }
   else if (special.kind === 'souls') {
-    if (fight.shadow && special.left % 4 === 0)
+    // Capture 3281: shadow souls chant every three ticks (2922/2925/2928/2931) with 5545.
+    const since = special.age - special.activeAge;
+    if (fight.shadow && since >= 4 && since % 3 === 1)
       for (const soul of special.souls)
-        if (!soul.dead)
+        if (!soul.dead && soul.npc) {
           soul.npc.forceChat(Common.data.soulSets[soul.group].phrase);
+          soul.npc.performAnimation(new Common.core.Animation(Common.data.animations.soulChantSay));
+        }
     if (special.left <= 0) {
       animate(Common.data.animations.soulResolve);
       if (special.rewarded.size === 0) {
         Common.damage(fight, 50);
         fight.boss.heal(100);
       }
-      finish(fight, special.rewarded.size ? 'soulsPartial' : 'soulsFailed');
+      const result = special.rewarded.size ? 'soulsPartial' : 'soulsFailed';
+      soulsEnd(fight, special, result);
+      finish(fight, null, Common.data.shadowExitTicks.souls);
     }
   }
 }
@@ -297,6 +437,7 @@ function soulDied(fight, npc) {
   if (!soul || soul.dead)
     return;
   soul.dead = true;
+  npc.performAnimation(new Common.core.Animation(Common.data.animations.soulFade));
   const group = soul.group;
   if (special.souls.some(s => s.group === group && !s.dead) || special.rewarded.has(group))
     return;
@@ -331,7 +472,9 @@ function clear(fight) {
     Common.remove(column.npc);
   for (const soul of special.souls ?? [])
     Common.remove(soul.npc);
+  if (special.timerShown && !special.timerDone)
+    fight.boss.removeHeadbar(Common.data.specialTimer.headbar);
   fight.special = null;
   Common.fragment(fight, false);
 }
-module.exports = { start, process, render, clear, soulDied, seedLayout };
+module.exports = { start, process, render, clear, soulDied, seedLayout, ACTIVATION };

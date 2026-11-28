@@ -203,7 +203,7 @@ test("stacks from different owners never merge, so an Ironman can't inherit a dr
   // The same owner still stacks, and the Ironman keeps it.
   const merged = manager.registerLocation(iron, new core.Item(995, 2), new core.Location(3201, 3200));
   assert.equal(own.getItem().getAmount(), 5);
-  assert.equal(items.includes(merged), false, "merged into the Ironman's own stack");
+  assert.equal(merged, own, "merged into the Ironman's own stack, which is what registerLocation returns");
 });
 
 test("a kill another player helped with gives an Ironman nothing; a solo kill keeps its drop", () => {

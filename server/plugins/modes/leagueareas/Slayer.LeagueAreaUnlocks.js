@@ -13,6 +13,10 @@
  *   Spree relic's `bossAreas`); a boss it does not list (the Shellbane Gryphon and the Maggot
  *   King, released after the league) is never given, as Culling Spree never offers it.
  * - Konar's area for a task is one whose box's centre is entered by the same rule, when any is.
+ * - A counting spawn in a sealed location does not count while the seal holds: a quest seals
+ *   the entrance (the Ruins of Tapoyauik needs The Heart of Darkness, the Ogre Enclave needs
+ *   Watchtower - the Wiki's blue dragon task page lists each location with its requirement).
+ *   A task whose counting monsters spawn only behind seals is not offered.
  * - Ours: a task with no placed monster at all (all spawned by content) is left to the master.
  */
 const fs = require("fs");
@@ -76,14 +80,48 @@ function entered(type, player, x, y) {
   return Regions.isOpen(type, player, x, y);
 }
 
+/**
+ * Locations a character may not enter yet: a quest seals the entrance (Wiki blue dragon task
+ * page: "The Ruins of Tapoyauik" needs The Heart of Darkness, "The Ogre Enclave" needs
+ * Watchtower). The Dragon Nest is not sealed: its cave entry (tlati_dragon_nest_cave_entry,
+ * loc 57591, loc-teleports.json) works in main, and the Wiki gives the Nest no requirement.
+ * The boxes are the full map squares holding each location's counted spawns (npc-spawns.json).
+ */
+const SEALED_LOCATIONS = [
+  { label: "Ruins of Tapoyauik", minX: 1536, minY: 9536, maxX: 1727, maxY: 9727, quest: "the_heart_of_darkness" },
+  { label: "Ogre Enclave", minX: 2560, minY: 9408, maxX: 2623, maxY: 9471, quest: "watchtower" },
+];
+
+/** The sealed location a tile sits in, if any. */
+function sealedAt(x, y) {
+  for (const loc of SEALED_LOCATIONS) {
+    if (x >= loc.minX && x <= loc.maxX && y >= loc.minY && y <= loc.maxY) return loc;
+  }
+  return null;
+}
+
+/**
+ * Whether a tile's sealed location counts as entered for the character: its quest is complete.
+ */
+function sealOpen(player, x, y) {
+  const loc = sealedAt(x, y);
+  if (loc === null) return true;
+  const request = { player, key: loc.quest, complete: false };
+  Common.api.emitCustomEvent("quest:is-complete", request);
+  return request.complete === true;
+}
+
 function taskAvailable(request) {
   const { player } = request;
   const type = player ? Common.leagueOf(player) : null;
   if (type === null || request.available === false) return;
   if (request.area) {
     const boxes = request.area.boxes ?? [];
-    if (boxes.length && !boxes.some(([minX, minY, maxX, maxY]) =>
-      entered(type, player, (minX + maxX) >> 1, (minY + maxY) >> 1))) request.available = false;
+    if (boxes.length && !boxes.some(([minX, minY, maxX, maxY]) => {
+      const cx = (minX + maxX) >> 1;
+      const cy = (minY + maxY) >> 1;
+      return entered(type, player, cx, cy) && sealOpen(player, cx, cy);
+    })) request.available = false;
     return;
   }
   if (request.bossId) {
@@ -97,10 +135,13 @@ function taskAvailable(request) {
   }
   const tiles = tilesFor(request).filter((tile) => !request.wilderness || wildernessAt(type, tile.x, tile.y));
   if (tilesFor(request).length === 0) return;
-  if (!tiles.some((tile) => entered(type, player, tile.x, tile.y))) request.available = false;
+  if (!tiles.some((tile) => entered(type, player, tile.x, tile.y) && sealOpen(player, tile.x, tile.y))) {
+    request.available = false;
+  }
 }
 
 module.exports = function attach(api) {
   api.onCustomEvent("slayer:task-available", taskAvailable);
 };
 module.exports.taskAvailable = taskAvailable;
+module.exports.sealedLocations = SEALED_LOCATIONS;

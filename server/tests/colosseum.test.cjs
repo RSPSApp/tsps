@@ -101,8 +101,9 @@ function fakeApi() {
       if (name === 'pets:owns') payload.owns = hooks.ownsPet === true;
       if (name === 'pets:award') (hooks.petsAwarded ??= []).push(payload.itemId);
     },
-    spawnNpc: ({ id, x, y }) => {
+    spawnNpc: ({ id, x, y, face = 6 }) => {
       const npc = fakeNpc(id, x, y);
+      npc.face = face;
       spawned.push(npc);
       return npc;
     },
@@ -137,6 +138,8 @@ function fakePlayer(name = 'Gladiator') {
   const varbits = new Map();
   const attributes = new Map();
   const skills = fakeSkills();
+  const bonuses = new (PluginManager.getCoreApi().BonusManager)();
+  const quickPrayers = { enabled: false, checkActive() {}, setEnabled(on) { this.enabled = on; } };
   const p = {
     skills, damage: [], splats: [], poison: [], venomed: false, inventories: {}, texts: {},
     getSkillManager: () => skills,
@@ -151,6 +154,9 @@ function fakePlayer(name = 'Gladiator') {
     showHitsplat: (damage, splat) => p.splats.push([damage, splat.mine]),
     prayers: [],
     getPrayerActive: () => p.prayers,
+    getQuickPrayers: () => quickPrayers,
+    getAppearance: () => ({ setHeadHint() {} }),
+    getBonusManager: () => bonuses,
     equipment: [],
     getEquipment: () => ({ getItems: () => p.equipment }),
     isVenomed: () => p.venomed,
@@ -159,6 +165,7 @@ function fakePlayer(name = 'Gladiator') {
     isPoisoned: () => true,
     getPoisonDamage: () => p.poison.at(-1) ?? 0,
     setPoisonDamage(value) { p.poison.push(value); },
+    jingles: [], graphics: [],
     location: new Location(1805, 9506, 0), area: null, messages: [], scripts: [], interfaces: [], statements: [], flags: [],
     getUsername: () => name,
     getIndex: () => 7,
@@ -184,12 +191,24 @@ function fakePlayer(name = 'Gladiator') {
         sendConfig: (id, value) => { varbits.set(`varp${id}`, value); return sender; },
         sendSubInterface: (uid, id) => { p.interfaces.push(id); return sender; },
         sendInterface: (id) => { p.interfaceId = id; p.interfaces.push(id); return sender; },
-        sendInterfaceRemoval: () => { p.interfaceId = -1; p.interfaces.push(-1); return sender; },
+        // The core's resetInterfaceState clears busy on every main modal close.
+        sendInterfaceRemoval: () => {
+          if (varbits.get(12393)) sender.setBusyModal(false);
+          p.interfaceId = -1;
+          p.interfaces.push(-1);
+          return sender;
+        },
+        setBusyModal: (open) => sender.sendVarbit(12393, Number(open)),
+        sendQuickPrayersState: (open) => sender.sendVarbit(4103, Number(open)),
+        sendJingle: (...args) => { p.jingles.push(args); return sender; },
         sendEnterAmountPrompt: (text) => { p.amountPrompt = text; return sender; },
         sendClientScript: (id, ...args) => { p.scripts.push([id, ...args]); return sender; },
         sendInterfaceScript: (id, args) => { p.scripts.push([id, ...args]); return sender; },
         sendInterfaceFlagsRange: (...args) => { p.flags.push(args); return sender; },
-        sendGraphic: () => sender,
+        sendGraphic: (graphic, tile) => {
+          p.graphics.push([graphic.getId(), tile.getX(), tile.getY()]);
+          return sender;
+        },
         sendProjectile: () => sender,
         sendPoisonType: () => sender,
         sendInventory: (id, capacity, items) => { p.inventories[id] = items.map(({ id: item, amount }) => [item, amount]); return sender; },
@@ -328,9 +347,10 @@ test("Minimus's [rank] is the Glory title", () => {
 
 // ------------------------------------------------------------------ a run
 
-test('a run: Minimus greets, the screen offers the modifiers, and confirming starts wave 1', () => {
+test('a run: Minimus greets, the screen offers the modifiers, and confirming starts wave 1', (t) => {
   const player = fakePlayer('Runner');
   const run = Run.start(player);
+  t.after(() => run.end('left'));
   assert.ok(Shared.inArena(player.location));
   assert.deepEqual([player.location.getX(), player.location.getY()], [1824, 3094], 'capture');
   const route = PluginManager.getCoreApi().PathFinder.calculateWalkRoute;
@@ -360,7 +380,7 @@ test('a run: Minimus greets, the screen offers the modifiers, and confirming sta
   click(41);
   assert.equal(player.varbits.get(9790), 1, 'Blasphemy tier varbit');
   assert.equal(player.varbits.get('varp4135'), 100);
-  assert.equal(run.minimus, null);
+  assert.equal(run.minimus?.getId() ?? null, null);
   ticks(4);
   assert.equal(run.stage, 'starting');
   ticks(1);
@@ -375,9 +395,135 @@ test('a run: Minimus greets, the screen offers the modifiers, and confirming sta
   assert.equal(run.wave, 1);
   assert.equal(run.stage, 'intermission');
   assert.match(player.messages.at(-1), /^Wave 1 completed! Duration: /);
-  assert.ok(run.minimus, 'Minimus is back');
-  run.end('left');
+  for (let offset = 0; offset <= 2; offset++) {
+    assert.equal(run.minimus?.getId() ?? null, null, `237/1150 t12186-12188: no Minimus at +${offset}`);
+    assert.equal(player.getInterfaceId(), -1);
+    ticks(1);
+  }
+  assert.equal(run.minimus?.getId(), 12808, '237/1150 t12189: Minimus returns at +3');
+  assert.deepEqual([run.minimus.location.getX(), run.minimus.location.getY()],
+    [player.location.getX(), player.location.getY() + 1]);
+  assert.deepEqual(run.minimus.anims, [10862]);
+  assert.equal(run.minimus.face, 6);
+  assert.equal(player.getInterfaceId(), 865, 'the modal opens on the same tick without a click');
+  assert.equal(player.varbits.get(12393), 1, 'busy on the automatic open tick');
 });
+
+test('Start-wave before wave 1 keeps prayers on and sets busy one tick after opening', (t) => {
+  const player = fakePlayer('First offer');
+  const run = Run.start(player);
+  t.after(() => run.end('left'));
+  const magic = PluginManager.getCoreApi().PrayerHandler.PROTECT_FROM_MAGIC;
+  player.prayers[magic] = true;
+  player.getPacketSender().sendVarbit(4116, 1).sendQuickPrayersState(true);
+  player.getQuickPrayers().setEnabled(true);
+  const start = hooks.npcs.Minimus['Start-wave'];
+  start({ player, npc: run.minimus });
+  const offer = player.scripts.at(-1);
+  assert.equal(player.getInterfaceId(), 865);
+  assert.equal(player.varbits.get(12393) ?? 0, 0, '237/1150 t27298: busy is not set yet');
+  ticks(1);
+  assert.equal(player.prayers[magic], true, '237/1150 t27297–27299: prayer stays on');
+  assert.equal(player.varbits.get(4103), 1);
+  assert.equal(player.varbits.get(12393), 1, 'busy at +1');
+  const messages = player.messages.length;
+  player.getPacketSender().sendInterfaceRemoval();
+  assert.equal(player.varbits.get(12393), 0);
+  start({ player, npc: run.minimus });
+  assert.deepEqual(player.scripts.at(-1), offer);
+  assert.equal(player.messages.length, messages, '237/1150 t32509-32517: no warning before wave 1');
+  ticks(1);
+  run.selectModifier(1);
+  assert.equal(run.confirm(), true);
+  assert.equal(player.varbits.get(12393), 0, '237/1150 t12203: Confirm clears busy immediately');
+  assert.equal(player.getInterfaceId(), -1);
+  assert.equal(run.minimus?.getId() ?? null, null);
+});
+
+test('automatic intermission turns off active prayers and quick prayers on the return tick', (t) => {
+  const { player, run } = runWith({}, 'Prayers');
+  t.after(() => run.end('left'));
+  const magic = PluginManager.getCoreApi().PrayerHandler.PROTECT_FROM_MAGIC;
+  player.prayers[magic] = true;
+  player.getPacketSender().sendVarbit(4116, 1).sendVarbit(4101, 1 << 12).sendQuickPrayersState(true);
+  player.getQuickPrayers().setEnabled(true);
+  run.tick();
+  assert.equal(run.wave, 1);
+  ticks(2);
+  assert.equal(player.prayers[magic], true);
+  assert.equal(player.varbits.get(4103), 1);
+  ticks(1);
+  assert.equal(player.prayers[magic], false, '237/1150 t12189: prayer off at +3');
+  assert.equal(player.varbits.get(4116), 0);
+  assert.equal(player.varbits.get(4101), 0);
+  assert.equal(player.varbits.get(4103), 0);
+  assert.equal(player.getQuickPrayers().enabled, false);
+});
+
+test('closing a between-wave modal keeps Minimus and all eight offer arguments on reopening', (t) => {
+  const { player, run } = runWith({}, 'Reopen');
+  t.after(() => run.end('left'));
+  run.random = () => 0;
+  run.tick();
+  ticks(3);
+  const start = hooks.npcs.Minimus['Start-wave'];
+  const minimus = run.minimus;
+  assert.equal(minimus?.getId(), 12808);
+  // Both the manual baseline and the automatic return reach the same screen here.
+  if (player.getInterfaceId() !== 865) start({ player, npc: minimus });
+  const offer = player.scripts.at(-1);
+  assert.equal(offer[0], 4931);
+  const messages = player.messages.length;
+  player.getPacketSender().sendInterfaceRemoval();
+  assert.equal(player.varbits.get(12393) ?? 0, 0);
+  assert.equal(player.messages.length, messages, '237/1150 t12660: a plain close is silent');
+  assert.ok(run.minimus === minimus, 'closing leaves the same Minimus in place');
+  run.random = () => 0.999;
+  start({ player, npc: minimus });
+  assert.equal(player.getInterfaceId(), 865, '237/1150 t12662: Start-wave reopens it');
+  assert.deepEqual(player.scripts.at(-1), offer, 'the eight arguments are unchanged');
+});
+
+test('the intermission uses a bit per chosen key, including after a tier upgrade', (t) => {
+  const player = fakePlayer('Mask');
+  const run = Run.start(player, { random: () => 0.25 });
+  t.after(() => run.end('left'));
+  const start = hooks.npcs.Minimus['Start-wave'];
+  start({ player, npc: run.minimus });
+  for (const key of [4, 3, 3]) {
+    const offer = player.scripts.at(-1).slice(2, 5);
+    assert.ok(offer.includes(key), `key ${key} is offered`);
+    run.selectModifier(offer.indexOf(key) + 1);
+    assert.equal(run.confirm(), true);
+    ticks(5);
+    assert.equal(run.stage, 'wave');
+    for (const npc of run.npcs) npc.hp = 0;
+    ticks(4);
+    if (player.getInterfaceId() !== 865) start({ player, npc: run.minimus });
+  }
+  assert.equal(run.modifiers.tier(4), 1);
+  assert.equal(run.modifiers.tier(3), 2);
+  const script = player.scripts.at(-1);
+  assert.equal(script[0], 4931);
+  assert.equal(script[8], 24, '237/1150 t12493,12576: keys 4 and 3, irrespective of tier');
+});
+
+test('forfeit closes the intermission before opening its dialogue', (t) => {
+  const { player, run } = runWith({}, 'Forfeit modal');
+  t.after(() => run.end('left'));
+  run.tick();
+  ticks(3);
+  if (player.getInterfaceId() !== 865) hooks.npcs.Minimus['Start-wave']({ player, npc: run.minimus });
+  assert.equal(player.getInterfaceId(), 865);
+  hooks.npcs.Minimus.Leave({ player, npc: run.minimus });
+  assert.equal(player.statements.length, 1);
+  assert.equal(player.getInterfaceId(), -1);
+  assert.equal(player.varbits.get(12393) ?? 0, 0);
+});
+
+test('reopening a between-wave offer sends the retail choice warning', {
+  skip: 'The retail system message is omitted from this change.',
+}, () => {});
 
 test('reinforcements come through the nearest gate after 40 seconds', () => {
   const player = fakePlayer('Slow');
@@ -916,9 +1062,10 @@ test("Sol's weapon and footwork achievements track attacks and actual run steps"
   run.end('left');
 });
 
-test('wave 12: Sol greets by attempt, lands behind the barricade, and his death brings out the chest', () => {
+test('wave 12: Sol greets by attempt, lands behind the barricade, and his death brings out the chest', (t) => {
   const player = fakePlayer('Twelve');
   const run = Run.start(player);
+  t.after(() => run.end('left'));
   run.removeMinimus();
   run.wave = 11;
   run.loot.future = Loot.roll(12, player);
@@ -928,6 +1075,7 @@ test('wave 12: Sol greets by attempt, lands behind the barricade, and his death 
   assert.equal(player.getAttribute(Sol.ATTR.ATTEMPTS), 1);
   assert.equal(player.statements.length, 1);
   run.stage = 'sol-landing';
+  run.modifiers.add(Modifiers.byId('solarflare').key);
   Sol.land(run);
   assert.equal(run.stage, 'wave');
   assert.equal(run.sol, null, 'the seated Sol is gone');
@@ -936,20 +1084,127 @@ test('wave 12: Sol greets by attempt, lands behind the barricade, and his death 
   assert.deepEqual(sol.chats, ["Let's start by testing your footwork."]);
   assert.ok(run.barricade.length > 40);
   assert.ok(run.npcs.has(sol));
+  const orb = run.solarflare.npc;
+  assert.equal(orb.isRegistered(), true);
   sol.hp = 0;
   run.tick();
   assert.equal(run.stage, 'won');
+  const completed = hooks.emitted.filter(([name, payload]) =>
+    name === 'colosseum:wave-completed' && payload.player === player);
+  assert.equal(completed.length, 1, 'wave completion event is emitted on the kill tick');
+  assert.equal(completed[0][1].wave, 12);
+  assert.equal(orb.isRegistered(), false, '237/1150 t25440: orb goes on the kill tick');
   assert.equal(player.getAttribute(Sol.ATTR.KILLS), 1);
   assert.equal(player.getAttribute(Scoreboard.ATTR.BEST), run.totalTicks, "the run's time is the scoreboard's best");
-  ticks(5);
+  ticks(7);
+  assert.equal(run.minimus?.getId() ?? null, null, '237/1150 t25447: no Minimus through +7');
+  assert.equal(run.chest?.getId() ?? null, null);
+  assert.deepEqual(player.jingles, []);
+  ticks(1);
+  assert.deepEqual(player.jingles, [[305, 0]], '237/1150 t25448: jingle at +8');
+  assert.deepEqual([run.minimus.location.getX(), run.minimus.location.getY(), run.minimus.face],
+    [1830, 3103, 3], 'Minimus appears at +8 facing west');
+  assert.equal(run.chest?.getId() ?? null, null);
+  ticks(1);
   assert.equal(run.stage, 'finished');
-  assert.ok(run.chest, 'the rewards chest');
-  assert.deepEqual([run.minimus.location.getX(), run.minimus.location.getY()], [1830, 3103], 'Minimus beside it');
+  assert.deepEqual(
+    [run.chest.getId(), run.chest.getLocation().getX(), run.chest.getLocation().getY(), run.chest.getType(), run.chest.getFace()],
+    [50741, 1829, 3105, 10, 1], '237/1150 t25449: the rewards chest at +9');
   assert.ok(run.loot.rewards.some(({ id }) => id === 28947), "Dizana's quiver");
   assert.ok(Shared.gloryOf(player) > 0, 'Glory kept');
   run.end('left');
   assert.equal(run.barricade.length, 0);
 });
+
+test('Volatility delays the chest and Solarflare and leaves Sol’s gib for three ticks', (t) => {
+  const { player, run, sol } = solRun('Volatile');
+  t.after(() => run.end('left'));
+  run.modifiers.add(Modifiers.byId('volatility').key);
+  run.modifiers.add(Modifiers.byId('solarflare').key);
+  Hazards.waveStarted(run);
+  const orb = run.solarflare.npc;
+  assert.equal(orb.isRegistered(), true);
+  // The body in the capture is five tiles wide, with its origin at the south-west corner.
+  sol.location = new Location(1822, 3106, 0);
+  sol.getSize = () => 5;
+  sol.hp = 0;
+  run.tick();
+  assert.equal(player.getAttribute(Sol.ATTR.KILLS), 1);
+  ticks(8);
+  assert.equal(run.chest?.getId() ?? null, null);
+  assert.equal(run.minimus?.getId() ?? null, null);
+  assert.deepEqual(player.jingles, []);
+  assert.equal(orb.isRegistered(), true, '237/1150 t14991–14999: the orb survives the kill tick');
+  assert.equal(player.graphics.some(([id]) => id === 2724), false, 'no early explosion');
+  ticks(1);
+  const gib = spawned.find((npc) => npc.__colosseumRun === run && npc.getId() === 12832);
+  assert.ok(gib?.isRegistered(), '237/1150 t15000: the gib at +9');
+  assert.deepEqual([gib.location.getX(), gib.location.getY()], [1822, 3106]);
+  assert.equal(run.npcs.has(gib), false, 'the gib is not an enemy');
+  assert.deepEqual(player.graphics.filter(([id]) => id === 2724), [[2724, 1824, 3108]]);
+  assert.equal(run.minimus?.getId() ?? null, null);
+  ticks(1);
+  assert.deepEqual(player.jingles, [[305, 0]], '237/1150 t15001: jingle at +10');
+  assert.equal(run.minimus?.getId(), 12808);
+  assert.equal(run.chest?.getId() ?? null, null);
+  assert.equal(orb.isRegistered(), true);
+  ticks(1);
+  assert.equal(run.chest?.getId(), 50741, '237/1150 t15002: chest at +11');
+  assert.equal(orb.isRegistered(), false, 'orb removed with the chest');
+  assert.equal(gib.isRegistered(), true);
+  ticks(1);
+  assert.equal(gib.isRegistered(), false, '237/1150 t15003: gib removed at +12');
+});
+
+test('leaving a run cancels Sol’s gib while its spawn is still queued', (t) => {
+  const { run, sol } = solRun('Queued gib');
+  const api = Shared.api();
+  const spawnNpc = api.spawnNpc;
+  const removeNpc = api.removeNpc;
+  const queue = api.core.World.getAddNPCQueue();
+  const gibId = 12832;
+  let gib;
+  t.after(() => {
+    run.end('logout');
+    if (gib) PluginManager.removeNpc(gib);
+  });
+  t.mock.method(api, 'spawnNpc', (options) => {
+    const npc = spawnNpc(options);
+    if (options.id === gibId) {
+      gib = npc;
+      gib.registered = false;
+      queue.push(gib);
+    }
+    return npc;
+  });
+  t.mock.method(api, 'removeNpc', (npc) => npc === gib ? PluginManager.removeNpc(npc) : removeNpc(npc));
+  run.modifiers.add(Modifiers.byId('volatility').key);
+
+  sol.hp = 0;
+  run.tick();
+  ticks(9);
+  assert.ok(gib && queue.includes(gib) && !gib.isRegistered(), 'the gib is pending registration');
+  run.end('logout');
+  assert.equal(queue.includes(gib), false, 'the ended run leaves no queued gib');
+});
+
+test('dying after Sol falls cancels the pending victory rewards', (t) => {
+  const { player, run, sol } = solRun('Dying victor');
+  t.after(() => run.end('death'));
+  sol.hp = 0;
+  run.tick();
+  assert.equal(run.stage, 'won');
+  ticks(7);
+  Arena.dyingInRun({ player });
+  ticks(4);
+  assert.equal(run.chest?.getId() ?? null, null);
+  assert.equal(run.minimus?.getId() ?? null, null);
+  assert.deepEqual(player.jingles, []);
+});
+
+test('victory sends the retail chest message at the reward tick', {
+  skip: 'The retail system message is omitted from this change.',
+}, () => {});
 
 test("Sol opens with a Spear, and a second Spear or Shield in a row uses the second pattern", () => {
   const { run, fight, sol } = solRun();

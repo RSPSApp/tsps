@@ -6,8 +6,7 @@
  * (its crystal version where one exists) with no bait (`fishing:tool`, `baitless`), and chop and
  * mine as the crystal axe and pickaxe (`woodcutting:tool`, `mining:tool`; no item, so no task
  * that names the tool: ours). The Knapsack comes from the cache's relic struct.
- * Not here: the Knapsack's storage (three kinds of gathered item, 140 in all, and its dispose
- * toggle): a container of its own for StorageItems, with options and lines nothing records yet.
+ * The Knapsack's storage is a StorageItems container (storage/Knapsack.StorageItems.js).
  */
 const Common = require("./Common.LeagueRelics");
 

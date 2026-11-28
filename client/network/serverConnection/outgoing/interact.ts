@@ -94,11 +94,13 @@ export function sendLocInteract(
     tile: { x: number; y: number },
     level?: number,
     action?: string,
+    opNum?: number,
+    subOpId?: number,
 ): void {
     if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return;
     send({
         type: "loc_interact",
-        payload: { id: id | 0, tile: { x: tile.x | 0, y: tile.y | 0 }, level, action },
+        payload: { id: id | 0, tile: { x: tile.x | 0, y: tile.y | 0 }, level, action, opNum, subOpId },
     } as any);
 }
 

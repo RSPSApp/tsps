@@ -44,9 +44,10 @@ assert.equal(methods.length, METHODS.size);
 const compile = (code: string) => ts.transpileModule(code, {
     compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS },
 }).outputText;
-const Methods = new Function("STANDARD_GAMEFRAME_ROOT", "loadGameframePaneRedirect", "markWidgetsLoaded", "HELD_WIDGET_ACTIONS",
+const Methods = new Function("STANDARD_GAMEFRAME_ROOT", "loadGameframePaneRedirect", "markWidgetsLoaded", "HELD_WIDGET_ACTIONS", "CHATBOX_MODAL_UID",
     compile(`class Methods {${methods.join("\n")}}; return Methods;`))(
-    STANDARD_GAMEFRAME_ROOT, loadGameframePaneRedirect, () => {}, new Function(`return ${heldActionsSource}`)());
+    STANDARD_GAMEFRAME_ROOT, loadGameframePaneRedirect, () => {}, new Function(`return ${heldActionsSource}`)(),
+    (162 << 16) | 568);
 
 const { createWidgetGroup, FLAG_OP1, TYPE_RECTANGLE, TYPE_TEXT } = require("../../server/plugins/interface/widgetGroup");
 const GROUP = 30090;

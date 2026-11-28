@@ -2,12 +2,13 @@
 
 /**
  * Checking the task: the enchanted gem's Check (and Activate, which talks to the master in OSRS
- * and here gives the same answer), the slayer ring's Check option and its Rub > Check
- * ("slayer:check" from Jewellery.plugin.js). Lines: Wiki, Enchanted gem; the streak line is
- * captured. The eternal gem is the same gem (rsprox captures, rev 227: its Check gives the same
- * two lines). On rev 242 the gem's Check also opens the Slayer helper (Helper.Slayer.js;
- * recording 1002084 t127); its Activate doesn't (that one opens the master's chat). Ours: the
- * eternal gem's Check opens it too (same gem; no rev 242 capture of the eternal gem).
+ * and here gives the same answer) and the slayer ring's and helmet's Check option. The ring's
+ * Rub submenu is its actions, not the task (Contact Master, Partner, Open Log: the cache's
+ * `subops`; see docs/slayer.md). Lines: Wiki, Enchanted gem; the streak line is captured. The
+ * eternal gem is the same gem (rsprox captures, rev 227: its Check gives the same two lines). On
+ * rev 242 the gem's Check also opens the Slayer helper (Helper.Slayer.js; recording 1002084
+ * t127); its Activate doesn't (that one opens the master's chat). Ours: the eternal gem's Check
+ * opens it too (same gem; no rev 242 capture of the eternal gem).
  */
 const Data = require("./Data.Slayer");
 const Helper = require("./Helper.Slayer");

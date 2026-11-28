@@ -436,10 +436,11 @@ module.exports = {
       if (hit.getCombatType() === CombatType.RANGED && Barrows.hasDamnedSet(player, "karils") && chance()) {
         const secondHit = new PendingHit(player, target, hit.getCombatMethod(), {
           delay: hit.getDelay() + 1,
+          damage: Math.floor(hit.getTotalDamage() / 2),
+          experience: false,
           handleAfterHitEffects: false,
           rollAccuracy: false,
         });
-        secondHit.setTotalDamage(Math.floor(hit.getTotalDamage() / 2));
         api.getCombatFactory().addPendingHit(secondHit);
       }
     });

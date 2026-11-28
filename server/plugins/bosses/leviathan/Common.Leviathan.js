@@ -59,19 +59,55 @@ function graphic(name, delay = 0) {
   result.delay = delay;
   return result;
 }
-function tileGraphic(player, area, at, name, delay = 0) { player.getPacketSender().sendGraphic(graphic(name, delay), tile(area, at)); }
-function damage(fight, amount, avoidable = true) {
+function tileGraphic(player, area, at, name, delay = 0, height = 0) {
+  const shown = height ? core.Graphic.delayed(ids.gfx[name], delay, height) : graphic(name, delay);
+  player.getPacketSender().sendGraphic(shown, tile(area, at));
+}
+/** A private synth, as live sends the encounter's sounds to the player in the fight. */
+function sound(player, name, delay = 0, loops = 1) {
+  player.getPacketSender().sendSoundEffect(data.sounds[name], loops, delay, 0);
+}
+/** A positioned sound at an arena source tile (the boss's hit and death sounds, radius 15). */
+function areaSound(player, area, at, name) {
+  const where = tile(area, at);
+  player.getPacketSender().sendAreaSound(data.sounds[name], where.getX(), where.getY(), where.getZ(), 1, 0, data.sounds.areaRadius);
+}
+/**
+ * Swaps the loc of a shape on an arena tile (the handholds, the island rowboat) for another, as one
+ * loc_add_change. Returns the new loc, or null when the tile has nothing of that shape.
+ */
+function replaceLoc(area, at, id, shape = 10) {
+  const location = tile(area, at);
+  const current = core.ObjectManager.objectsAt(location).find(o => o.getType() === shape && o.getPrivateArea() === area)
+    ?? area.getTemplateObject?.(location, shape);
+  if (current?.getId() === id) return current;
+  const object = new core.GameObject(id, location, shape, current?.getFace() ?? 0, area);
+  if (current) core.ObjectManager.replaceInPlace(current, object);
+  else core.ObjectManager.register(object, true);
+  area.add?.(object);
+  return object;
+}
+/**
+ * `reason` is the Perfect Leviathan failure line for this damage, where a capture shows it
+ * (rsprox 227/00555: "You took damage from the falling rubble."); other sources fail it silently.
+ */
+function damage(fight, amount, avoidable = true, reason = null) {
   if (fight.stopped || fight.over || fight.session.ended || fight.session.fight !== fight || fight.player.getHitpoints() <= 0) return;
   const hit = new core.HitDamage(Math.max(0, Math.floor(amount)), core.HitMask.RED);
-  trackDamage(fight, hit, avoidable);
+  trackDamage(fight, hit, avoidable, reason);
   fight.player.getCombat().getHitQueue().addPendingDamage([hit]);
 }
-function trackDamage(fight, hit, avoidable = true) {
+function trackDamage(fight, hit, avoidable = true, reason = null) {
   hit.setSource(fight.boss);
   fight.pendingDamage.add(hit);
   hit.onApplied(taken => {
     fight.pendingDamage.delete(hit);
-    if (taken > 0 && avoidable && !fight.stopped && !fight.over && !fight.session.ended && fight.session.fight === fight) fight.perfect = false;
+    if (taken > 0 && avoidable && !fight.stopped && !fight.over && !fight.session.ended && fight.session.fight === fight) {
+      const wasPerfect = fight.perfect;
+      fight.perfect = false;
+      if (wasPerfect && reason && !fight.awakened)
+        api.emitCustomEvent("combat-achievements:failed", { player: fight.player, task: "Perfect Leviathan", reason });
+    }
   });
 }
 function biteDamage(fight, amount) {
@@ -120,7 +156,7 @@ function shadowSpell(spell) {
   return ["SHADOW_RUSH", "SHADOW_BURST", "SHADOW_BLITZ", "SHADOW_BARRAGE"].some(name =>
     core.CombatSpells[name].getSpell().spellId() === spell?.spellId?.());
 }
-module.exports = { init, random, pick, count, normalKills, MONSTER, location, tile, sourceTile, later, animate, graphic, tileGraphic, damage, biteDamage, protectedFrom, projectile, tileProjectile,
+module.exports = { init, random, pick, count, normalKills, MONSTER, location, tile, sourceTile, later, animate, graphic, tileGraphic, sound, areaSound, replaceLoc, damage, biteDamage, protectedFrom, projectile, tileProjectile,
   shadowSpell,
   INSIDE_ATTRIBUTE, KILLS_ATTRIBUTE, AWAKENED_KILLS_ATTRIBUTE, BEST_ATTRIBUTE, AWAKENED_BEST_ATTRIBUTE, DEATHS_ATTRIBUTE,
   get api() { return api; }, get core() { return core; }, get data() { return data; }, get ids() { return ids; } };

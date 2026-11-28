@@ -113,6 +113,22 @@ function leftover(food, bite) {
   return food.leaves ? idsFor(food.leaves)[0] : undefined;
 }
 
+/** The slot the leftover goes to: the eaten slot, or for a `leavesInFreeSlot` vessel the first free one. */
+function vesselSlot(inventory, food, bite, slot) {
+  if (!food.leavesInFreeSlot || !isLastBite(food, bite)) return slot;
+  const items = inventory.getItems();
+  for (let index = 0; index < slot; index++) {
+    const item = items[index];
+    if (!item || item.getId() < 0 || item.getAmount() <= 0) return index;
+  }
+  return slot;
+}
+
+function isLastBite(food, bite) {
+  const count = Array.isArray(food.bites) ? food.bites.length : food.bites ?? 1;
+  return bite + 1 >= count;
+}
+
 /**
  * "food:container" { itemId, container }: the dish or other leftover a food ends in (its `leaves`),
  * for content that spoils a whole food (Mort Myre's ghasts rot a pie to its dish and rotten food).
@@ -390,7 +406,9 @@ function eat(event) {
   inventory.deleteAtSlot(slot, 1, false);
   const next = leftover(food, bite);
   // What is left (the next bite, the pie dish) keeps the eaten item's meta: a preset pie leaves a preset half.
-  if (next !== undefined) inventory.setItem(slot, new core.Item(next, 1, meta));
+  // A `leavesInFreeSlot` drink's vessel goes to the first free slot once the drink is gone, which is
+  // earlier than the drink's own slot when one is free (docs/food.md, Drinks eaten as food).
+  if (next !== undefined) inventory.setItem(vesselSlot(inventory, food, bite, slot), new core.Item(next, 1, meta));
   inventory.refreshItems();
 
   const hitpointsBefore = player.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS);
@@ -434,7 +452,7 @@ module.exports = {
   eatDelay,
   foodItemIds,
   _test: {
-    getAnglerfishHeal, canOverheal, overhealAllowance, healAmount, rollOutcome, foodBite, leftover, eatDelay, applyFood,
+    getAnglerfishHeal, canOverheal, overhealAllowance, healAmount, rollOutcome, foodBite, leftover, vesselSlot, eatDelay, applyFood,
     FOOD_EATEN_ATTRIBUTE,
   },
   register(api) {

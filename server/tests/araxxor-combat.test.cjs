@@ -138,6 +138,7 @@ test("her ranged and magic hits splat with the 120-cycle shot, not a tick before
     core: { Projectile, CombatMethod: class {}, CombatType: {}, NpcIdentifiers: { ARAXXOR: 13668 } },
     getPrayerHandler: () => ({}),
     onNpcHitModify: () => {},
+    onCustomEvent: () => {},
     registerNpcCombatMethodProvider: () => {},
   });
   for (const shape of [Shared.PROJECTILE.ranged, Shared.PROJECTILE.magic]) {
@@ -284,6 +285,7 @@ test("spawned eggs are pinned: scripted movement and zero wander radius", () => 
   Minions.attach({
     core: fakeCore,
     onNpcHitModify: () => {},
+    onCustomEvent: () => {},
     registerNpcCombatMethodProvider: () => {},
     getBonusManager: () => null,
   });
@@ -452,10 +454,12 @@ test("the harvest pet roll and the destroyed corpse's Nid roll are loot, not ext
     World: { getRemoveNPCQueue: () => ({ push() {} }), getProcessCycle: () => 0 },
     Task: class { stop() {} },
     TaskManager: { submit: (task) => task.execute() },
+    ChatType: { SPAM: 105 },
   };
   const api = {
     core,
     persistAttribute() {},
+    onNpcBeforeDeath() {},
     onNpcDeath() {},
     onCustomEvent() {},
     onNpcInteraction() {},
@@ -470,7 +474,7 @@ test("the harvest pet roll and the destroyed corpse's Nid roll are loot, not ext
     getLocation: () => ({}),
     performAnimation() {},
   });
-  const player = { performAnimation() {} };
+  const player = { performAnimation() {}, getPacketSender: () => ({ sendTypedMessage() {}, sendSoundEffect() {} }) };
   const originalRandom = Math.random;
   Math.random = () => 0; // roll Nid (1/1500) on destroy
   try {
@@ -499,7 +503,7 @@ test("the harvested loot is told to the loot tracker as Araxxor's, at the harves
     ItemDefinition: { forId: () => ({ getNoteId: () => -1, isNoted: () => false, isStackable: () => true }) },
   };
   Corpse.attach({
-    core, persistAttribute() {}, onNpcDeath() {}, onCustomEvent() {}, onNpcInteraction() {},
+    core, persistAttribute() {}, onNpcBeforeDeath() {}, onNpcDeath() {}, onCustomEvent() {}, onNpcInteraction() {},
     emitCustomEvent(name, payload) { events.push([name, payload]); },
     getItemOnGroundManager: () => ({ registerLocation() {} }),
   });
@@ -522,10 +526,11 @@ test("a Nid from the death roll or from Destroy reaches the listeners after the 
     World: { getRemoveNPCQueue: () => ({ push() {} }), getProcessCycle: () => 0 },
     Task: class { stop() {} },
     TaskManager: { submit: (task) => task.execute() },
+    ChatType: { SPAM: 105 },
   };
   // A synchronous bus: Corpse attaches first (bosses/ loads before npcs/Pets.plugin.js), the pet listener after it.
   const api = {
-    core, persistAttribute() {}, onNpcDeath() {}, onNpcInteraction() {},
+    core, persistAttribute() {}, onNpcBeforeDeath() {}, onNpcDeath() {}, onNpcInteraction() {},
     onCustomEvent(name, handler) { handlers.set(name, [...(handlers.get(name) ?? []), handler]); },
     emitCustomEvent(name, payload) { for (const handler of handlers.get(name) ?? []) handler(payload); },
     getItemOnGroundManager: () => ({ registerLocation() {} }),
@@ -541,7 +546,7 @@ test("a Nid from the death roll or from Destroy reaches the listeners after the 
     npc.getAttribute = () => session;
     return npc;
   };
-  const player = { performAnimation() {} };
+  const player = { performAnimation() {}, getPacketSender: () => ({ sendTypedMessage() {}, sendSoundEffect() {} }) };
 
   const harvested = corpse();
   api.emitCustomEvent("npc-drops:roll", { npc: harvested, npcId: Shared.BOSS_ID, drops: [{ itemId: Shared.NID_ITEM_ID, amount: 1 }] });
@@ -572,9 +577,10 @@ test("the harvest's loot goes out as one npc-drops:roll (log, clan broadcast), a
     World: { getRemoveNPCQueue: () => ({ push() {} }), getProcessCycle: () => 0 },
     Task: class { stop() {} },
     TaskManager: { submit: (task) => task.execute() },
+    ChatType: { SPAM: 105 },
   };
   Corpse.attach({
-    core, persistAttribute() {}, onNpcDeath() {}, onCustomEvent() {}, onNpcInteraction() {},
+    core, persistAttribute() {}, onNpcBeforeDeath() {}, onNpcDeath() {}, onCustomEvent() {}, onNpcInteraction() {},
     emitCustomEvent(name, payload) { events.push([name, payload]); },
     getItemOnGroundManager: () => ({ registerLocation() {} }),
   });
@@ -591,7 +597,7 @@ test("the harvest's loot goes out as one npc-drops:roll (log, clan broadcast), a
   };
   const logged = () => events.filter(([name]) => name === "collection-log:obtain").map(([, request]) => request.itemId);
   const rolls = () => events.filter(([name]) => name === "npc-drops:roll").map(([, request]) => request);
-  const player = { performAnimation() {} };
+  const player = { performAnimation() {}, getPacketSender: () => ({ sendTypedMessage() {}, sendSoundEffect() {} }) };
   Corpse.harvest({ player, npc: corpseWith() });
   assert.equal(rolls().length, 1, "harvested: one roll");
   assert.deepEqual(rolls()[0].drops.map((drop) => drop.itemId), [WHIP, Shared.ELITE_CLUE_ITEM_ID], "all of it");
@@ -852,8 +858,9 @@ test("each halberd piece drop is the next piece the player lacks; a new set star
       World: { getRemoveNPCQueue: () => ({ push() {} }), getProcessCycle: () => 0 },
       Task: class { stop() {} },
       TaskManager: { submit: (task) => task.execute() },
+      ChatType: { SPAM: 105 },
     },
-    persistAttribute() {}, onNpcDeath() {}, onCustomEvent() {}, onNpcInteraction() {},
+    persistAttribute() {}, onNpcBeforeDeath() {}, onNpcDeath() {}, onCustomEvent() {}, onNpcInteraction() {},
     emitCustomEvent() {}, getItemOnGroundManager: () => ({ registerLocation() {} }),
   });
   const attrs = new Map();
@@ -900,6 +907,7 @@ test("the mirrorback recoils melee only from melee distance", () => {
   Minions.attach({
     core: fakeCore,
     onNpcHitModify: () => {},
+    onCustomEvent: () => {},
     registerNpcCombatMethodProvider: () => {},
     getBonusManager: () => null,
   });
@@ -1004,4 +1012,85 @@ test("the halberd seed counts pieces in a looting bag and in group storage", asy
     else process.env[Store.FILE_ENV] = previousFile;
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("a lost task is told once, the tick after, with the captured reason", () => {
+  const CombatAchievements = require("../plugins/bosses/araxxor/CombatAchievements.Araxxor");
+  let cycle = 100;
+  const failed = [];
+  CombatAchievements.attach({
+    core: { World: { getProcessCycle: () => cycle } },
+    getPrayerHandler: () => ({}),
+    onCombatHitResolved() {},
+    onNpcDeath() {},
+    onCustomEvent() {},
+    emitCustomEvent(name, payload) { if (name === "combat-achievements:failed") failed.push([payload.task, payload.reason]); },
+  });
+  const player = { getCombat: () => ({ getPoisonImmunityTimer: () => ({ finished: () => true }) }) };
+  let bossX = 3631;
+  const boss = {
+    isRegistered: () => true,
+    getAttribute: () => false,
+    getLocation: () => ({ getX: () => bossX, getY: () => 9814 }),
+  };
+  CombatAchievements.spawned(player, boss);
+  CombatAchievements.avoidableDamage(player, 4, CombatAchievements.FAILURE.pool);
+  CombatAchievements.avoidableDamage(player, 9);
+  CombatAchievements.tick(player, boss);
+  assert.deepEqual(failed, [], "nothing on the tick it is lost");
+  cycle++;
+  bossX++;
+  CombatAchievements.tick(player, boss);
+  assert.deepEqual(failed, [["Perfect Araxxor", "You were hit by an Acid Pool."]], "the first reason, once");
+  cycle++;
+  CombatAchievements.tick(player, boss);
+  assert.deepEqual(failed.at(-1), ["Swimming in Venom", "Araxxor moved."]);
+  assert.equal(failed.length, 2);
+  CombatAchievements.left(player);
+});
+
+test("a task lost on the kill tick is still told", () => {
+  const CombatAchievements = require("../plugins/bosses/araxxor/CombatAchievements.Araxxor");
+  const cycle = 200;
+  const failed = [];
+  CombatAchievements.attach({
+    core: { World: { getProcessCycle: () => cycle } },
+    getPrayerHandler: () => ({}),
+    onCombatHitResolved() {},
+    onNpcDeath() {},
+    onCustomEvent() {},
+    emitCustomEvent(name, payload) { if (name === "combat-achievements:failed") failed.push(payload.task); },
+  });
+  const player = { getCombat: () => ({ getPoisonImmunityTimer: () => ({ finished: () => true }) }) };
+  const boss = { isRegistered: () => true, getAttribute: () => false, getLocation: () => ({ getX: () => 3631, getY: () => 9814 }) };
+  CombatAchievements.spawned(player, boss);
+  CombatAchievements.avoidableDamage(player, 4, CombatAchievements.FAILURE.pool);
+  CombatAchievements.killed(player, 1, () => {});
+  assert.deepEqual(failed, ["Perfect Araxxor"]);
+  CombatAchievements.left(player);
+});
+
+test("hit sounds play on the NPC's middle: Araxxor's 7x7 centre, a Mirrorback's own tile", () => {
+  const Shared = require("../plugins/bosses/araxxor/Shared.Araxxor");
+  let cycle = 300;
+  const sent = [];
+  const player = { isRegistered: () => true, getPacketSender: () => ({ sendAreaSound: (...args) => sent.push(args) }) };
+  const npcAt = (x, y, size) => ({
+    getSize: () => size,
+    getLocation: () => ({ getX: () => x, getY: () => y, getZ: () => 0 }),
+    getAttribute: (key) => (key === Shared.ATTR_ENCOUNTER ? { player } : undefined),
+  });
+  const core = { World: { getProcessCycle: () => cycle } };
+  Shared.playHitSound(core, npcAt(3631, 9814, 7), Shared.HIT_SOUND.boss);
+  Shared.playHitSound(core, npcAt(3624, 9816, 7), Shared.HIT_SOUND.boss);
+  cycle++;
+  Shared.playHitSound(core, npcAt(3625, 9810, 1), Shared.HIT_SOUND.mirrorback);
+  assert.deepEqual(sent.map((s) => s.slice(0, 3)), [[3609, 3634, 9817], [3609, 3627, 9819], [4020, 3625, 9810]]);
+});
+
+test("the fight duration is m:ss without precise timing and m:ss.cc with it", () => {
+  const Corpse = require("../plugins/bosses/araxxor/Corpse.Araxxor");
+  assert.equal(Corpse.formatTicks(176, false), "1:46");
+  assert.equal(Corpse.formatTicks(176, true), "1:45.60");
+  assert.equal(Corpse.formatTicks(176), "1:45.60");
 });

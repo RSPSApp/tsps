@@ -356,3 +356,563 @@ test("Callisto's ranged impact is delayed by its flight, never read as a height"
     assert.deepEqual([graphic.getDelay(), graphic.getHeight()], [end, 0], `${tiles} tiles`);
   }
 });
+
+const SPIDER_CYCLE = 'wilderness-bosses:spider-cycle';
+
+function spiderFight(t, bossId = 6610) {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { PrayerHandler } = require('../dist/game/content/PrayerHandler');
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel));
+  player.setIndex(9740);
+  player.setUsername('wildboss');
+  player.setRegistered(true);
+  player.getSkillManager().setMaxLevels(core.Skill.PRAYER, 99, false).setCurrentLevels(core.Skill.PRAYER, 99, false);
+  t.after(() => player.setRegistered(false));
+
+  const spawn = bossId === 6610 ? [3421, 10202, 2] : [1629, 11546, 2];
+  const npc = new core.NPC(bossId, new core.Location(...spawn));
+  npc.setRegistered(true);
+  t.after(() => {
+    World.unregisterNpcPosition(npc);
+    npc.setRegistered(false);
+  });
+  const { key, spiderling } = Spiders._test.SPIDERS[bossId];
+  const add = [];
+  const remove = [];
+  const projectiles = [];
+  const tasks = [];
+  const registered = [];
+  let deferRegistration = false;
+  let Combat;
+  let beforeDeath;
+  let beforeTargetDeath;
+  let combatHitResolved;
+  let cycle = 0;
+
+  t.mock.method(World, 'getAddNPCQueue', () => add);
+  t.mock.method(World, 'getRemoveNPCQueue', () => remove);
+  t.mock.method(World, 'getProcessCycle', () => cycle);
+  t.mock.method(World.getNpcs(), 'add', (added) => {
+    if (deferRegistration) return false;
+    registerSpiderling(added);
+    return true;
+  });
+  t.mock.method(core.CombatFactory, 'addPendingHit', () => {});
+  t.mock.method(Caves, 'playersIn', () => []);
+  t.mock.method(core.Projectile.prototype, 'sendProjectile', function () {
+    projectiles.push({ id: this.projectileId, end: this.end });
+  });
+  t.mock.method(core.TaskManager, 'submit', (task) => {
+    task.setRunning(true);
+    tasks.push(task);
+  });
+  // Keep unrelated spiderling attack setup and shuffling independent of the fixture.
+  t.mock.method(Common, 'engage', () => {});
+  t.mock.method(Common, 'open', () => true);
+  let roll = 0;
+  t.mock.method(Math, 'random', () => (roll++ % 19) / 19);
+
+  Spiders.attach({
+    core,
+    getPrayerHandler: () => PrayerHandler,
+    getObjectManager: () => ({ register() {}, deregister() {} }),
+    spawnNpc: (definition) => PluginManager.spawnNpc(definition),
+    registerNpcCombatMethodProvider(ids, method) {
+      assert.ok(ids.includes(bossId), 'the boss uses the registered method');
+      Combat = method;
+    },
+    onNpcBeforeDeath: (handler) => { beforeDeath = handler; },
+    onPlayerBeforeDeath: (handler) => { beforeTargetDeath = handler; },
+    onCombatHitResolved: (handler) => { combatHitResolved = handler; },
+  });
+  const fight = Common.FIGHTS.get(key);
+  const combat = new Combat();
+  fight.spawned(npc);
+
+  function place(adjacent) {
+    const x = npc.getLocation().getX() + npc.getSize() + (adjacent ? 0 : 5);
+    player.setLocation(new core.Location(x, npc.getLocation().getY() + 2, npc.getLocation().getZ()));
+  }
+
+  function attack(beforeStart, attacker = npc) {
+    cycle += attacker.getCombat().getAttackDelay();
+    attacker.resetUpdating();
+    beforeStart?.();
+    combat.start(attacker, player);
+    return attacker.getAnimation()?.id;
+  }
+
+  function registerSpiderling(added) {
+    assert.equal(added.getRealId(), spiderling);
+    added.setRegistered(true);
+    registered.push(added);
+  }
+
+  function registerBrood() {
+    for (const added of add.splice(0)) registerSpiderling(added);
+  }
+  t.after(() => {
+    try {
+      fight.reset(npc);
+    } finally {
+      for (const added of registered) added.setRegistered(false);
+      Spiders.attach(api);
+    }
+  });
+
+  function tickTasks(ticks) {
+    for (let i = 0; i < ticks; i++) {
+      cycle++;
+      for (const task of [...tasks]) {
+        if (task.isRunning()) task.tick();
+      }
+    }
+  }
+
+  place(true);
+  return {
+    npc, player, key, fight, add, remove, registered, projectiles, beforeDeath, beforeTargetDeath, combatHitResolved,
+    place, attack, combat, registerBrood, tickTasks,
+    deferAdds: () => { deferRegistration = true; },
+  };
+}
+
+for (const [name, bossId] of [['Venenatis', 6610], ['Spindel', 11998]]) {
+  test(`${name} calls two spiderlings on her opening bite`, (t) => {
+    const { npc, add, attack, registered } = spiderFight(t, bossId);
+    assert.equal(npc.getAnimation().id, 9993);
+    assert.equal(npc.getCombat().getAttackDelay(), 7);
+    assert.equal(attack(), 9991);
+    assert.equal(registered.length, 2, 'both spiderlings are in the world on the attack tick');
+    assert.equal(add.length, 0);
+    assert.notDeepEqual(registered[0].getLocation(), registered[1].getLocation(), 'the two use separate spawn tiles');
+    assert.equal(npc.getAttribute(SPIDER_CYCLE), 1);
+  });
+
+  test(`${name} throws the sticky web on attack 11 even when she bites`, (t) => {
+    const { npc, player, attack, place, registerBrood, projectiles } = spiderFight(t, bossId);
+    place(false);
+    assert.equal(attack(), 9989);
+    registerBrood();
+    for (let slot = 1; slot < 10; slot++) attack();
+    assert.ok(projectiles.every(({ id }) => id !== 2360));
+    place(true);
+    assert.equal(attack(), 9991);
+    assert.deepEqual(projectiles.filter(({ id }) => id === 2360).map(({ id }) => id), [2360]);
+    assert.deepEqual(projectiles.at(-1).end, player.getLocation());
+    assert.equal(npc.getAttribute(SPIDER_CYCLE), 11);
+  });
+}
+
+// Leave the route queued so these tests can inspect the destination. The NPC-tick
+// test below uses the real step processing and combat scheduler.
+function spiderRoute(t, npc) {
+  const queue = npc.getMovementQueue();
+  t.mock.method(queue, 'process', () => {});
+  t.mock.method(queue, 'didMoveThisCycle', () => true);
+  t.mock.method(queue, 'canWalkTo', () => true);
+  return queue;
+}
+
+function chooseSpiderDestination(t, dx, dy) {
+  const randomBetween = Common.randomBetween;
+  t.mock.method(Common, 'randomBetween', (min, max) => {
+    if (min === -6 && (max === 7 || max === 6)) return dx;
+    if (min === -7 && max === 8) return dy;
+    return randomBetween(min, max);
+  });
+}
+
+function spiderDistance(a, b) {
+  return Math.max(Math.abs(a.getX() - b.getX()), Math.abs(a.getY() - b.getY()));
+}
+
+for (const [name, bossId] of [['Venenatis', 6610], ['Spindel', 11998]]) {
+  test(`${name} bites and runs on the fourth attack`, (t) => {
+    const { npc, attack } = spiderFight(t, bossId);
+    const queue = spiderRoute(t, npc);
+    chooseSpiderDestination(t, -5, 0);
+    for (let i = 0; i < 3; i++) {
+      assert.equal(attack(), 9991);
+      assert.equal(queue.size(), 0);
+    }
+    assert.equal(attack(), 9991);
+    assert.ok(queue.size() > 0, 'the fourth bite queues a run');
+    assert.equal(npc.getMovementSteps(), 2);
+  });
+
+  test(`${name} keeps the fourth-attack run when the target steps out of bite range`, (t) => {
+    const { npc, place, attack } = spiderFight(t, bossId);
+    const queue = spiderRoute(t, npc);
+    chooseSpiderDestination(t, -3, 0);
+    for (let i = 0; i < 3; i++) {
+      assert.equal(attack(), 9991);
+      assert.equal(queue.size(), 0);
+    }
+    place(false);
+    assert.equal(attack(), 9989);
+    const destination = queue.getDestination();
+    assert.ok(destination, 'the fourth attack queues a run despite the style change');
+    const distance = spiderDistance(npc.getLocation(), destination);
+    assert.equal(distance, 3);
+    assert.equal(npc.getCombat().getAttackDelay(), 3);
+    queue.reset();
+    assert.equal(attack(), 9989);
+    assert.equal(queue.size(), 0);
+    assert.equal(npc.getCombat().getAttackDelay(), 4);
+  });
+
+  test(`${name} moves on attacks 4, 8, 12 and 16 of each mixed cycle`, (t) => {
+    const { npc, place, attack } = spiderFight(t, bossId);
+    const queue = spiderRoute(t, npc);
+    chooseSpiderDestination(t, -5, 0);
+    const moved = [];
+    for (let count = 1; count <= 32; count++) {
+      place(count % 3 !== 0);
+      attack();
+      if (queue.size() > 0) moved.push(count);
+      queue.reset();
+    }
+    assert.deepEqual(moved, [4, 8, 12, 16, 20, 24, 28, 32]);
+  });
+
+  test(`${name} restarts the movement count after the cave resets an abandoned fight`, (t) => {
+    const { npc, key, attack, tickTasks } = spiderFight(t, bossId);
+    const queue = spiderRoute(t, npc);
+    const area = Caves._test.areas.get(key);
+    chooseSpiderDestination(t, -5, 0);
+    for (let i = 0; i < 3; i++) attack();
+    assert.equal(npc.getAttribute(SPIDER_CYCLE), 3);
+    area.process(npc);
+    tickTasks(100);
+    area.process(npc);
+    assert.equal(npc.getAttribute(SPIDER_CYCLE), 0, 'the cave reset the deserted fight');
+    for (let i = 0; i < 3; i++) {
+      attack();
+      assert.equal(queue.size(), 0);
+    }
+    attack();
+    assert.ok(queue.size() > 0);
+  });
+
+  test(`${name} keeps the ordinary delay when every candidate footprint is blocked`, (t) => {
+    const { npc, place, attack } = spiderFight(t, bossId);
+    const queue = spiderRoute(t, npc);
+    place(false);
+    for (let i = 0; i < 3; i++) attack();
+    const origin = npc.getLocation();
+    const open = t.mock.method(Common, 'open', () => false);
+    assert.equal(attack(), 9989);
+    assert.ok(open.mock.callCount() > 0, 'the fourth attack searched for a destination');
+    assert.deepEqual(npc.getLocation(), origin);
+    assert.equal(queue.size(), 0);
+    assert.equal(npc.getCombat().getAttackDelay(), 4);
+  });
+
+  for (const victim of ['boss', 'target']) {
+    test(`${name} queues no run when the ${victim} dies on the fourth attack`, (t) => {
+      const { npc, player, fight, place, attack, beforeDeath } = spiderFight(t, bossId);
+      const queue = spiderRoute(t, npc);
+      chooseSpiderDestination(t, -5, 0);
+      place(false);
+      for (let i = 0; i < 3; i++) attack();
+      const swing = t.mock.method(core.CombatFactory, 'addPendingHit', () => {
+        if (victim === 'boss') {
+          npc.setHitpoints(0);
+          beforeDeath({ npc, preventDeath: false });
+        } else {
+          player.setHitpoints(0);
+        }
+      });
+      assert.equal(attack(), 9989);
+      assert.equal(swing.mock.callCount(), 1, 'death was triggered by the scripted swing');
+      assert.equal(queue.size(), 0);
+      swing.mock.restore();
+      if (victim === 'target') return;
+
+      const respawn = npc.clone();
+      respawn.setRegistered(true);
+      t.after(() => {
+        fight.reset(respawn);
+        World.unregisterNpcPosition(respawn);
+        respawn.setRegistered(false);
+      });
+      fight.spawned(respawn);
+      const respawnQueue = spiderRoute(t, respawn);
+      assert.equal(respawn.getCombat().getAttackDelay(), 7);
+      for (let i = 0; i < 3; i++) {
+        attack(undefined, respawn);
+        assert.equal(respawnQueue.size(), 0);
+      }
+      attack(undefined, respawn);
+      assert.ok(respawnQueue.size() > 0);
+    });
+  }
+
+  test(`${name} destination estimate uses the spawn box and an open footprint`, (t) => {
+    const { npc, fight, place, attack } = spiderFight(t, bossId);
+    const queue = spiderRoute(t, npc);
+    const spawn = npc.getSpawnPosition();
+    const origin = spawn.transform(2, 1);
+    const blockedColumn = spawn.getX() - 1;
+    const destinations = new Set();
+    let longest = 0;
+    let seed = 240;
+    t.mock.method(Math, 'random', () => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed / 2 ** 32;
+    });
+    t.mock.method(Common, 'open', (x) => x !== blockedColumn);
+    for (let sample = 0; sample < 200; sample++) {
+      fight.reset(npc);
+      npc.setLocation(origin);
+      place(false);
+      for (let i = 0; i < 4; i++) attack();
+      const destination = queue.getDestination();
+      assert.ok(destination, 'a candidate was found');
+      const dx = destination.getX() - spawn.getX();
+      const dy = destination.getY() - spawn.getY();
+      assert.ok(dx >= -6 && dx <= 7);
+      assert.ok(dy >= -7 && dy <= 8);
+      assert.equal(destination.getZ(), spawn.getZ());
+      const d = spiderDistance(origin, destination);
+      assert.ok(d >= 1 && d <= 13);
+      longest = Math.max(longest, d);
+      assert.equal(npc.getSize(), 4);
+      assert.ok(blockedColumn < destination.getX() || blockedColumn >= destination.getX() + npc.getSize());
+      destinations.add(`${dx},${dy}`);
+      queue.reset();
+    }
+    assert.ok(destinations.size > 40);
+    assert.ok(longest > 3, 'the spawn box allows more than a three-tile shuffle');
+  });
+}
+
+test('the spider move delay follows the recorded table for 1 through 13 tiles', (t) => {
+  const { npc, fight, place, attack } = spiderFight(t);
+  const queue = spiderRoute(t, npc);
+  const origin = npc.getSpawnPosition().transform(-6, 0);
+  const expected = [2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8];
+  for (let distance = 1; distance <= expected.length; distance++) {
+    fight.reset(npc);
+    npc.setLocation(origin);
+    place(false);
+    chooseSpiderDestination(t, -6 + distance, 0);
+    for (let i = 0; i < 4; i++) attack();
+    assert.equal(npc.getCombat().getAttackDelay(), expected[distance - 1], `after a ${distance}-tile run`);
+    assert.equal(spiderDistance(origin, queue.getDestination()), distance);
+    queue.reset();
+  }
+});
+
+test('Venenatis clears a run if its target dies after she attacks on the same tick', (t) => {
+  const { npc, player, place, attack, beforeTargetDeath } = spiderFight(t);
+  const queue = spiderRoute(t, npc);
+  chooseSpiderDestination(t, -5, 0);
+  place(false);
+  for (let i = 0; i < 4; i++) assert.equal(attack(), 9989);
+  assert.ok(queue.size() > 0, 'the fourth attack queued a route before the target died');
+  player.setHitpoints(0);
+  beforeTargetDeath?.({ player, preventDeath: false });
+  assert.equal(queue.size(), 0);
+  assert.equal(npc.isScriptedMovement(), false);
+});
+
+function spiderOnNpcTicks(t) {
+  const { npc, player, combat, tickTasks } = spiderFight(t);
+  const origin = npc.getLocation();
+  player.setLocation(origin.transform(4, 2));
+  core.RegionManager.loadMapFiles(origin.getX(), origin.getY());
+  npc.setNeedsPlacement(false);
+  player.setNeedsPlacement(false);
+  t.mock.method(npc, 'getCombatMethod', () => combat);
+  chooseSpiderDestination(t, -5, 1);
+  npc.getCombat().attack(player);
+  function tick(count = 1) {
+    for (let i = 0; i < count; i++) {
+      tickTasks(1);
+      npc.resetUpdating();
+      npc.process();
+    }
+  }
+  return { npc, player, origin, tick };
+}
+
+test('Venenatis starts the run on the bite tick and keeps it through the combat loop', (t) => {
+  const { npc, player, origin, tick } = spiderOnNpcTicks(t);
+  const destination = origin.transform(-5, 1);
+  tick(19);
+  assert.equal(npc.getAnimation()?.id, 9991);
+  assert.deepEqual(npc.getLocation(), origin.transform(-2, 1), 'two steps on the attack tick');
+  assert.equal(npc.getCombat().getAttackDelay(), 4);
+  player.setLocation(destination.transform(-1, 0));
+  tick();
+  assert.deepEqual(npc.getLocation(), origin.transform(-4, 1), 'the in-range target does not clear the queue');
+  tick();
+  assert.deepEqual(npc.getLocation(), destination, 'one step on the final tick of the odd-length run');
+  tick(2);
+  assert.equal(npc.getAnimation()?.id, 9991, 'the next attack follows the move delay');
+});
+
+test('Venenatis uses the actual distance when a started run loses its route', (t) => {
+  const { npc, origin, tick } = spiderOnNpcTicks(t);
+  tick(19);
+  assert.deepEqual(npc.getLocation(), origin.transform(-2, 1));
+  assert.equal(npc.getCombat().getAttackDelay(), 4, 'the planned five-tile run allows four ticks');
+  npc.getMovementQueue().reset();
+  tick();
+  assert.equal(npc.getCombat().getAttackDelay(), 2, 'the actual two-tile run allows three ticks from the attack');
+  tick(2);
+  assert.equal(npc.getAnimation()?.id, 9989);
+});
+
+test('Venenatis keeps a fourth attack within two steps when pursuit already ran that tick', (t) => {
+  const { npc, player, origin, tick } = spiderOnNpcTicks(t);
+  tick(18);
+  player.setLocation(origin.transform(0, 14));
+  tick();
+  assert.equal(npc.getAnimation()?.id, 9989, 'the pursuit brought her into range for the fourth attack');
+  assert.deepEqual(npc.getLocation(), origin.transform(0, 2), 'only the two pursuit steps fit on the attack tick');
+  tick();
+  assert.deepEqual(npc.getLocation(), origin.transform(-2, 1), 'the relocation takes its first two steps on the next tick');
+});
+test('Venenatis counts both ways of crossing the melee boundary in the same cycle', (t) => {
+  const { npc, attack, place, projectiles, registerBrood } = spiderFight(t);
+  for (let slot = 0; slot < 4; slot++) assert.equal(attack(), 9991);
+  assert.deepEqual(projectiles, [], 'a bite replaces the ordinary shot');
+  registerBrood();
+  place(false);
+  for (let slot = 4; slot < 8; slot++) assert.equal(attack(), 9989);
+  assert.equal(attack(), 9990);
+  assert.deepEqual(projectiles.map(({ id }) => id), [2356, 2356, 2356, 2356, 2358]);
+  assert.equal(npc.getAttribute(SPIDER_CYCLE), 9);
+  place(true);
+  assert.equal(attack(), 9991);
+  assert.equal(npc.getAttribute(SPIDER_CYCLE), 10);
+  place(false);
+  assert.equal(attack(), 9990);
+  assert.deepEqual(projectiles.slice(-2).map(({ id }) => id), [2358, 2360]);
+  assert.equal(npc.getAttribute(SPIDER_CYCLE), 11);
+});
+
+for (const [name, adjacent, sequence] of [['bites', true, 9991], ['shots', false, 9989]]) {
+  test(`Venenatis adds two more spiderlings after 16 ${name} with the first two alive`, (t) => {
+    const { npc, add, registered, attack, registerBrood, place } = spiderFight(t);
+    place(adjacent);
+    assert.equal(attack(), sequence);
+    registerBrood();
+    assert.equal(registered.length, 2);
+    for (let slot = 1; slot < 16; slot++) attack();
+    assert.equal(add.length, 0, 'no extra calls before the cycle wraps');
+    assert.equal(attack(), sequence);
+    assert.equal(registered.length, 4, 'the second pair registers on the same attack');
+    assert.equal(add.length, 0);
+    assert.equal(registered.filter((spider) => spider.getHitpoints() > 0).length, 4);
+    assert.equal(npc.getAttribute(SPIDER_CYCLE), 1);
+  });
+}
+
+test('Venenatis keeps both new spiderlings when one from an older call dies that tick', (t) => {
+  const { add, registered, attack, registerBrood, place } = spiderFight(t);
+  place(false);
+  attack();
+  registerBrood();
+  assert.equal(registered.length, 2);
+  for (let slot = 1; slot < 16; slot++) attack();
+  attack(() => registered[0].setHitpoints(0));
+  assert.equal(registered.length, 4, 'the death does not turn the call into a top-up');
+  assert.equal(add.length, 0);
+  assert.equal(registered.filter((spider) => spider.getHitpoints() > 0).length, 3);
+});
+
+for (const reason of ['reset', 'death (estimated five-tick delay)']) {
+  test(`Venenatis dismisses all eight spiderlings, including a pending call, on ${reason}`, (t) => {
+    const { npc, fight, add, remove, registered, beforeDeath, attack, place, registerBrood, tickTasks, deferAdds } = spiderFight(t);
+    place(false);
+    for (let slot = 0; slot < 48; slot++) {
+      attack();
+      registerBrood();
+    }
+    deferAdds();
+    attack();
+    assert.equal(registered.length, 6);
+    assert.equal(add.length, 2);
+    const spiders = [...registered, ...add];
+    assert.ok(spiders.every((spider) => spider.getHitpoints() > 0));
+    if (reason === 'reset') {
+      fight.reset(npc);
+      assert.deepEqual(remove, registered);
+      assert.deepEqual(add, [], 'the pending pair cannot appear after the reset');
+      assert.equal(npc.getAttribute(SPIDER_CYCLE), 0);
+    } else {
+      beforeDeath({ npc, preventDeath: true });
+      tickTasks(5);
+      assert.ok(spiders.every((spider) => spider.getHitpoints() > 0));
+      beforeDeath({ npc, preventDeath: false });
+      registerBrood();
+      tickTasks(4);
+      assert.ok(spiders.every((spider) => spider.getHitpoints() > 0));
+      tickTasks(1);
+      assert.ok(spiders.every((spider) => spider.getHitpoints() === 0));
+    }
+  });
+}
+
+test('Venenatis spiderling deaths follow her death by an estimated five ticks', (t) => {
+  const { npc, registered, beforeDeath, attack, place, registerBrood, tickTasks } = spiderFight(t);
+  place(false);
+  assert.equal(attack(), 9989);
+  registerBrood();
+  assert.equal(registered.length, 2);
+  beforeDeath({ npc, preventDeath: false });
+  assert.ok(registered.every((spider) => spider.getHitpoints() > 0));
+  tickTasks(4);
+  assert.ok(registered.every((spider) => spider.getHitpoints() > 0));
+  tickTasks(1);
+  assert.ok(registered.every((spider) => spider.getHitpoints() === 0));
+});
+
+test('Venenatis spiderling drain uses the filterable channel with its original bytes', (t) => {
+  const { player, attack, place, registered, registerBrood, combatHitResolved } = spiderFight(t);
+  const sender = player.getPacketSender();
+  const messages = t.mock.method(sender, 'sendTypedMessage', () => {});
+  const plain = t.mock.method(sender, 'sendMessage', () => {});
+  place(false);
+  attack();
+  registerBrood();
+  assert.equal(registered.length, 2);
+  const before = player.getSkillManager().getCurrentLevel(core.Skill.PRAYER);
+  combatHitResolved({ attacker: registered[0], target: player });
+  assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.PRAYER), before - 1);
+  assert.equal(plain.mock.callCount(), 0);
+  assert.deepEqual(messages.mock.calls.map(({ arguments: [type, text] }) => [type, Buffer.from(text)]), [
+    [core.ChatType.SPAM, Buffer.from('You feel yourself drained by the spiderling.')],
+  ]);
+});
+
+test('Venenatis sticky web drain uses the filterable channel once per visit with its original bytes', (t) => {
+  const { key, player, fight, attack, place, registerBrood, projectiles, tickTasks } = spiderFight(t);
+  const sender = player.getPacketSender();
+  const messages = t.mock.method(sender, 'sendTypedMessage', () => {});
+  const plain = t.mock.method(sender, 'sendMessage', () => {});
+  place(false);
+  attack();
+  registerBrood();
+  for (let slot = 1; slot <= 10; slot++) attack();
+  assert.equal(projectiles.at(-1).id, 2360, 'the ordinary slot-10 throw reaches the target tile');
+  tickTasks(4);
+  const landing = player.getLocation().clone();
+  const before = player.getSkillManager().getCurrentLevel(core.Skill.PRAYER);
+  fight.playerTick(player, { key });
+  fight.playerTick(player, { key });
+  assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.PRAYER), before - 6);
+  player.setLocation(new core.Location(landing.getX() + 4, landing.getY(), landing.getZ()));
+  fight.playerTick(player, { key });
+  player.setLocation(landing);
+  fight.playerTick(player, { key });
+  assert.equal(plain.mock.callCount(), 0);
+  const expected = [core.ChatType.SPAM, Buffer.from('You feel yourself drained by the webs!')];
+  assert.deepEqual(messages.mock.calls.map(({ arguments: [type, text] }) => [type, Buffer.from(text)]), [expected, expected]);
+});

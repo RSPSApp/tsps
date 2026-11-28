@@ -74,7 +74,8 @@ export class ChatTextLayout {
         const pages: string[] = [];
         for (let start = 0; start < lines.length; start += ChatTextLayout.LINES_PER_PAGE) {
             const page = lines.slice(start, start + ChatTextLayout.LINES_PER_PAGE);
-            pages.push(page.map(([line], i) => i === 0 ? line : (page[i - 1][1] ? "<br>" : " ") + line).join(""));
+            // A line broken after a hyphen joins the next without a space (the word goes on).
+            pages.push(page.map(([line], i) => i === 0 ? line : (page[i - 1][1] ? "<br>" : page[i - 1][2] ? "" : " ") + line).join(""));
         }
         return pages;
     }
@@ -95,45 +96,57 @@ export class ChatTextLayout {
      * every line of a coloured passage (Client of Kourend's possessed Veos, rsprox local 1001998
      * ticks 2109-2121: "<col=000080>...<br><col=000080>..."), and a page is a new chatbox.
      */
-    private static carryColour(lines: Array<[string, boolean]>): Array<[string, boolean]> {
+    private static carryColour(lines: Array<[string, boolean, boolean]>): Array<[string, boolean, boolean]> {
         let open: string | null = null;
-        return lines.map(([line, br]) => {
+        return lines.map(([line, br, hyphen]) => {
             const shown: string = open && !/^<col=[0-9a-f]{6}>/i.test(line) ? `${open}${line}` : line;
             for (const [tag] of shown.matchAll(/<col=[0-9a-f]{6}>|<\/col>/gi)) open = tag.startsWith("</") ? null : tag;
-            return [shown, br];
+            return [shown, br, hyphen];
         });
     }
 
-    /** Each line, and whether a "<br>" ends it. */
-    private static layout(text: string): Array<[string, boolean]> {
+    /** Each line, whether a "<br>" ends it, and whether it was broken just after a hyphen. */
+    private static layout(text: string): Array<[string, boolean, boolean]> {
         if (!ChatTextLayout.loadAdvances()) {
-            return Misc.wrapText(String(text ?? ""), ChatTextLayout.FALLBACK_CHARACTERS).map((line) => [line, false]);
+            return Misc.wrapText(String(text ?? ""), ChatTextLayout.FALLBACK_CHARACTERS).map((line) => [line, false, false]);
         }
-        const lines: Array<[string, boolean]> = [];
+        const lines: Array<[string, boolean, boolean]> = [];
         const paragraphs = String(text ?? "").split(/<br\s*\/?>/i);
         for (let p = 0; p < paragraphs.length; p++) {
             const first = lines.length;
-            for (const line of ChatTextLayout.wrapParagraph(paragraphs[p], ChatTextLayout.WIDTH)) lines.push([line, false]);
+            for (const [line, hyphen] of ChatTextLayout.breakParagraph(paragraphs[p], ChatTextLayout.WIDTH)) lines.push([line, false, hyphen]);
             if (p < paragraphs.length - 1 && lines.length > first) lines[lines.length - 1][1] = true;
         }
         return lines;
     }
 
-    /** One paragraph's lines, broken at spaces to fit `width`; none for an empty paragraph. */
+    /** One paragraph's lines, broken to fit `width`; none for an empty paragraph. */
     private static wrapParagraph(paragraph: string, width: number): string[] {
-        const lines: string[] = [];
+        return ChatTextLayout.breakParagraph(paragraph, width).map(([line]) => line);
+    }
+
+    /**
+     * One paragraph's lines, and whether each was broken just after a hyphen. The client breaks at a space
+     * or after a hyphen: live sends "much in-<br>fighting" (Family Crest, local recording 1002252 tick 168),
+     * "extra-<br>planar" and "great-<br>grandfather", and keeps "ill-bred" whole where it fits.
+     */
+    private static breakParagraph(paragraph: string, width: number): Array<[string, boolean]> {
+        const lines: Array<[string, boolean]> = [];
         let line = "";
         for (const word of paragraph.split(" ")) {
             if (!word) continue;
-            const candidate = line ? `${line} ${word}` : word;
-            if (line && ChatTextLayout.width(candidate) > width) {
-                lines.push(line);
-                line = word;
-            } else {
-                line = candidate;
+            const pieces = word.split(/(?<=-)(?=.)/);
+            for (let k = 0; k < pieces.length; k++) {
+                const candidate = line ? `${line}${k === 0 ? " " : ""}${pieces[k]}` : pieces[k];
+                if (line && ChatTextLayout.width(candidate) > width) {
+                    lines.push([line, k > 0]);
+                    line = pieces[k];
+                } else {
+                    line = candidate;
+                }
             }
         }
-        if (line) lines.push(line);
+        if (line) lines.push([line, false]);
         return lines;
     }
 }

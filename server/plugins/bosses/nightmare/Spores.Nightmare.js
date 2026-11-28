@@ -3,7 +3,7 @@
  * message and their growth a tick after that, armed on the fifth. A player who comes within a tile
  * of an armed spore bursts it (its animation and sound; it's gone two ticks later) and turns
  * drowsy (Specials.Nightmare). Those left burst by themselves on the thirtieth tick.
- * Phosani's comes with a run of her claws six ticks after her animation.
+ * Phosani's comes with a run of six sets of her claws six ticks after her animation.
  */
 const Common = require("./Common.Nightmare");
 
@@ -42,9 +42,9 @@ function start(fight) {
   if (fight.phosani) {
     const { chain } = Common.data.claws;
     fight.at(CHAIN_AFTER, () => {
-      if (fight.spores === state && fight.stage !== "blast") require("./Claws.Nightmare").chain(fight);
+      if (fight.spores === state && fight.stage !== "blast") require("./Claws.Nightmare").chain(fight, false, chain.sporesCount);
     });
-    return CHAIN_AFTER + chain.every * chain.count + 6;
+    return CHAIN_AFTER + chain.every * chain.sporesCount + 6;
   }
   return null;
 }

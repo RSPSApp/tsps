@@ -34,7 +34,8 @@ export function hullTiles(boat: Boat, fineX: number, fineY: number, angle: numbe
 
 /**
  * Whether the boat may move to a candidate position and facing. Only tiles the hull newly
- * covers are checked, so a boat that ends up overlapping land can still sail off it.
+ * covers (compared with the hull at `fromX`/`fromY`, by default where the boat is) are checked,
+ * so a boat that ends up overlapping land can still sail off it.
  */
 export function canOccupy(
     boat: Boat,
@@ -42,8 +43,10 @@ export function canOccupy(
     fineY: number,
     angle: number,
     isSailable: SailableTileCheck,
+    fromX = boat.fineX,
+    fromY = boat.fineY,
 ): boolean {
-    const before = hullTiles(boat, boat.fineX, boat.fineY, boat.angle);
+    const before = hullTiles(boat, fromX, fromY, boat.angle);
     for (const tile of hullTiles(boat, fineX, fineY, angle)) {
         if (before.has(tile)) continue;
         if (!isSailable(unpackTileX(tile), unpackTileY(tile), boat.level)) return false;

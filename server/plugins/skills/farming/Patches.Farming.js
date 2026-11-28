@@ -316,8 +316,9 @@ function noteBinClick({ player, objectId }) {
  * starts at once: an ingredient goes in with the animation on the click's tick and lands a tick
  * later (weeds two), compost is scooped a tick after the click. Every click cancels the loop
  * running before it; one on that same loop (same bin, action and item) whose next step is still
- * to come picks it back up where it was, and one with another item starts at that step
- * (Ours: no capture clicks a bin mid-loop).
+ * to come picks it back up where it was (a take's next scoop moved up to a tick after the click,
+ * per the video on issue 6815), and one with another item starts at that step (Ours: no capture
+ * clicks a bin mid-loop).
  */
 function startBinWork(player, patch, input, action = "fill-bin") {
     const position = player.getLocation().clone();
@@ -325,12 +326,17 @@ function startBinWork(player, patch, input, action = "fill-bin") {
     // A loop paused by a level-up pop-up is never picked up: its pause would never clear.
     const running = last && last.patch === patch && last.input.bin === input.bin && last.nextTick > workTick
         && last.position.equals(position) && !last.levelUpPaused;
+    const stood = BIN_CLICK_CYCLE.get(player) === core.World.getProcessCycle();
+    BIN_CLICK_CYCLE.delete(player);
     if (running && last.action === action && last.input.id === input.id) {
+        // Live (the reporter's video on issue 6815): a bucket used again while standing at the
+        // bin scoops a tick later, as a first click does, so re-clicking every two ticks fills a
+        // bucket every two ticks. A scoop already made still lands on its own tick (Ours: a click
+        // between the scoop and its bucket keeps that bucket).
+        if (stood && action === "take-bin" && !last.depositing) last.nextTick = Math.min(last.nextTick, workTick + 1);
         WORK.set(player, last);
         return;
     }
-    const stood = BIN_CLICK_CYCLE.get(player) === core.World.getProcessCycle();
-    BIN_CLICK_CYCLE.delete(player);
     const work = { patch, action, input, nextTick: workTick + 2, position, depositing: false };
     LAST_BIN_WORK.set(player, work);
     WORK.set(player, work);
@@ -1593,6 +1599,7 @@ function attach(api) {
     api.onCustomEvent("hespori:quest-leave", Hespori.hesporiLogout);
     api.onNpcDeath(Hespori.questHesporiDeath);
     api.onCombatHitRoll(Hespori.hesporiHitRoll);
+    api.onCustomEvent("combat:npc-poison", Hespori.hesporiNpcPoison);
     api.onCombatHitResolved(Hespori.hesporiHit);
     api.onPlayerDealtDamage(Hespori.hesporiDamage);
     api.onPlayerDeathItemDrop(Hespori.hesporiDeathDrop);

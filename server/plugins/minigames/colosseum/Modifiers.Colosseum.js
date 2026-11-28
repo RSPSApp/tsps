@@ -92,6 +92,14 @@ class ModifierSet {
     return modifier ? this.tier(modifier.key) : 0;
   }
 
+  activeMask() {
+    let mask = 0;
+    for (const [key, tier] of this.tiers) {
+      if (tier > 0) mask |= 1 << key;
+    }
+    return mask;
+  }
+
   maxed(key) {
     const modifier = byKey(key);
     return this.tier(key) >= (modifier?.tiered ? MAX_TIER : 1);

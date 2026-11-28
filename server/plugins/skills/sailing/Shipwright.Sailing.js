@@ -13,7 +13,7 @@ const { NpcDialogue } = require("../../../src/main/typescript/elvarg/game/model/
 const { PlayerDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/PlayerDialogue");
 const { EndDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/EndDialogue");
 const { content, playSound, tileBeside } = require("./SailingContent.Sailing");
-const { dropLostOnRecovery } = require("./Cargo.Sailing");
+const Cargo = require("./Cargo.Sailing");
 const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
 const { isCapsized, recoveryFee } = require("./BoatParts.Sailing");
 const { MODE, openBoatSelection } = require("./BoatSelection.Sailing");
@@ -189,8 +189,8 @@ function recoverNow(player, dock, slot, head) {
   if (!boat || !pay(player, recoveryFee(boat))) return;
   const cause = boat.location.kind !== "sunk" ? "docked" : isCapsized(boat) ? "capsized" : "lost";
   Sailing.recover(player, slot, dock.id);
-  // A recovery loses salvage, courier crates and fish from the hold (OSRS Wiki, Cargo hold).
-  dropLostOnRecovery(boat);
+  // The hold goes with the recovery; port tasks hear which courier crates left it.
+  Cargo.loseCargo(player, boat);
   sendBoatVarbits(player);
   castRecovery(player, dock, cause, head);
 }

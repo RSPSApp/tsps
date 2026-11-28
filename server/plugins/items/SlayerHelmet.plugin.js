@@ -14,7 +14,12 @@
  * Content may give a player the (i) or plain helmet's effects without one ("slayer:helmet").
  *
  * Assembling needs the Malevolent masquerade unlock (varbit slayer_helm_unlocked, bought
- * in the Slayer Rewards interface). Reinforced goggles are not required.
+ * in the Slayer Rewards interface). Reinforced goggles join the components once A Porcine of
+ * Interest is complete (Wiki, Slayer helmet: mat7, "only required after completion of the
+ * quest"), and Disassemble gives a pair back. Completing the quest
+ * gives every Slayer helmet the pair's protection from sourhogs (Wiki, A Porcine of Interest:
+ * "Existing slayer helmets will have reinforced goggles added to them"), which is why that check
+ * reads the quest itself: live objects carry no per-item state to record it.
  *
  * Recolours: using a recolour's head on a plain or imbued helmet asks "Combine the <head> with
  * your helm?" and, on Yes, makes that colour of the same helmet. Each needs its Slayer reward
@@ -73,6 +78,8 @@ let SW_MASKS = null;
 let NMZ_IMBUED_MASKS = new Map();
 /** Item meta: this mask or helmet was imbued by the Nightmare Zone, so Uncharge refunds points. */
 const IMBUED_BY_NMZ_META = "slayer-helmet:nmz-imbued";
+/** A Porcine of Interest: from its completion on, the goggles are a component of the helmet. */
+const GOGGLES_QUEST = "a_porcine_of_interest";
 
 /** Victim -> the imbues a PvP death took from their black masks, given back once the death returns kept items. */
 const pendingDeathRefunds = new WeakMap();
@@ -309,6 +316,17 @@ function imbuedHelmFor(maskItemId) {
   return (form && objId(form.helm)) ?? ItemIdentifiers.SLAYER_HELMET_I_;
 }
 
+/**
+ * Whether the goggles are a component yet: from A Porcine of Interest's completion on they are
+ * (Wiki, Slayer helmet: "Reinforced goggles are additionally required only if the quest ... is
+ * completed"). The helmet records nothing about them; the quest is the whole rule.
+ */
+function gogglesRequired(player) {
+  const request = { player, key: GOGGLES_QUEST, complete: false };
+  pluginApi.emitCustomEvent("quest:is-complete", request);
+  return request.complete === true;
+}
+
 function assemble(event) {
   if (event.handled) return;
   const { player, usedItem, usedWithItem, usedItemId, usedWithItemId, usedItemSlot, usedWithItemSlot } = event;
@@ -316,9 +334,13 @@ function assemble(event) {
   const scrollOnWith = isImbueScroll(usedWithItemId);
   const usingScroll = scrollOnUsed || scrollOnWith;
   const otherId = Number(scrollOnUsed ? usedWithItemId : usedItemId);
+  // From A Porcine of Interest on, the goggles are a component too (Wiki, Slayer helmet: mat7).
+  const goggles = gogglesRequired(player);
+  const parts = goggles ? [...PARTS, ItemIdentifiers.REINFORCED_GOGGLES] : PARTS;
+  const isPartNow = (id) => isPart(id) || (goggles && Number(id) === ItemIdentifiers.REINFORCED_GOGGLES);
   if (usingScroll) {
-    if (!isPart(otherId)) return;
-  } else if (!isPart(usedItemId) || !isPart(usedWithItemId) || usedItemId === usedWithItemId) {
+    if (!isPartNow(otherId)) return;
+  } else if (!isPartNow(usedItemId) || !isPartNow(usedWithItemId) || usedItemId === usedWithItemId) {
     return;
   }
   const inventory = player.getInventory();
@@ -327,7 +349,7 @@ function assemble(event) {
   const selectedMask = maskOnUsed ? usedItem : maskOnWith ? usedWithItem : null;
   const selectedSlot = maskOnUsed ? usedItemSlot : usedWithItemSlot;
   const mask = selectedMask ?? findMask(inventory);
-  if (!mask || PARTS.some((part) => !inventory.contains(part))) return;
+  if (!mask || parts.some((part) => !inventory.contains(part))) return;
   event.handled = true;
   if (!helmUnlocked(player)) {
     player.sendMessage(HELM_LOCKED);
@@ -343,7 +365,7 @@ function assemble(event) {
   const nmzImbued = usingScroll ? null : nmzMark(mask);
   if (selectedMask) inventory.deleteAtSlot(selectedSlot, 1);
   else inventory.deleteNumber(mask.getId(), 1);
-  for (const part of PARTS) inventory.deleteNumber(part, 1);
+  for (const part of parts) inventory.deleteNumber(part, 1);
   if (usingScroll) inventory.deleteNumber(scrollOnUsed ? Number(usedItemId) : Number(usedWithItemId), 1);
   if (nmzImbued) inventory.add(new pluginApi.core.Item(result, 1, nmzImbued), false);
   else inventory.adds(result, 1);
@@ -415,8 +437,9 @@ function disassemble(event) {
   if (!entry || entry.recolour?.disassemble === false) return true;
   const head = entry.recolour?.headId ?? null;
   const inventory = player.getInventory();
+  const goggles = gogglesRequired(player);
   // Ours: no message is recorded for a full inventory.
-  if (inventory.getFreeSlots() < PARTS.length + (head != null ? 1 : 0)) {
+  if (inventory.getFreeSlots() < PARTS.length + (goggles ? 1 : 0) + (head != null ? 1 : 0)) {
     player.sendMessage("You don't have enough inventory space to disassemble the helmet.");
     return true;
   }
@@ -425,6 +448,7 @@ function disassemble(event) {
   if (nmzImbued) inventory.add(new pluginApi.core.Item(entry.mask, 1, nmzImbued), false);
   else inventory.adds(entry.mask, 1);
   for (const part of PARTS) inventory.adds(part, 1);
+  if (goggles) inventory.adds(ItemIdentifiers.REINFORCED_GOGGLES, 1);
   if (head != null) inventory.adds(head, 1);
   inventory.refreshItems();
   pluginApi.emitCustomEvent("equipment:changed", { player });

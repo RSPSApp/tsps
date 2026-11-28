@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { Opcodes } from "../rs/cs2/Opcodes";
 import { createHandlerMap } from "../rs/cs2/handlers";
-import { getDbRowOverride, getEnumOverride, getStructOverride, loadFromPayload } from "../common/gamemode/GamemodeContentStore";
+import { clearWorldOverlays, getCustomModIconWidth, getCustomModIconsRevision, getDbRowOverride, getEnumOverride, getStructOverride, loadFromPayload } from "../common/gamemode/GamemodeContentStore";
 
 /** Server-sent structs and enums (a league's relic catalog) stand in for the cache's in the cs2 config ops. */
 function context(extra: Record<string, unknown> = {}) {
@@ -181,4 +181,47 @@ test("enum overrides are kept per sender: one sender's payload never clears anot
     assert.deepEqual(getEnumOverride(850)?.intValues, [-1, -1], "and only its own");
     loadFromPayload({ gamemodeId: "grouping", datasets: [{ key: "enumOverrides", rows: [] }] });
     assert.equal(getEnumOverride(850), undefined);
+});
+
+test("customModIcons registers valid RGBA frames, validates bounds, bumps revision, and clears on reset", () => {
+    const revBefore = getCustomModIconsRevision();
+    const rgba12x10 = Buffer.alloc(12 * 10 * 4, 255).toString("base64");
+    const rgba13x11 = Buffer.alloc(13 * 11 * 4, 200).toString("base64");
+    const wrongSize = Buffer.alloc(10, 255).toString("base64");
+
+    loadFromPayload({
+        gamemodeId: "custom-mod-icons",
+        datasets: [{
+            key: "customModIcons",
+            rows: [
+                { frame: 24, width: 12, height: 10, rgba: rgba12x10 },
+                { frame: 66, width: 13, height: 11, rgba: rgba13x11 },
+                // Invalid rows must be ignored cleanly
+                { frame: -1, width: 12, height: 10, rgba: rgba12x10 },
+                { frame: 256, width: 12, height: 10, rgba: rgba12x10 },
+                { frame: 25, width: 33, height: 10, rgba: Buffer.alloc(33 * 10 * 4, 255).toString("base64") },
+                { frame: 26, width: 0, height: 10, rgba: "" },
+                { frame: 27, width: 12, height: 10, rgba: wrongSize },
+            ],
+        }],
+    });
+    const revLoaded = getCustomModIconsRevision();
+    assert.ok(revLoaded > revBefore, "loading customModIcons increments revision");
+    assert.equal(getCustomModIconWidth(24), 12, "can override an existing stock frame");
+    assert.equal(getCustomModIconWidth(66), 13, "can define a new frame beyond stock mod_icons");
+    assert.equal(getCustomModIconWidth(-1), undefined);
+    assert.equal(getCustomModIconWidth(256), undefined);
+    assert.equal(getCustomModIconWidth(25), undefined, "rejects icons wider than 32px");
+    assert.equal(getCustomModIconWidth(26), undefined, "rejects zero-dimension icons");
+    assert.equal(getCustomModIconWidth(27), undefined, "rejects mismatched RGBA byte length");
+
+    // Unrelated gamemode_data payloads preserve loaded customModIcons
+    loadFromPayload({ gamemodeId: "other", datasets: [{ key: "structOverrides", rows: [] }] });
+    assert.equal(getCustomModIconWidth(24), 12);
+    assert.equal(getCustomModIconWidth(66), 13);
+
+    clearWorldOverlays();
+    assert.ok(getCustomModIconsRevision() > revLoaded, "clearing overlays increments revision");
+    assert.equal(getCustomModIconWidth(24), undefined);
+    assert.equal(getCustomModIconWidth(66), undefined);
 });

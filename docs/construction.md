@@ -637,12 +637,13 @@ spellbook and occult altars, pools, costume room storage, servants, the Estate a
 adverts, house options, the house viewer, chairs.
 
 Moving the house to Hosidius needs a visit to Great Kourend first, and Aldarin a visit to
-Varlamore (Wiki). Nothing else in tsps records those visits (the cache's
-`zeah_playerhasvisited` and `varlamore_visited` varbits are never set, and varbits aren't saved),
-so `House` keeps `visitedKourend` / `visitedVarlamore` in the house save from
-`onPlayerMapSquareChange`, which fires once per 64x64 map square crossed. It is a global hook
-because both regions span hundreds of map squares, the case `docs/agents/areas.md` gives it for;
-the estate agent also accepts either varbit if a quest ever sets it.
+Varlamore (Wiki). The cache's `zeah_playerhasvisited` and `varlamore_visited` varbits are not
+saved (the Kourend quest's boat ride and the quetzals' first Fortis landing set and resend them,
+and `AreaUnlocks.LeagueMode` also gives it to a league character born in Varlamore), so `House`
+keeps `visitedKourend` / `visitedVarlamore` in the house save from `onPlayerMapSquareChange`,
+which fires once per 64x64 map square crossed. It is a global hook because both regions span
+hundreds of map squares, the case `docs/agents/areas.md` gives it for; the estate agent also
+accepts either varbit if a quest ever sets it.
 
 ### Servants
 

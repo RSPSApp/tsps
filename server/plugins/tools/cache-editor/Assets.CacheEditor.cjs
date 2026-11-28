@@ -264,22 +264,42 @@ function addAnimation(root, { name, files, library, replace, id: requested }, co
         if (existing) return { asset: existing, reused: true, revision: Document.revision(document), document };
     }
     const id = replace === undefined ? nextId(document, "animation", root, requested, core) : Number(replace);
+    checkCustomFrameMaps(root, document, checked, id);
     const rowName = replace === undefined ? folderName("animation", name, library ? library.split("/").filter(Boolean).join("_") : `animation_${id}`) : undefined;
     if (rowName) checkName(document, "animation", rowName, id, core);
-    // Players get each animation in one content packet: check the row they would get, as the server
-    // builds it at startup (its id, name and frame group, which all change the compressed size),
-    // before storing anything.
+    // Players get each animation in content packets, split into parts when it needs more than one:
+    // build the rows they would get, as the server builds them at startup (its id, name and frame
+    // group, which all change the compressed size), before storing anything.
     const animations = (document.assets ?? []).filter((row) => row.kind === "animation");
     const finalName = rowName ?? animations.find((row) => row.id === id)?.name ?? "";
     const group = Files.FIRST_FRAME_GROUP + animations.filter((row) => row.id < id).length;
-    if (!Files.fitsPacket(core.encodeContentData, Files.animationRow(checked, id, finalName, group))) {
-        throw error("The animation is too big for one content packet; use fewer or smaller frames", 413);
+    try {
+        Files.animationRows(core.encodeContentData, checked, id, finalName, group);
+    } catch (failure) {
+        throw error(`${String(failure.message).replace(/^\[custom-animations\] /, "")}; use fewer or smaller frames`, 413);
     }
     storeFolder(root, "animation", hash, keep);
     return commit(root, document, {
         kind: "animation", id, name: rowName, file: `animation/${hash}`, hash, size: totalSize(keep),
         frames: checked.ids.length, framemaps: checked.framemaps,
     }, replace);
+}
+
+/**
+ * A custom frame map is known by its id, so every animation asset that uses the id must have the
+ * same bytes (CustomAnimations refuses the set at startup otherwise). `id` is the animation being
+ * stored, which a replace may change.
+ */
+function checkCustomFrameMaps(root, document, checked, id) {
+    for (const [framemap, bytes] of checked.customFrameMaps) {
+        for (const row of document.assets ?? []) {
+            if (row.kind !== "animation" || row.id === id || !row.framemaps?.includes(framemap)) continue;
+            const theirs = readAsset(root, row)?.get(`framemap-${framemap}.dat`);
+            if (theirs && !theirs.equals(bytes)) {
+                throw error(`Frame map ${framemap} differs from the one animation ${row.id} (${row.name}) uses; give a different frame map its own id`, 409);
+            }
+        }
+    }
 }
 
 /**

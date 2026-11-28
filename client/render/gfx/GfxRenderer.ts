@@ -8,6 +8,8 @@ import { GfxCache, graphicFrameCycle } from "./GfxCache";
 import { GfxManager, TILE_GFX_LIFT_UNITS } from "./GfxManager";
 import type { GfxInstance } from "./GfxManager";
 import { SpotAnimGpuCache } from "./SpotAnimGpuCache";
+import { dispatchGfxFrameSounds } from "./GfxFrameSounds";
+import { getPainterIndices, hasMixedPriorities } from "../npc/NpcPriorityPass";
 
 type Pass = "opaque" | "alpha";
 
@@ -15,8 +17,8 @@ export class GfxRenderer {
     private cache: GfxCache;
     private gpuCache: SpotAnimGpuCache;
     // Reusable Maps to avoid per-frame allocations
-    private reusableGroupsMap = new Map<string, Array<{ slot: number; yOffUnits: number }>>();
-    private reusableYOffsetMap = new Map<number, Array<{ slot: number; yOffUnits: number }>>();
+    private reusableGroupsMap = new Map<string, Array<{ slot: number; yOffUnits: number; rotation: number }>>();
+    private reusableYOffsetMap = new Map<number, Array<{ slot: number; yOffUnits: number; rotation: number }>>();
     // Frame index cache to avoid recomputing cumulative offsets (null = no frame lengths)
     private frameOffsetCache = new Map<number, number[] | null>();
 
@@ -46,7 +48,7 @@ export class GfxRenderer {
     /**
      * Clear and return the reusable groups map to avoid per-frame allocation.
      */
-    private getReusableGroupsMap(): Map<string, Array<{ slot: number; yOffUnits: number }>> {
+    private getReusableGroupsMap(): Map<string, Array<{ slot: number; yOffUnits: number; rotation: number }>> {
         // Clear all arrays in the map and clear the map itself
         for (const arr of this.reusableGroupsMap.values()) {
             arr.length = 0;
@@ -58,7 +60,7 @@ export class GfxRenderer {
     /**
      * Clear and return the reusable y-offset map to avoid per-frame allocation.
      */
-    private getReusableYOffsetMap(): Map<number, Array<{ slot: number; yOffUnits: number }>> {
+    private getReusableYOffsetMap(): Map<number, Array<{ slot: number; yOffUnits: number; rotation: number }>> {
         for (const arr of this.reusableYOffsetMap.values()) {
             arr.length = 0;
         }
@@ -125,62 +127,8 @@ export class GfxRenderer {
                 const ageMs = graphicAgeMs(inst,nowMs);
                 const frameIdx = this.computeSpotFrameIdxByMs(inst.spotId, Math.floor(ageMs));
 
-                // Dispatch frame-sounds once per frame change for this instance
-                if (inst.lastSoundFrame !== frameIdx) {
-                    try {
-                        const mv: any = this.renderer.osrsClient as any;
-                        const spot = mv.spotAnimTypeLoader?.load?.(inst.spotId | 0);
-                        const seqId: number =
-                            typeof spot?.sequenceId === "number" ? spot.sequenceId | 0 : -1;
-                        if (seqId >= 0) {
-                            const seqType = mv.seqTypeLoader?.load?.(seqId | 0);
-                            if (seqType && seqType.frameSounds?.size) {
-                                // Resolve world position and local-player flag
-                                let px: number | undefined;
-                                let py: number | undefined;
-                                let pz: number | undefined;
-                                let isLocal = false;
-
-                                const anyEntry: any = entry as any;
-                                if (typeof anyEntry.pid === "number") {
-                                    const pid = anyEntry.pid | 0;
-                                    px = mv.playerEcs?.getX?.(pid) | 0;
-                                    py = mv.playerEcs?.getY?.(pid) | 0;
-                                    const lvl = mv.playerEcs?.getLevel?.(pid) | 0;
-                                    pz = (lvl | 0) * 128;
-                                    const sid = mv.playerEcs?.getServerIdForIndex?.(pid);
-                                    isLocal =
-                                        typeof sid === "number" &&
-                                        (sid | 0) === (mv.controlledPlayerServerId | 0);
-                                } else if (typeof anyEntry.ecsId === "number") {
-                                    const eid = anyEntry.ecsId | 0;
-                                    px = mv.npcEcs?.getX?.(eid) | 0;
-                                    py = mv.npcEcs?.getY?.(eid) | 0;
-                                    const lvl = mv.npcEcs?.getLevel?.(eid) | 0;
-                                    pz = (lvl | 0) * 128;
-                                    isLocal = false;
-                                } else if (inst.world) {
-                                    px = (inst.world.tileX | 0) * 128 + 64;
-                                    py = (inst.world.tileY | 0) * 128 + 64;
-                                    pz = (inst.world.level | 0) * 128;
-                                    isLocal = false;
-                                }
-
-                                const pos =
-                                    px !== undefined && py !== undefined
-                                        ? { x: px, y: py, z: pz }
-                                        : undefined;
-                                mv.handleSeqFrameSounds(seqType, frameIdx | 0, {
-                                    position: pos,
-                                    isLocalPlayer: isLocal,
-                                    debugSeqId: seqId | 0,
-                                    debugFrame: frameIdx | 0,
-                                });
-                            }
-                        }
-                    } catch {}
-                    inst.lastSoundFrame = frameIdx | 0;
-                }
+                // The graphic's frame sounds, once per frame change (shared with the WebGPU renderer).
+                dispatchGfxFrameSounds(this.renderer.osrsClient, inst, frameIdx, entry as any);
                 const frameCycle = this.cache.smoothingCycle(
                     inst.spotId,
                     frameIdx,
@@ -193,7 +141,15 @@ export class GfxRenderer {
                 const key = `${inst.spotId}|${frameIdx}|${frameCycle}|${inst.hueShift??0}`;
                 const arr = groups.get(key) ?? [];
                 const yOffUnits = resolveYOffset(entry) | 0;
-                arr.push({ slot, yOffUnits });
+                // The actor's facing, which the shader turns attached graphics by.
+                const owner: any = entry;
+                const mv: any = this.renderer.osrsClient;
+                const rotation = typeof owner.pid === "number"
+                    ? (mv.playerEcs?.getRotation?.(owner.pid | 0) ?? 0) & 2047
+                    : typeof owner.ecsId === "number"
+                        ? (mv.npcEcs?.getRotation?.(owner.ecsId | 0) ?? 0) & 2047
+                        : 0;
+                arr.push({ slot, yOffUnits, rotation });
                 if (!groups.has(key)) groups.set(key, arr);
             }
 
@@ -212,6 +168,13 @@ export class GfxRenderer {
                     frameCycle,
                 );
                 if (!vaoRec) continue;
+                // Translucent layers of several priorities (the Echo Amoxliatl icicle's shells)
+                // are painted in the OSRS painter's order: colour without depth writes, then depth.
+                const painterGeometry = transparent
+                    ? this.cache.ensureFrameGeometry(spotId, frameIdx, true, frameCycle)
+                    : undefined;
+                const painter = !!painterGeometry &&
+                    hasMixedPriorities(painterGeometry.vertices, painterGeometry.indices, painterGeometry.facePriorities);
                 const dc: DrawCall = this.renderer
                     .configureDrawCall(vaoRec.drawCall)
                     .uniformBlock("SceneUniforms", (this.renderer as any).sceneUniformBuffer)
@@ -249,7 +212,28 @@ export class GfxRenderer {
                     for (const inst of groupInstances) {
                         dc.uniform("u_drawIdOverride", inst.slot | 0);
                         dc.uniform("u_visualHueShift", Number(hueStr)/360);
-                        try { dc.draw(); } finally { (prog as any).uniform("u_visualHueShift", 0); }
+                        if (painter) {
+                            const sorted = getPainterIndices(`${key}|a`, painterGeometry!.vertices,
+                                painterGeometry!.indices, (this.renderer as any).osrsClient.camera.viewMatrix,
+                                inst.rotation, painterGeometry!.facePriorities);
+                            const ib: any = vaoRec.ib;
+                            if (ib.painterKey !== sorted.key) {
+                                ib.data(sorted.indices);
+                                ib.painterKey = sorted.key;
+                            }
+                        }
+                        const app: any = (this.renderer as any).app;
+                        try {
+                            if (painter) app.depthMask(false);
+                            dc.draw();
+                            if (painter) {
+                                app.depthMask(true).colorMask(false, false, false, false);
+                                dc.draw();
+                            }
+                        } finally {
+                            if (painter) app.depthMask(true).colorMask(true, true, true, true);
+                            (prog as any).uniform("u_visualHueShift", 0);
+                        }
                     }
                 }
 

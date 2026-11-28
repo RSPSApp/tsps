@@ -32,7 +32,8 @@ export class ObjectActionPacketListener {
     x: number,
     y: number,
     clickType = 0,
-    action?: string
+    action?: string,
+    subOpId?: number
   ): void {
     if (!player || player.getHitpoints() <= 0 || player.busy()) {
       return;
@@ -81,6 +82,7 @@ export class ObjectActionPacketListener {
         objectId: object.getId(),
         clickType,
         option,
+        subOpId,
         location: {
           x: object.getLocation().getX(),
           y: object.getLocation().getY(),

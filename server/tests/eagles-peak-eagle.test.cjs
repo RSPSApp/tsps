@@ -1,7 +1,8 @@
 // From server/: node --test tests/eagles-peak-eagle.test.cjs (after yarn build).
 //
-// The giant eagle's Walk-past without the disguise, against rsprox 2821 (rev 230): the stumble back
-// two tiles, the eagle's attack, a 0 hit and the recorded message box a tick later.
+// The giant eagle's Walk-past without the disguise, against rsprox 2821 (rev 230) and the Eagles' Peak
+// capture (rev 243, t1993 and t2804): the stumble back two tiles, the eagle's attack, a hit of 0-2 (2 and 0
+// recorded) with its sound and the recorded message box a tick later.
 process.env.DISABLE_PLAYER_BOTS = '1';
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -51,8 +52,9 @@ function fakePlayer() {
   return player;
 }
 
-test('walking past the eagle without the disguise plays the recorded swipe', () => {
+test('walking past the eagle without the disguise plays the recorded swipe', (t) => {
   tasks = [];
+  t.mock.method(Math, 'random', () => 0);
   const player = fakePlayer();
   const eagleAnims = [];
   const npc = { getId: () => 1490, performAnimation: (a) => eagleAnims.push(a.getId()) };
@@ -82,10 +84,21 @@ test('walking past the eagle without the disguise plays the recorded swipe', () 
   assert.equal(text, SWIPE, "the recorded message box");
 });
 
-test('the swipe still plays when the eagle npc is missing from the event', () => {
+test('a swipe that lands is a red hit with the hit sound (the capture\'s 2 at t1994)', (t) => {
   tasks = [];
+  t.mock.method(Math, 'random', () => 0.99);
   const player = fakePlayer();
-  assert.equal(walkPast({ player, npc: undefined, npcId: 1490 }), true);
+  assert.equal(walkPast({ player, npc: { getId: () => 1490, performAnimation() {} }, npcId: 1490 }), true);
+  for (const task of tasks.filter((entry) => !(entry instanceof core.ForceMovementTask))) task.execute();
+  assert.deepEqual(player.hits, [2]);
+  assert.deepEqual(player.sounds.at(-1), [520, 20]);
+});
+
+test('the swipe still plays when the eagle npc is missing from the event', (t) => {
+  tasks = [];
+  t.mock.method(Math, 'random', () => 0);
+  const player = fakePlayer();
+  assert.equal(walkPast({ player, npc: undefined, npcId: 1490 }), true, 'the event npc id still identifies the eagle');
   for (const task of tasks.filter((t) => !(t instanceof core.ForceMovementTask))) task.execute();
   assert.deepEqual(player.hits, [0]);
   assert.equal(player.dialogues.length, 1);
@@ -116,7 +129,8 @@ test('Shout-to reaches Nickolaus across the actual cave ledge', async (t) => {
   session.setTurnPacketProcessor(() => connection.processTurnPackets());
   player.setUsername('eagleshout'); player.setAttribute('bot-skip-persistence', true);
   core.World.getPlayers().add(player);
-  player.setAttribute('quest.eagles_peak.stage', 3);
+  player.setAttribute('eagles-peak:stage-format', 1);
+  player.setAttribute('quest.eagles_peak.stage', 15);
   player.moveTo(new core.Location(1998, 4955, 3));
   const messages = [], lines = [], errors = [];
   t.mock.method(console, 'error', (...args) => errors.push(args.map(String).join(' ')));
@@ -133,8 +147,11 @@ test('Shout-to reaches Nickolaus across the actual cave ledge', async (t) => {
   const tick = () => core.World.process();
   for (let i = 0; i < 4; i++) tick();
   PluginManager.emitPlayerLogin({ player, username: player.getUsername() });
-  const npc = [...core.World.getNpcs()].find(n => n?.getId() === 1484 && n.getOwner() === player);
-  assert.ok(npc, 'quest produces its owned chasm Nickolaus');
+  // The map's own Nickolaus (2023 at 2006,4959,3) is the Shout-to actor: eaglepeak_quest 15 shows him as 1484.
+  player.getPacketSender().sendVarbit(2780, 15);
+  const spawnRow = require('../data/definitions/npc-spawns.json').find(row => row.id === 2023);
+  const npc = PluginManager.spawnNpc({ id: spawnRow.id, x: spawnRow.x, y: spawnRow.y, z: spawnRow.level, wanderRadius: 0 });
+  t.after(() => PluginManager.removeNpc(npc));
   assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY(), npc.getLocation().getZ()], [2006, 4959, 3]);
   assert.equal(npc.getCurrentDefinition(player).getActions()[0], 'Shout-to');
   assert.equal(core.RegionManager.blocked(player.getLocation(), null), false, 'the west ledge is a real walkable tile');
@@ -173,13 +190,14 @@ test('Shout-to reaches Nickolaus across the actual cave ledge', async (t) => {
     await choose("So it's not that you're trapped then?");
     await choose('Could I help at all?');
     await drain();
-    assert.equal(quest.getStage(player), 4, 'the existing help choice requests a disguise');
+    assert.equal(player.getPacketSender().getVarbit(3110), 3, 'the help choice asks for a disguise (eaglepeak_nickolaus_chat 3)');
+    assert.equal(quest.getStage(player), 15);
     assert.equal(messages.includes("I can't reach that!"), false);
   });
   await t.test('the canonical cache parent at its existing spawn resolves to the same Shout-to actor', async () => {
     const spawn = require('../data/definitions/npc-spawns.json').find(row => row.id === 2023);
     assert.deepEqual([spawn.x, spawn.y, spawn.level], [2006, 4959, 3]);
-    quest.setStage(player, 3);
+    quest.setStage(player, 15);
     const { NpcSpawnDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcSpawnDefinitionLoader');
     const definition = new NpcSpawnDefinitionLoader().toDefinition(spawn, 'canonical-test');
     assert.equal(definition.getRadius(), 5, 'the unmodified spawn loader defaults to five-tile wandering');
@@ -224,16 +242,20 @@ test('Shout-to reaches Nickolaus across the actual cave ledge', async (t) => {
     player.closeInterruptibleInterfaces(); player.moveTo(new core.Location(1998, 4955, 3));
     for (let i = 0; i < 4; i++) tick();
   });
-  await t.test('repeat and disguise stages keep their existing transcript branches', async () => {
-    quest.setStage(player, 4); await shout(); await drain();
+  await t.test('the later chats keep their transcript branches', async () => {
+    const chat = (value) => { player.setAttribute('eagles-peak:varbits', { 3110: value }); player.getPacketSender().sendVarbit(3110, value); };
+    chat(3); await shout(); await drain();
     assert.match(lines.join(' '), /I'm afraid not yet/);
-    quest.setStage(player, 5); await shout(); await drain();
+    chat(5);
+    player.getInventory().add(new core.Item(10171, 1), false);
+    player.getInventory().add(new core.Item(10172, 1), false);
+    await shout(); await drain();
     assert.match(lines.join(' '), /Yes, I have one right here/);
     player.getEquipment().setItem(core.Equipment.CAPE_SLOT, new core.Item(10171, 1));
     player.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(10172, 1));
     await shout(); await drain();
     assert.match(lines.join(' '), /young hatchling/);
-    assert.equal(quest.getStage(player), 5, 'shouting does not hand over the spare disguise');
+    assert.equal(quest.getStage(player), 15, 'shouting does not hand over the spare disguise');
   });
   await t.test('unrelated options, positions, planes and quest stages retain ordinary reach', () => {
     const request = () => ({ player, npc, npcId: 1484, definition: npc.getCurrentDefinition(player), clickType: 1, range: 1, ignoreProjectileClip: false });
@@ -254,10 +276,10 @@ test('Shout-to reaches Nickolaus across the actual cave ledge', async (t) => {
     npc.setLocation(original);
     player.setLocation(new core.Location(1998, 4955, 2)); unchanged(request());
     player.setLocation(new core.Location(1998, 4955, 3));
-    for (const stage of [0, 2, 6, 8]) { quest.setStage(player, stage); unchanged(request()); }
+    for (const stage of [0, 10, 20, 40]) { quest.setStage(player, stage); unchanged(request()); }
   });
   await t.test('wrong-plane and distant native clicks cannot start the conversation', async () => {
-    quest.setStage(player, 3);
+    quest.setStage(player, 15);
     for (const at of [[1998, 4955, 2], [1990, 4980, 3]]) {
       player.moveTo(new core.Location(...at)); for (let i = 0; i < 4; i++) tick();
       await shout(); assert.equal(player.getDialogueManager().isActive(), false);

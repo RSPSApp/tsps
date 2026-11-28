@@ -268,3 +268,40 @@ evidence, superseded for these ordinary late counts by the complete2026 tracks.
 Exact roar packet timestamps, client interpolation, every raw flight offset,
 special-damage distribution and remaining normal evidence gaps are still open.
 Only the count and equal-phase schedule demonstrated above are corrected.
+
+### Capture-parity pass: six RSProx recordings (24 November 2026)
+
+Recordings 555, 550, 100, 1750 and 1751 (Leagues V, revision 227) and 1703 (the quest
+boss, revision 226) were decoded end to end: 290 boss spawns, 286 kills of the normal boss
+and 4 awakened kills (100 #17/#51, 1751 #2/#3). Their damage and HP drain come from Leagues
+relics and are not balance evidence. None of the 290 spawns ever used a special attack
+(sequences 10285–10290 never appear), so lightning and smoke stay as recorded above.
+Packet timings, IDs and presentation are what this pass takes from them.
+
+| Area | Capture fact | Change |
+|---|---|---|
+| Fight duration | `Fight duration` equals the spawn tick to the kill-message tick in 286/286 kills: lethal hit + the six-tick death animation | `finishedTicks` is taken when the kill is counted (Rewards), not at the lethal hit. PBs and speed tasks were 3.6 s generous |
+| Loot tile | Loot (with spotanim 85) landed on 18 different tiles, mostly 2076,6378, never on 2075,6371 | Drops on the player's tile; the authored tile is only a fallback off the arena floor. The exact rule (player tile) is inferred from the spread |
+| Arena lock | Handholds 47592 at 2070,6368 become wall 49224 once climbed (1751 ticks 12518/12521). The island rowboat is 49215 (Escape, Quick-escape) on arrival and 49214 (Travel) from the first kill on, through respawns | Climbing seals the arena; no climbing back out. Escape asks "Are you sure you want to leave?" Yes./No. (100 tick 4749); Quick-escape and Travel leave at once. Wiki Handholds page: "disintegrate as you use them to enter the arena" |
+| Stun | 12 samples (1703, 100 #51): impact (383), boss keeps attacking, "Your spell stuns the Leviathan!" two ticks later, then animation reset 65535 + spotanim 2379. Never 10282 or 10294 | Stun is queued from the impact, lands with the message and resets a tick later; `stunTicks` counts from the reset (awakened resumes 8 after it, matching its value). The normal stun length itself is still unsampled. 2379 is the barrage's large impact; only barrage was sampled |
+| Enrage | Telegraph spotanim 2298 (height 124) on the spawn corner's centre and four neighbours at 0/30/60/90 cycles with the enrage roar; pathfinder and "focuses on you intensely" three ticks later (287/287) | Corner chosen and telegraphed at the roar; message moved to the spawn tick |
+| Roar debris | Every roar: 11–30 shattering rocks 2475/2476 at 20/50/80 cycles across the floor, CamShake on slots 0–2 (random 5–8), synths 7043 (delay 5) and 1678 (five loops). Enrage-phase debris every 8 ticks shatters, without shake or synths in 67 of 76 falls | Added |
+| Later roars | Volley roars from the third on drop nothing: awakened 10/10, normal 3/4 third roars | Debris only on the first two volley roars, the enrage roar and enrage-phase falls. Small normal sample |
+| Looped volley end | A one-tick volley ends with 10280 the tick after its last orb and roars the tick after that (17 samples); roar to next orb stays 5 | Added `orbEnd`; the roar moves one tick later, the orb schedule is unchanged |
+| Death cleanup | Rubble stands through the death animation and one tick after the boss is removed every rock becomes invisible loc 29733 with spotanim 2474 (286/287) | Rubble kept until a tick after the kill message, then removed with 2474 on each tile |
+| Sounds | 7037 spawn; 7030/7041/7040 magic/ranged/melee launch; area 7031 (radius 15, boss centre) on each hit it takes; area 7034 on death | Added. `npc-combat-sounds.json` lists 7037 as the boss's attack sound; it is the spawn sound, but that file is generated and is left alone |
+| Perfect Leviathan | "You have failed Perfect Leviathan: You took damage from the falling rubble." (555 tick 6433, one tick after a roar rock landed on the player) | Sent through `combat-achievements:failed` for rubble damage. Other sources' reason lines are unrecorded and fail silently |
+
+Already matching and unchanged: first orb +4, 6@3 / 8@2 / 8@2 with 5/5/4-tick flights, melee
+from the third volley, roar 3 or 2 ticks after the last shot and next orb 5 after it, roar
+rocks landing 7 ticks later, first-roar tells inside the authored regions, enrage at 180 HP
+or below cutting the volley short, enrage orbs at +5 then every 2, enrage debris every 8,
+pathfinder corner/route/cadence and tint, tail bites on the boss bite tick (3:1:1), six-tick
+death animation, 30-tick respawn after the kill message, music 750/745, message texts and
+projectile geometry.
+
+Awakened stays disabled, but these captures now cover it: opening volleys 8@2, 8@2, 12@1,
+10@1 (not the scaffold's 6@3 start); tornado spawning near 50% HP on varying tiles
+(2089,6374 / 2091,6375 / 2076,6366 / 2076,6377), moving about five single steps and then
+pausing about eight ticks, hitting 37–43 with spotanim 2507 and area sound 7021; stun 8
+ticks from the reset; five-rock cross on roars. None of it is implemented here.

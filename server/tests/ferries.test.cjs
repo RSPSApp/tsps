@@ -637,7 +637,7 @@ test("quest plugins hand crossings over with ferries:travel", () => {
 
 test("Barnaby's three destinations fade, sail and arrive without casting a teleport or charging twice", () => {
   // rsprox 224/01440.txt ticks 15777-15780: Brimhaven lands on the ship's deck.
-  const destinations = [[2680, 3274, 0], [2775, 3233, 1], [2916, 3225, 0]];
+  const destinations = [[2683, 3263, 1], [2775, 3233, 1], [2916, 3225, 0]];
   for (const [index, port] of BarnabyFerry._test.PORTS.entries()) {
     const player = createPlayer({ coins: 100 });
     const sail = () => BarnabyFerry._test.sail(player, port, BarnabyFerry._test.fareFor(player));
@@ -754,7 +754,7 @@ test("a departure receipt preserves the origin and is not emitted for refused tr
   assert.equal(departures.length, 1);
   assert.equal(departures[0].route, "barnaby-ardougne");
   tick(3);
-  assert.deepEqual(at(player), [2680, 3274, 0]);
+  assert.deepEqual(at(player), [2683, 3263, 1]);
   assert.deepEqual([departures[0].from.getX(), departures[0].from.getY(), departures[0].from.getZ()], [2773, 3229, 0]);
 });
 

@@ -1,4 +1,3 @@
-import { lowEndDeviceModeEnabled } from "../../game/plugins/lowenddevice/LowEndDeviceMode";
 import Denque from "denque";
 import { computeSceneViewportRect, type SceneViewportInput } from "./viewportRect";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
@@ -100,9 +99,9 @@ import { layoutWidgets } from "../../widgets/layout/WidgetLayout";
 import { collectWidgetsAtPoint } from "../../widgets/menu/utils";
 import {
     getCanvasCssSize,
+    isHandheldDevice,
     isIos,
     isMobileMode,
-    isLowEndDevice,
     isWebGL2Supported,
 } from "../../common/utils/DeviceUtil";
 import { isPortraitModeEnabled, isPortraitViewport } from "../../game/plugins/portraitmode/PortraitLayout";
@@ -195,9 +194,8 @@ import {
 } from "../shaders/Shaders";
 import { KNOWN_WATER_TEXTURE_IDS } from "../water/WaterTextureIds";
 import type { WebGLOsrsRendererHost } from "./hostInterface";
-import { RENDER_CONSTANTS, BrowserQualityProfile, DESKTOP_QUALITY_PROFILE, IOS_SAFARI_QUALITY_PROFILE, MOBILE_TOUCH_QUALITY_PROFILE, LOW_END_QUALITY_PROFILE } from "./constants";
-
-const LOW_END_SCENE_SCALE = 0.6;
+import { RENDER_CONSTANTS, BrowserQualityProfile, DESKTOP_QUALITY_PROFILE, MEDIUM_QUALITY_PROFILE, IOS_SAFARI_QUALITY_PROFILE, MOBILE_TOUCH_QUALITY_PROFILE, LOW_END_QUALITY_PROFILE } from "./constants";
+import { getPerformancePolicy } from "../../game/performance/PerformancePolicy";
 
 /** OSRS fixed-mode toplevel; its gameframe renders at a fixed 765x503. */
 const FIXED_GAMEFRAME_ROOT = 548;
@@ -422,13 +420,15 @@ export function getCanvasResolutionScale(host: Pick<WebGLOsrsRendererHost, "osrs
         // snaps the widget render scale to an integer device-pixel ratio so
         // NEAREST-sampled sprites and bitmap fonts stay pixel-perfect.
         // Handhelds cap at 2 for fill-rate/memory; the iOS scene framebuffer is
-        // compensated via its quality profile so 3D cost stays flat.
-        const maxScale = isLoginLikeState ? 3 : isMobileMode ? 2 : 3;
+        // compensated via its quality profile so 3D cost stays flat. This is a hardware
+        // memory cap, so it stays on every Performance preset, including High.
+        const handheld = isHandheldDevice;
+        const maxScale = isLoginLikeState ? 3 : handheld ? 2 : 3;
         const targetScale = Math.min(dpr, maxScale);
 
         const safeCssWidth = Number.isFinite(cssWidth) ? Math.max(1, cssWidth) : 1;
         const safeCssHeight = Number.isFinite(cssHeight) ? Math.max(1, cssHeight) : 1;
-        const maxPixelCount = isMobileMode ? 6_000_000 : 12_000_000;
+        const maxPixelCount = handheld ? 6_000_000 : 12_000_000;
         const targetPixelCount = safeCssWidth * safeCssHeight * targetScale * targetScale;
         if (targetPixelCount <= maxPixelCount) {
             return targetScale;
@@ -441,17 +441,12 @@ export function getCanvasResolutionScale(host: Pick<WebGLOsrsRendererHost, "osrs
 
 export function resolveBrowserQualityProfile(host: WebGLOsrsRendererHost, ): BrowserQualityProfile {
 
-        if (lowEndDeviceModeEnabled) return LOW_END_QUALITY_PROFILE;
-        // The platform, not touch hardware: a touchscreen laptop on the desktop layout is a
-        // desktop (#358), and must not get the handheld profile's half-resolution scene. A low-end
-        // device (a tablet on "desktop site") gets the handheld's view distance.
-        if (!isMobileMode && !isLowEndDevice) {
-            return DESKTOP_QUALITY_PROFILE;
-        }
-        if (isIos) {
-            return IOS_SAFARI_QUALITY_PROFILE;
-        }
-        return MOBILE_TOUCH_QUALITY_PROFILE;
+        const preset = getPerformancePolicy().preset;
+        if (preset === "low") return LOW_END_QUALITY_PROFILE;
+        if (preset === "medium") return MEDIUM_QUALITY_PROFILE;
+        if (preset === "high") return DESKTOP_QUALITY_PROFILE;
+        // Auto on a handheld keeps today's mobile behavior (iPhone gets its own profile).
+        return isIos ? IOS_SAFARI_QUALITY_PROFILE : MOBILE_TOUCH_QUALITY_PROFILE;
     
 }
 
@@ -482,21 +477,19 @@ export function getActiveQualityProfileLabel(host: WebGLOsrsRendererHost, ): str
 
 export function getSceneResolutionScale(host: WebGLOsrsRendererHost, ): number {
 
-        // A low-end device draws the 3D view at reduced resolution (an iPhone's profile at half):
-        // the GPU budget goes further and the UI stays sharp.
-        if ((isLowEndDevice || lowEndDeviceModeEnabled) && !host.osrsClient.isOnLoginScreen()) {
-            const scale = Math.min(LOW_END_SCENE_SCALE, host.syncBrowserQualityProfile().defaultSceneScale || 1);
-            host.osrsClient.mobileEffectiveResolutionScale = scale;
-            return scale;
-        }
-        if (!isMobileMode || host.osrsClient.isOnLoginScreen()) {
+        if (host.osrsClient.isOnLoginScreen()) {
             host.osrsClient.mobileEffectiveResolutionScale = 1;
-            if (host.osrsClient.isOnLoginScreen()) return 1;
-            const pluginScale = host.osrsClient.clientPlugins.sceneResolutionScale();
-            return Math.max(0.5, Math.min(1, host.sceneResolutionScale || 1, pluginScale));
+            return 1;
         }
-        const profile = host.syncBrowserQualityProfile();
-        const scale = Math.max(0.5, Math.min(1, profile.defaultSceneScale || 1));
+        // The Performance preset owns the base scale (Auto mobile 0.5, Low 0.5,
+        // Medium/High 1.0). Stretched Mode and the debug slider remain explicit reductions,
+        // and an explicit Performance scene-resolution override feeds the base value.
+        const policy = getPerformancePolicy();
+        const pluginScale = host.osrsClient.clientPlugins.sceneResolutionScale();
+        const scale = Math.max(
+            0.5,
+            Math.min(1, policy.sceneResolution, host.sceneResolutionScale || 1, pluginScale),
+        );
         host.osrsClient.mobileEffectiveResolutionScale = scale;
         return scale;
     

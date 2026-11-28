@@ -1,12 +1,14 @@
 /**
  * Araxxor's boss health bar, through the shared BossHud plugin (boss-hud:* events). As the
  * captures show it (headbar type 20 on the boss): it appears with the fight, follows her
- * hitpoints and lingers through the enrage. After a kill it fades and clears; leaving the
+ * hitpoints and lingers through the enrage. After a kill it fades nine ticks into the death and
+ * clears four ticks after that (rsprox 550, 1768, 788, 3280, 3347: 490 of 490 kills); leaving the
  * lair or logging out drops it at once.
  */
 const Shared = require("./Shared.Araxxor");
 
-const FADE_AFTER_DEATH_TICKS = 4;
+/** BossHud's default: the bar clears this long after its fade starts. */
+const CLEAR_AFTER_FADE_TICKS = 4;
 
 let api = null;
 let core = null;
@@ -55,11 +57,16 @@ function later(ticks, action) {
   })());
 }
 
-function killed(npc) {
+/** She is dying: the bar shows her last hitpoints, fades `fadeAfterTicks` later and then clears. */
+function killed(npc, fadeAfterTicks) {
   const bar = bars.get(npc);
   if (!bar) return;
   bars.delete(npc);
-  later(FADE_AFTER_DEATH_TICKS, () => api.emitCustomEvent("boss-hud:hide", { player: bar.player }));
+  const current = Math.max(0, npc.getHitpoints?.() ?? 0);
+  if (current !== bar.current) api.emitCustomEvent("boss-hud:update", { player: bar.player, current });
+  later(fadeAfterTicks, () => api.emitCustomEvent("boss-hud:hide", {
+    player: bar.player, afterTicks: CLEAR_AFTER_FADE_TICKS,
+  }));
 }
 
 function dropFor(player) {

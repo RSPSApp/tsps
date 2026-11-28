@@ -178,18 +178,28 @@ function canUseNetwork(player, from) {
   return true;
 }
 
-/** Opens the menu with every tree, greying out those the player can't travel to now. */
-function openMenu(player, from, head) {
+/**
+ * Opens the menu with every tree, greying out those the player can't travel to now. With `relic` (a
+ * league relic's fairy mushroom, "spirit-trees:menu"), the same menu, as live opens it from the
+ * mushroom (rsprox 234/3275); a pick goes to `relic.choose({ name, to })` (`to` the tile, "house" or
+ * null for a greyed tree), which teleports its own way.
+ */
+function openMenu(player, from, head, relic = null) {
   const grown = grownPatches(player);
   const choices = trees.map((tree) => ({ tree, to: destination(player, tree, grown) }));
   const labels = choices.map(({ tree, to }) => (to ? label(player, tree) : `${GREY}${label(player, tree)}</col>`));
-  player.setAttribute(MENU_ATTRIBUTE, { from: from?.name ?? null, head, choices });
+  player.setAttribute(MENU_ATTRIBUTE, { from: from?.name ?? null, head, choices, relic });
   const sender = player.getPacketSender();
   sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   player.setInterfaceId(MENU);
   sender.sendSubInterface(MAIN_MODAL, MENU, 0);
   sender.sendClientScript(SCRIPT_MENU, TITLE, [...labels, "Cancel"].join("|"), 1);
   sender.sendInterfaceFlagsRange((MENU << 16) | MENU_CHOICES, 0, MENU_SLOTS, PAUSE_BUTTON);
+}
+
+/** "spirit-trees:menu" { player, relic }: the menu for a league relic's fairy mushroom (openMenu's `relic`). */
+function openRelicMenu({ player, relic }) {
+  if (player && relic) openMenu(player, null, null, relic);
 }
 
 /** The last tree travelled to, for the client: its menu slot plus one. */
@@ -369,7 +379,8 @@ function chooseTree(event) {
   player.getPacketSender().sendInterfaceScript(SCRIPT_RESTORE_INPUT);
   player.setInterfaceId(-1);
   const choice = menu.choices[Number(event.action)];
-  if (choice) goTo(player, choice, menu);
+  if (choice && menu.relic) menu.relic.choose({ name: choice.tree.name, to: choice.to });
+  else if (choice) goTo(player, choice, menu);
 }
 
 function menuClosed({ player, interfaceId }) {
@@ -405,6 +416,7 @@ module.exports = {
     api.onCustomEvent("spirit-trees:open", openFromPatch);
     api.onCustomEvent("spirit-trees:last-destination", lastDestinationFrom);
     api.onCustomEvent("spirit-trees:destinations", destinationsEvent);
+    api.onCustomEvent("spirit-trees:menu", openRelicMenu);
     api.onCustomEvent("interface:closed", menuClosed);
   },
 };

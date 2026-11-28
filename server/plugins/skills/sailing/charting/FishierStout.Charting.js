@@ -81,8 +81,16 @@ function dockBoat(player) {
   const dock = player.getSkillManager().getMaxLevel(Skill.SAILING) >= 62 && request.complete === true ? "rellekka" : "port_sarim";
   if (Sailing.disembark(player, dock) !== null) return;
   owned.location = { kind: "docked", dock };
-  // The drink page specifically preserves non-courier cargo, unlike recovery after sinking.
-  owned.cargo = owned.cargo.map(slot => slot && portTasks.isCrate(slot.id) ? null : slot);
+  // The drink page specifically preserves non-courier cargo, unlike recovery after sinking. The
+  // crates it does take still go back to their task slots, or the source ledger keeps refusing a
+  // replacement for a crate this deleted (#6878).
+  const crates = [];
+  owned.cargo = owned.cargo.map((slot) => {
+    if (!slot || !portTasks.isCrate(slot.id)) return slot;
+    crates.push({ id: slot.id, amount: slot.amount ?? 1 });
+    return null;
+  });
+  if (crates.length > 0) common.api().emitCustomEvent("sailing:cargo-lost", { player, boat: owned, crates });
 }
 function enter(scene) {
   const { player } = scene;

@@ -168,6 +168,12 @@ module.exports = function attach(pluginApi) {
   api.onCustomEvent("league:relic-unlocked", watchFromEvent);
 };
 
+/**
+ * What a gather of `itemId` by `skill` will arrive as: the cooked fish or bar while the boots are
+ * worn, otherwise null. No side effects: a container answering `storage:room` asks it, so its room
+ * is judged on the item it will actually be handed (Knapsack.StorageItems).
+ */
+module.exports.product = (player, skill, itemId) => (wearsBoots(player) ? processed(skill, itemId)?.itemId ?? null : null);
 module.exports.runTick = runTick;
 module.exports.watchRuns = watchRuns;
 module.exports.runners = runners;

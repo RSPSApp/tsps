@@ -44,6 +44,7 @@ const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
 const { ObjectDefinition } = require("../dist/game/definition/ObjectDefinition");
 const Jewellery = require("../plugins/items/Jewellery.plugin");
+const { PluginManager } = require("../dist/plugins/PluginManager");
 const customEvents = [];
 /** Players the Colosseum plugin would say have the Hero title. */
 const colosseumHeroes = new Set();
@@ -65,7 +66,7 @@ Jewellery.register({
   core: { ChatType: require('../dist/net/protocol/ClientProtocol').ChatType, Animation: require('../dist/game/model/Animation').Animation, TaskManager: { submit() {} }, CountdownTask: class {}, EndDialogue: class {}, ObjectIdentifiers, ItemIdentifiers, ItemDefinition, ObjectDefinition, Flag: require("../dist/game/model/Flag").Flag, DialogueChainBuilder, StatementDialogue, ItemStatementDialogue },
   persistAttribute() {},
   onCustomEvent() {},
-  onItemAction: (handler) => { itemAction = handler; },
+  onItemAction: (handler) => { PluginManager.itemActionHooks.push({ pluginName: "Jewellery", handlerName: "handleJewelleryAction", handler }); },
   onItemOnObject: (handler) => { itemOnObjectHandlers.push(handler); },
   onPlayerLogin: (handler) => { loginHandler = handler; },
   onSpellCast() {},
@@ -122,17 +123,26 @@ function createPlayer({ farming = 1, clientType = 0, visitedKourend = true } = {
   };
 }
 
+/** The cache's 1-based inventory option index for `option`, as the client's widget op carries it. */
+function clickTypeFor(itemId, option) {
+  const actions = require("../dist/game/cache/CacheDefinitions").CacheDefinitions.getItem(itemId)?.inventoryActions ?? [];
+  const index = actions.findIndex((action) => String(action ?? "").toLowerCase() === String(option).toLowerCase());
+  return index < 0 ? 2 : index + 1;
+}
+
 function inventoryClick(player, item, option, extra = {}) {
   const slot = player.inventory.getItems().indexOf(item);
-  const event = { player, item, itemId: item.getId(), slot, interfaceId: 149, clickType: 2, option, handled: false, ...extra };
-  itemAction(event);
+  const event = { player, item, itemId: item.getId(), slot, interfaceId: 149, clickType: clickTypeFor(item.getId(), option), option, handled: false, ...extra };
+  // Through the real dispatch, which names the submenu row this click picked (`subOption`) and
+  // reads it from the option the row sits under (#6870).
+  PluginManager.emitItemAction(event);
   return event;
 }
 
-function equippedClick(player, item, clickType, option) {
+function equippedClick(player, item, clickType, option, extra = {}) {
   const slot = player.equipment.getItems().indexOf(item);
-  const event = { player, item, itemId: item.getId(), slot, interfaceId: Equipment.INVENTORY_INTERFACE_ID, clickType, option, handled: false };
-  itemAction(event);
+  const event = { player, item, itemId: item.getId(), slot, interfaceId: Equipment.INVENTORY_INTERFACE_ID, clickType, option, handled: false, ...extra };
+  PluginManager.emitItemAction(event);
   return event;
 }
 
@@ -257,7 +267,7 @@ test("worn options that are not teleports are left to other plugins", () => {
   const player = createPlayer();
   const ring = new Item(ItemIds.SLAYER_RING_8_, 1);
   player.equipment.setItem(Equipment.RING_SLOT, ring);
-  assert.equal(equippedClick(player, ring, 3, "Check").handled, false);
+  assert.equal(equippedClick(player, ring, 2, "Check").handled, false);
   assert.equal(teleports.length, 0);
 });
 
@@ -272,7 +282,7 @@ test("long destination lists page onto a second prompt", () => {
   assert.deepEqual(teleports[0], { target: [1248, 3725, 0], wildernessLevel: 30 });
 });
 
-test("inventory sub-menu options teleport by position", () => {
+test("an inventory sub-menu row teleports to the destination the cache names", () => {
   const player = createPlayer();
   const pendant = new Item(ItemIds.DIGSITE_PENDANT_5_, 1);
   player.inventory.setItem(0, pendant);
@@ -353,26 +363,91 @@ test("the ring of wealth's Rub submenu and worn options follow the cache's order
   assert.deepEqual(ACTIONS.slice(4).map((action) => action.type), ["boss-log", "coin-collection"]);
 });
 
-test("the slayer ring's Rub submenu is its actions: Check, Teleport, then Master, Partner and Log", () => {
+test("the slayer ring's Rub submenu is its three actions, not the destinations (#6870)", () => {
   const player = createPlayer();
   const ring = new Item(ItemIds.SLAYER_RING_8_, 1);
   player.inventory.setItem(0, ring);
 
-  inventoryClick(player, ring, "Rub", { subOpId: 1 });
-  assert.equal(player.messages.at(-1), "Your Slayer ring has 8 charges left.");
-  assert.equal(customEvents.at(-1)[0], "slayer:check", "the Slayer plugin adds the task");
-  assert.equal(teleports.length, 0, "Check doesn't teleport");
-
-  inventoryClick(player, ring, "Rub", { subOpId: 2 });
-  pick("Stronghold Slayer Cave");
-  assert.deepEqual(teleports.at(-1).target, [2431, 3424, 0], "Teleport offers the destinations");
-
-  const before = teleports.length;
-  for (const subOpId of [3, 4, 5]) {
-    inventoryClick(player, ring, "Rub", { subOpId });
-    assert.equal(player.messages.at(-1), "Nothing interesting happens.");
+  // The cache's rows under Rub: Contact Master, Partner, Open Log (item 11866 subops[1]).
+  for (const [row, subOpId] of [["Contact Master", 1], ["Partner", 2], ["Open Log", 3]]) {
+    const event = inventoryClick(player, ring, "Rub", { subOpId });
+    assert.equal(event.handled, true, `${row} is answered`);
+    assert.equal(teleports.length, 0, `${row} doesn't teleport`);
+    assert.equal(prompts.length, 0, `${row} asks for no destination: Rub's rows aren't a list`);
+    assert.deepEqual(player.messages, [], `${row} says nothing: it isn't built (docs/slayer.md)`);
   }
-  assert.equal(teleports.length, before, "Master, Partner and Log don't teleport");
+});
+
+test("the slayer ring's Rub rows reach content as jewellery:action (#6923)", () => {
+  const player = createPlayer();
+  const ring = new Item(ItemIds.SLAYER_RING_8_, 1);
+  player.inventory.setItem(0, ring);
+
+  // The cache's Contact Master row (item 11866 subops[1]); the ring's rows are actions, so the
+  // click is taken and handed to content as an event — the row is never a destination.
+  const from = customEvents.length;
+  const event = inventoryClick(player, ring, "Rub", { subOpId: 1 });
+  const actions = customEvents.slice(from).filter(([name]) => name === "jewellery:action").map(([, payload]) => payload);
+  assert.equal(event.handled, true, "the row is answered");
+  assert.equal(actions.length, 1, "one action, not one per row");
+  assert.equal(actions[0].action, "Contact Master");
+  assert.equal(actions[0].equipped, false, "the inventory's Rub row");
+  assert.equal(actions[0].item, ring);
+  assert.equal(actions[0].player, player);
+  assert.equal(prompts.length, 0, "no destination prompt");
+  assert.equal(teleports.length, 0, "no teleport");
+});
+
+test("the worn ring's Master op reaches content as jewellery:action (#6923)", () => {
+  const player = createPlayer();
+  const ring = new Item(ItemIds.SLAYER_RING_8_, 1);
+  player.equipment.setItem(Equipment.RING_SLOT, ring);
+
+  // Worn options: Check, Teleport, Master, Partner, Log (params 451-455). Master is click 4 and
+  // names no destination, so it goes the new worn branch's way: an action event, not a prompt.
+  const from = customEvents.length;
+  const event = equippedClick(player, ring, 4, "Master");
+  const actions = customEvents.slice(from).filter(([name]) => name === "jewellery:action").map(([, payload]) => payload);
+  assert.equal(event.handled, true, "the op is answered");
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].action, "Master");
+  assert.equal(actions[0].equipped, true, "the worn op");
+  assert.equal(actions[0].item, ring);
+  assert.equal(prompts.length, 0, "Master is not a destination");
+  assert.equal(teleports.length, 0);
+  assert.equal(ring.getId(), ItemIds.SLAYER_RING_8_, "no charge spent");
+});
+
+test("the slayer ring's Teleport submenu teleports to the row it names (#6870)", () => {
+  const player = createPlayer();
+  const ring = new Item(ItemIds.SLAYER_RING_8_, 1);
+  player.inventory.setItem(0, ring);
+
+  // The cache names two rows shorter than the plugin's labels ("Stronghold", "Fremennik Dungeon").
+  inventoryClick(player, ring, "Teleport", { subOpId: 1 });
+  assert.deepEqual(teleports.at(-1).target, [2431, 3424, 0], "Stronghold is Stronghold Slayer Cave");
+  assert.equal(ring.getId(), ItemIds.SLAYER_RING_7_, "one charge");
+  assert.equal(prompts.length, 0, "the row teleports instead of asking where to go");
+  assert.ok(!player.messages.includes("You rub the ring..."), "a Teleport row doesn't rub");
+
+  inventoryClick(player, ring, "Teleport", { subOpId: 3 });
+  assert.deepEqual(teleports.at(-1).target, [2807, 10002, 0], "Fremennik Dungeon");
+
+  // A destination's own quest check still runs (Priest in Peril for the Slayer Tower).
+  inventoryClick(player, ring, "Teleport", { subOpId: 2 });
+  assert.equal(teleports.length, 2);
+  assert.equal(player.statements.at(-1), "You have not yet unlocked that destination.");
+});
+
+test("the slayer ring's worn Teleport rows find their destinations (#6870)", () => {
+  const player = createPlayer();
+  const ring = new Item(ItemIds.SLAYER_RING_8_, 1);
+  player.equipment.setItem(Equipment.RING_SLOT, ring);
+  // Worn options: Check, Teleport, Master, Partner, Log (params 451-455); Teleport's rows are
+  // params 662, 2075, 2083... Worn Teleport is click 3, one past Check.
+  assert.equal(equippedClick(player, ring, 3, "Teleport", { subOpId: 1 }).handled, true);
+  assert.deepEqual(teleports.at(-1).target, [2431, 3424, 0]);
+  assert.equal(ring.getId(), ItemIds.SLAYER_RING_7_);
 });
 
 test("the ring of dueling's Fortis Colosseum teleport needs the Colosseum's Hero title", () => {
@@ -431,7 +506,7 @@ test("the slayer ring teleports up to level 30 Wilderness (Wiki)", () => {
   player.inventory.setItem(0, ring);
   doneQuestKeys.add("priest_in_peril"); // Slayer Tower needs it (Wiki)
   try {
-    inventoryClick(player, ring, "Rub", { subOpId: 2 });
+    inventoryClick(player, ring, "Teleport");
     pick("Slayer Tower");
   } finally {
     doneQuestKeys.delete("priest_in_peril");
@@ -445,7 +520,7 @@ test("the slayer ring's Teleport pages on to Wyrmscraig Cavern, near Mortimer (W
   player.inventory.setItem(0, ring);
   doneQuestKeys.add("fallen_from_grace");
   try {
-    inventoryClick(player, ring, "Rub", { subOpId: 2 });
+    inventoryClick(player, ring, "Teleport");
     pick("More...");
     pick("Wyrmscraig Cavern");
   } finally {
@@ -465,13 +540,13 @@ test("the slayer ring's Slayer Tower, Tarn's Lair, Dark Beasts and Wyrmscraig Ca
     const ring = new Item(ItemIds.SLAYER_RING_8_, 1);
     player.inventory.setItem(0, ring);
     const before = teleports.length;
-    inventoryClick(player, ring, "Rub", { subOpId: 2 });
+    inventoryClick(player, ring, "Teleport");
     pickPaged(label);
     assert.equal(teleports.length, before, `${label}: no teleport before ${name}`);
     assert.deepEqual(player.statements.at(-1), "You have not yet unlocked that destination.");
     assert.equal(ring.getId(), ItemIds.SLAYER_RING_8_, "no charge used");
     doneQuestKeys.add(key);
-    inventoryClick(player, ring, "Rub", { subOpId: 2 });
+    inventoryClick(player, ring, "Teleport");
     pickPaged(label);
     assert.equal(teleports.length, before + 1, `${label}: after ${name} it teleports`);
     doneQuestKeys.delete(key);

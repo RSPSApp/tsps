@@ -52,6 +52,20 @@
       "landing": { "x": 2463, "y": 3498, "z": 0 }
     },
     {
+      "name": "Keep Le Faye, ground to first floor (Merlin's Crystal capture MerlinsCrystal.bin, rev 242: up from 2770,3403,0 lands on 2769,3407,1 at tick 1029, down from 2769,3407,1 lands on 2769,3403,0 at tick 1252)",
+      "up": { "id": 15645, "x": 2769, "y": 3404, "z": 0 },
+      "down": { "id": 15648, "x": 2769, "y": 3405, "z": 1 },
+      "landing": { "x": 2769, "y": 3407, "z": 1 },
+      "downLanding": { "x": 2769, "y": 3403, "z": 0 }
+    },
+    {
+      "name": "Keep Le Faye, first to second floor (MerlinsCrystal.bin: up from 2769,3397,1 lands on 2769,3401,2 at ticks 1039, 1104, 1159; down from 2770,3401,2 lands on 2769,3397,1 at ticks 1103, 1159, 1243)",
+      "up": { "id": 15645, "x": 2769, "y": 3398, "z": 1 },
+      "down": { "id": 15648, "x": 2769, "y": 3399, "z": 2 },
+      "landing": { "x": 2769, "y": 3401, "z": 2 },
+      "downLanding": { "x": 2769, "y": 3397, "z": 1 }
+    },
+    {
       "name": "Ardougne Castle main staircase (the upper flight is walled on its west, north and east sides, so it is only usable from the south; landings match the RuneLite shortest-path transports 2571,3298,0 <-> 2571,3294,1)",
       "up": { "id": 15645, "x": 2571, "y": 3295, "z": 0 },
       "down": { "id": 15648, "x": 2571, "y": 3295, "z": 1 },
@@ -76,6 +90,13 @@
       "up": { "id": 61190, "x": 3417, "y": 3484, "z": 0 },
       "down": { "id": 62173, "x": 3417, "y": 3484, "z": 1 },
       "downLanding": { "x": 3417, "y": 3483, "z": 0 }
+    },
+    {
+      "name": "Ruins of Tapoyauik entrance stairs (cache rev 242: surface 54525 offers Climb-down at 1693,3230,0 and the ruins 54526 offers Climb-up at 1693,9630,2 — the ruins' +6400 underground plane is at height z2, which the generic plane-0 underground search cannot see, so the pair is declared. Landings: down on 1693,9633,2 — the tile every recorded descent (rsprox tapoyauik_temple_entrance, recordings 1695 rev 226 and 1001302 rev 237) teleports to, and the quest's own Ruins.enter places — and up on 1692,3230,0, both verified walkable next to the destination stairs (clip 0x1008 / 0x10080); the north row of the ruins is walled (0x20100). Post-quest re-entry per the Wiki's entrance map pin; the pre-quest seal is the Heart of Darkness quest's. The ruins' stairs open only south (clipMask 27) and that row is walled, so no floor tile routes to the open face: TheHeartOfDarkness.Quest.js routes the Climb-up from the player's own tile (live-verified 2026-11-27))",
+      "up": { "id": 54526, "x": 1693, "y": 9630, "z": 2 },
+      "down": { "id": 54525, "x": 1693, "y": 3230, "z": 0 },
+      "landing": { "x": 1692, "y": 3230, "z": 0 },
+      "downLanding": { "x": 1693, "y": 9633, "z": 2 }
     }
   ],
   "messages": {

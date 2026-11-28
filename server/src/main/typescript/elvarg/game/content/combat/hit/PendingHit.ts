@@ -52,7 +52,11 @@ type PendingHitConfig = {
      * fight style (a derived hit that pays another style's XP).
      */
     experienceSkills?: readonly number[];
-    /** A pre-rolled damage value, still passing through damage hooks and the HP cap. */
+    /**
+     * A pre-rolled damage value. With rollAccuracy:false and handleAfterHitEffects:false it is
+     * authoritative (derived/cannon damage): no weapon roll/proc hooks run again. Final per-splat
+     * target-stat adjustments and the HP cap still apply. Other uses keep ordinary damage hooks.
+     */
     damage?: number;
     /** Fixed status damage for direct application: no attack rolls, bonuses or roll-time procs. */
     statusDamage?: boolean;
@@ -71,6 +75,11 @@ type PendingHitConfig = {
      * special stays armed, with its energy, for the attacker's next attack.
      */
     ordinary?: boolean;
+    /**
+     * Shares one attack's rolls between its splats (Infernal tecpatl's Brand) after every roll and
+     * before each splat is finalized (flat armour) and capped on its own. `accurate[i]` is splat i's.
+     */
+    splitDamage?: (splats: HitDamage[], accurate: readonly boolean[]) => void;
 };
 
 export class PendingHit {
@@ -87,6 +96,8 @@ export class PendingHit {
     private failedAccuracyChecks = 0;
     private handleAfterHitEffects: boolean;
     private experience = true;
+    /** Whether the hit sets off the target's Vengeance (an attack the Wiki says doesn't: the Echo Thermonuclear smoke devil's shots). */
+    private vengeance = true;
     /** The skills the usual combat XP is split across, when not the attacker's fight style. */
     private experienceSkills?: number[];
     private damageBudget?: { remaining: number };
@@ -94,6 +105,8 @@ export class PendingHit {
     private damageMultiplier = 1;
     /** No special attack's traits apply (PendingHitConfig.ordinary). */
     private ordinary = false;
+    /** PendingHitConfig.splitDamage. */
+    private splitDamage?: (splats: HitDamage[], accurate: readonly boolean[]) => void;
     /** Optional per-hitsplat extra reveal delays (from `hitDelayTicks`). */
     private hitDelays?: number[];
     private hitMaximumSplitCount = 1;
@@ -159,6 +172,7 @@ export class PendingHit {
             this.bestOf = Math.max(1, Math.trunc(delayOrConfig.bestOf ?? 1));
             this.damageMultiplier = delayOrConfig.damageMultiplier ?? 1;
             this.ordinary = delayOrConfig.ordinary === true;
+            if (typeof delayOrConfig.splitDamage === "function") this.splitDamage = delayOrConfig.splitDamage;
             if (Number.isInteger(delayOrConfig.delay)) {
                 resolvedDelay = delayOrConfig.delay as number;
             }
@@ -267,6 +281,16 @@ export class PendingHit {
     /** Whether the attacker gets the usual combat XP for this hit. */
     public rewardsExperience(): boolean {
         return this.experience;
+    }
+
+    /** Whether the hit sets off the target's Vengeance; true unless content says otherwise. */
+    public triggersVengeance(): boolean {
+        return this.vengeance;
+    }
+
+    public setTriggersVengeance(triggers: boolean): this {
+        this.vengeance = triggers;
+        return this;
     }
 
     /** The branch of a first-successful-roll special that landed (0-based), -1 if all rolls missed, undefined if not such a special. */
@@ -415,12 +439,28 @@ export class PendingHit {
         // reactions are deliberately not applied here: they are read at impact.
         let remaining = Math.max(0, this.target.getHitpoints());
         const capToRemaining = (damage: HitDamage): HitDamage => {
+            // Final per-splat roll adjustments precede HP/budget caps and swing-time XP.
+            // `hits` is still being built: consumers edit `damage`, not getHits().
+            PluginManager.emitCustomEvent("combat:hit-finalize", {
+                attacker: this.attacker, target: this.target, hit: this, damage,
+            });
             if (damage.getDamage() > remaining) {
                 damage.setDamage(remaining);
             }
             remaining -= damage.getDamage();
             return damage;
         };
+
+        // Scripted follow-up/cannon rolls are authoritative, not another roll of the worn weapon.
+        // Player attackers only: an NPC's fixed roll (Duke Sucellus) still meets Ward of Arceuus in rollHitDamage.
+        if (hitAmount === 1 && fixedDamage !== undefined && !rollAccuracy && !this.handleAfterHitEffects && this.attacker.isPlayer()) {
+            const value = Math.floor(Math.max(0, Math.floor(fixedDamage)) * this.damageMultiplier);
+            const damage = new HitDamage(value, value > 0 ? HitMask.RED : HitMask.BLUE);
+            this.accurate = damage.getDamage() > 0;
+            capToRemaining(damage);
+            this.totalDamage = damage.getDamage();
+            return [damage];
+        }
 
         if (hitAmount === 1) {
             const roll = { attacker: this.attacker, target: this.target, combatType: this.combatType, forceAccurate: false, forceMaxHit: false, bypassProtectionPrayer };
@@ -456,13 +496,10 @@ export class PendingHit {
             if (rollAccuracy && !this.accurate) this.failedAccuracyChecks = 1;
             // Cap the roll to the HP held when it was made, before the hit-time
             // protection/Elysian reductions, so tick-eating and XP see this value.
-            capToRemaining(damage);
             if (this.damageMultiplier !== 1) {
                 damage.setDamage(Math.floor(damage.getDamage() * this.damageMultiplier));
-                // The multiplier is a size bonus, never an excuse for an overkill splat.
-                const hitpointCap = Math.max(0, this.target.getHitpoints());
-                if (damage.getDamage() > hitpointCap) damage.setDamage(hitpointCap);
             }
+            capToRemaining(damage);
             this.totalDamage = damage.getDamage();
             return [damage];
         }
@@ -478,6 +515,7 @@ export class PendingHit {
         let firstAccurate: boolean | undefined;
         let firstBounds: SpecialDamageBounds | undefined;
         const priorHits: HitDamage[] = [];
+        const accurateSplats: boolean[] = [];
         let anyAccurate = false;
         for (let i = 0; i < hits.length; i++) {
             const roll = { attacker: this.attacker, target: this.target, combatType: this.combatType, forceAccurate: false, forceMaxHit: false, bypassProtectionPrayer };
@@ -518,11 +556,22 @@ export class PendingHit {
             const ownRoll = !blockedByFirstMiss && !(i > 0 && traits?.sharedAccuracyRollAcrossHits === true);
             if (ownRoll && rollAccuracy && !this.accurate) this.failedAccuracyChecks++;
             if (i === 0 && this.requireFirstAccurate) firstAccurate = this.accurate;
-            capToRemaining(damage);
-            this.totalDamage += damage.getDamage();
+            if (!this.splitDamage) {
+                capToRemaining(damage);
+                this.totalDamage += damage.getDamage();
+            }
             hits[i] = damage;
             priorHits.push(damage);
+            accurateSplats.push(this.accurate);
             anyAccurate ||= this.accurate;
+        }
+        if (this.splitDamage) {
+            // Split the raw rolls first; each share then gets its own flat armour and HP cap.
+            this.splitDamage(hits, accurateSplats);
+            for (const damage of hits) {
+                capToRemaining(damage);
+                this.totalDamage += damage.getDamage();
+            }
         }
         // After-hit consumers observe the attack, rather than only its final accuracy roll.
         this.accurate = anyAccurate;

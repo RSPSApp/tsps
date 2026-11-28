@@ -10,7 +10,7 @@ import { PlayerAppearance } from "../../rs/config/player/PlayerAppearance";
 import { Model } from "../../rs/model/Model";
 import { ModelData } from "../../rs/model/ModelData";
 import { clamp } from "../../common/utils/MathUtil";
-import { isLowEndDevice } from "../../common/utils/DeviceUtil";
+import { getPerformancePolicy } from "../../game/performance/PerformancePolicy";
 import { ActorAnimationClip } from "../../game/actor/ActorAnimation";
 import type { PlayerAnimKey } from "../../game/ecs/PlayerEcs";
 import { resolveHeightSamplePlaneForLocal } from "../../game/scene/PlaneResolver";
@@ -26,10 +26,6 @@ import type { WebGLOsrsRenderer } from "../WebGLOsrsRenderer";
  * assembled by WebGLOsrsClientRenderer (dynamic or pre-baked).
  */
 const PLAYER_INTERACT_BASE = 0x8000;
-// Low-end devices freeze idle bystanders in the default pose much sooner (crowds like Edgeville).
-const UNANIMATED_PLAYER_COUNT = isLowEndDevice ? 25 : 200;
-// Low-end devices draw only the nearest players per map square (self and combat target always kept).
-const LOW_END_MAX_PLAYERS_PER_MAP = 32;
 
 export function shouldUseUnanimatedIdlePlayer(
     activePlayerCount: number,
@@ -40,7 +36,7 @@ export function shouldUseUnanimatedIdlePlayer(
     idleSeqId: number,
 ): boolean {
     return (
-        activePlayerCount > UNANIMATED_PLAYER_COUNT &&
+        activePlayerCount > getPerformancePolicy().unanimatedPlayerCount &&
         lowPriority &&
         !moving &&
         !actionActive &&
@@ -2951,7 +2947,8 @@ export class PlayerRenderer {
             out.push(pid | 0);
         }
 
-        if (isLowEndDevice && out.length > LOW_END_MAX_PLAYERS_PER_MAP) {
+        const maxPlayersPerMap = getPerformancePolicy().maxPlayersPerMap;
+        if (Number.isFinite(maxPlayersPerMap) && out.length > maxPlayersPerMap) {
             const osrs = this.renderer.osrsClient;
             const selfPid = osrs.playerEcs.getIndexForServerId(osrs.controlledPlayerServerId);
             const targetPid = this.renderer.getCombatTargetPlayerEcsIndex() ?? -1;
@@ -2964,7 +2961,7 @@ export class PlayerRenderer {
                 return dx * dx + dy * dy;
             };
             out.sort((a, b) => dist(a) - dist(b));
-            out.length = LOW_END_MAX_PLAYERS_PER_MAP;
+            out.length = maxPlayersPerMap;
         }
 
         this.frameRenderPlayersByMap.set(key, out);

@@ -172,9 +172,8 @@ function shoot(cannon, owner, npc) {
   const style = accuracyStyle(owner, npc);
   const accurate = AccuracyFormulasDpsCalc.rollAccuracy(owner, npc, style, CombatType.RANGED, "heavy");
   const max = granite ? Data.MAX_HIT.granite : Data.MAX_HIT.steel;
-  const damage = accurate ? Math.min(npc.getHitpoints(), Math.floor(Math.random() * (max + 1))) : 0;
-  const hit = new PendingHit(owner, npc, method(), { delay: 0, rollAccuracy: false, experience: false, handleAfterHitEffects: false });
-  hit.setTotalDamage(damage);
+  const damage = accurate ? Math.floor(Math.random() * (max + 1)) : 0;
+  const hit = new PendingHit(owner, npc, method(), { damage, delay: 0, rollAccuracy: false, experience: false, handleAfterHitEffects: false });
   CombatFactory.addPendingHit(hit);
 }
 

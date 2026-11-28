@@ -117980,7 +117980,7 @@
       ],
       "standard-dialogue-after-completing-family-pest": [
         {
-          "npc": "I have received word from my father that you assisted us again! I get the feeling you weren't going to stop trying until you did though."
+          "npc": "I received word from my father that you assisted us again! I get the feeling you weren't going to stop trying until you did though."
         },
         {
           "type": "condition",
@@ -117990,9 +117990,14 @@
               "npc": "As a token of my appreciation, I will happily forge you as many pairs of Goldsmith gauntlets as you desire."
             },
             {
+              "type": "input",
+              "text": "How many would you like to take?",
+              "id": "lEtW8v"
+            },
+            {
               "type": "message",
-              "text": "Avan hands you a pair of Goldsmith gauntlets.",
-              "id": "gqV59f"
+              "text": "Avan hands you some goldsmith gauntlets.",
+              "id": "WoB3G1"
             },
             {
               "npc": "You will find the rate you gain experience when smelting gold much improved whilst wearing these gauntlets."
@@ -179325,7 +179330,11 @@
         {
           "type": "line",
           "speaker": "Guard",
-          "text": "You must pay a toll of 10 gold coins to pass."
+          "text": "You must pay a toll of 10 gold coins to pass.",
+          "speaker_ids": [
+            4287,
+            4288
+          ]
         },
         {
           "type": "choice",
@@ -179339,7 +179348,11 @@
                 {
                   "type": "line",
                   "speaker": "Guard",
-                  "text": "Ok suit yourself."
+                  "text": "Ok suit yourself.",
+                  "speaker_ids": [
+                    4287,
+                    4288
+                  ]
                 }
               ]
             },
@@ -179352,7 +179365,11 @@
                 {
                   "type": "line",
                   "speaker": "Guard",
-                  "text": "The money goes to the city of Al-Kharid."
+                  "text": "The money goes to the city of Al-Kharid.",
+                  "speaker_ids": [
+                    4287,
+                    4288
+                  ]
                 }
               ]
             },
@@ -179404,7 +179421,11 @@
         {
           "type": "line",
           "speaker": "Guard",
-          "text": "You may pass for free, you are a friend of Al-Kharid."
+          "text": "You may pass for free, you are a friend of Al-Kharid.",
+          "speaker_ids": [
+            4287,
+            4288
+          ]
         },
         {
           "type": "action",
@@ -179419,7 +179440,11 @@
         {
           "type": "line",
           "speaker": "Guard",
-          "text": "You may pass for free, for you are a friend of Al-Kharid, but your goblin friend must stay on this side."
+          "text": "You may pass for free, for you are a friend of Al-Kharid, but your goblin friend must stay on this side.",
+          "speaker_ids": [
+            4287,
+            4288
+          ]
         },
         {
           "player": "Why?"
@@ -179427,7 +179452,11 @@
         {
           "type": "line",
           "speaker": "Guard",
-          "text": "Why do you think this gate is here, if not to keep the goblins out of Al Kharid?"
+          "text": "Why do you think this gate is here, if not to keep the goblins out of Al Kharid?",
+          "speaker_ids": [
+            4287,
+            4288
+          ]
         },
         {
           "player": "But Zanik isn't like the other goblins!"
@@ -185642,108 +185671,99 @@
                 "id": "OYjQdU"
               }
             ]
-          }
-        ]
-      },
-      {
-        "type": "condition",
-        "text": "If the player is on a Deadman Mode world:",
-        "steps": [
+          },
           {
-            "type": "choice",
-            "options": [
+            "text": "Let's talk about where I respawn when I die.",
+            "steps": [
               {
-                "text": "Let's talk about where I respawn when I die.",
+                "player": "Let's talk about where I respawn when I die."
+              },
+              {
+                "type": "condition",
+                "text": "If the player's respawn location is not at the Grand Exchange:",
                 "steps": [
                   {
-                    "player": "Let's talk about where I respawn when I die."
+                    "npc": "You're currently due to respawn somewhere else. Would you rather respawn here, at the Grand Exchange, instead."
                   },
                   {
-                    "type": "condition",
-                    "text": "If the player's respawn location is not at the Grand Exchange:",
-                    "steps": [
+                    "type": "choice",
+                    "options": [
                       {
-                        "npc": "You're currently due to respawn somewhere else. Would you rather respawn here, at the Grand Exchange, instead."
-                      },
-                      {
-                        "type": "choice",
-                        "options": [
+                        "text": "Yes, I'd like to respawn at the Grand Exchange.",
+                        "steps": [
                           {
-                            "text": "Yes, I'd like to respawn at the Grand Exchange.",
-                            "steps": [
-                              {
-                                "player": "Yes, I'd like to respawn at the Grand Exchange."
-                              },
-                              {
-                                "npc": "Okay, you can respawn here when you die. Let me know if you change your mind."
-                              },
-                              {
-                                "type": "end"
-                              }
-                            ]
+                            "player": "Yes, I'd like to respawn at the Grand Exchange."
                           },
                           {
-                            "text": "No thanks, leave me alone.",
-                            "steps": [
-                              {
-                                "player": "No thanks, leave me alone."
-                              },
-                              {
-                                "type": "end"
-                              }
-                            ]
+                            "npc": "Okay, you can respawn here when you die. Let me know if you change your mind."
+                          },
+                          {
+                            "type": "end"
+                          }
+                        ]
+                      },
+                      {
+                        "text": "No thanks, leave me alone.",
+                        "steps": [
+                          {
+                            "player": "No thanks, leave me alone."
+                          },
+                          {
+                            "type": "end"
                           }
                         ]
                       }
-                    ],
-                    "id": "9sbF_i"
-                  },
-                  {
-                    "type": "condition",
-                    "text": "If the player's respawn location is at the Grand Exchange:",
-                    "steps": [
-                      {
-                        "npc": "You're currently due to respawn here, at the Grand Exchange."
-                      },
-                      {
-                        "type": "choice",
-                        "options": [
-                          {
-                            "text": "I'd rather respawn in Lumbridge.",
-                            "steps": [
-                              {
-                                "player": "I'd rather respawn in Lumbridge."
-                              },
-                              {
-                                "npc": "Please yourself. You will now respawn in Lumbridge when you die. Let me know if you change your mind."
-                              },
-                              {
-                                "type": "end"
-                              }
-                            ]
-                          },
-                          {
-                            "text": "Okay, respawning here sounds great.",
-                            "steps": [
-                              {
-                                "player": "Okay, respawning here sounds great."
-                              },
-                              {
-                                "type": "end"
-                              }
-                            ]
-                          }
-                        ]
-                      }
-                    ],
-                    "id": "eKDWRT"
+                    ]
                   }
-                ]
+                ],
+                "id": "9sbF_i"
+              },
+              {
+                "type": "condition",
+                "text": "If the player's respawn location is at the Grand Exchange:",
+                "steps": [
+                  {
+                    "npc": "You're currently due to respawn here, at the Grand Exchange."
+                  },
+                  {
+                    "type": "choice",
+                    "options": [
+                      {
+                        "text": "I'd rather respawn in Lumbridge.",
+                        "steps": [
+                          {
+                            "player": "I'd rather respawn in Lumbridge."
+                          },
+                          {
+                            "npc": "Please yourself. You will now respawn in Lumbridge when you die. Let me know if you change your mind."
+                          },
+                          {
+                            "type": "end"
+                          }
+                        ]
+                      },
+                      {
+                        "text": "Okay, respawning here sounds great.",
+                        "steps": [
+                          {
+                            "player": "Okay, respawning here sounds great."
+                          },
+                          {
+                            "type": "end"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "id": "eKDWRT"
               }
-            ]
+            ],
+            "id": "31HhC1",
+            "condition": "If the player is on a Deadman Mode world:",
+            "condition_id": "l_rAR3"
           }
-        ],
-        "id": "l_rAR3"
+        ]
       },
       {
         "type": "choice",
@@ -194549,13 +194569,13 @@
               ]
             },
             {
-              "text": "I see you are a chef, will you cook me anything?",
+              "text": "I see you are a chef. Can you cook me anything?",
               "steps": [
                 {
-                  "player": "I see you are a chef... Could you cook me something?"
+                  "player": "I see you are a chef. Can you cook me anything?"
                 },
                 {
-                  "npc": "I would, but I am very busy. I am trying to increase my reknown as one of the worlds' leading chefs by preparing a special and unique fish salad."
+                  "npc": "I would, but I am very busy. I am trying to increase my reknown as one of the world's leading chefs by preparing a special and unique fish salad."
                 }
               ]
             }
@@ -194629,7 +194649,7 @@
               "text": "Gauntlets",
               "steps": [
                 {
-                  "npc": "I hear you have brought the completed crest to my father. I must say, that was awfully impressive work."
+                  "npc": "I heard you brought the completed crest to my father. I must say, that was awfully impressive work."
                 },
                 {
                   "player": "It was easy really."
@@ -194737,19 +194757,24 @@
       ],
       "standard-dialogue-after-completing-family-pest": [
         {
-          "npc": "I have received word from my father that you assisted us again! I get the feeling you weren't going to stop trying until you did though."
+          "npc": "I received word from my father that you assisted us again! I get the feeling you weren't going to stop trying until you did though."
         },
         {
           "type": "condition",
           "text": "If this is the first time the player has talked to Caleb after completing Family Pest:",
           "steps": [
             {
-              "npc": "As thanks, I'll provide you with as many pairs of Cooking gauntlets as you wish."
+              "npc": "As thanks, I'll provide you with as many pairs of cooking gauntlets as you wish."
+            },
+            {
+              "type": "input",
+              "text": "How many would you like to take?",
+              "id": "Dkvlsw"
             },
             {
               "type": "message",
-              "text": "Caleb hands you a pair of Cooking gauntlets.",
-              "id": "Jsoiaj"
+              "text": "Caleb hands you some cooking gauntlets.",
+              "id": "Tj45hY"
             },
             {
               "npc": "You will find the rate you burn certain foods is much reduced whilst wearing these gauntlets."
@@ -205246,7 +205271,10 @@
                 {
                   "type": "line",
                   "speaker": "Camel",
-                  "text": "You and whose army mate? You and whose army?"
+                  "text": "You and whose army mate? You and whose army?",
+                  "speaker_ids": [
+                    4674
+                  ]
                 },
                 {
                   "player": "Oooh, sorry, didn't realise you could hear me?"
@@ -205254,7 +205282,10 @@
                 {
                   "type": "line",
                   "speaker": "Camel",
-                  "text": "Well I can, so watch what you say in future."
+                  "text": "Well I can, so watch what you say in future.",
+                  "speaker_ids": [
+                    4674
+                  ]
                 },
                 {
                   "player": "Righto!"
@@ -205270,7 +205301,10 @@
                 {
                   "type": "line",
                   "speaker": "Camel",
-                  "text": "Well, I have to say, I am pretty peckish, but thankfully, I don't eat humans... often."
+                  "text": "Well, I have to say, I am pretty peckish, but thankfully, I don't eat humans... often.",
+                  "speaker_ids": [
+                    4674
+                  ]
                 },
                 {
                   "player": "Oooh, sorry, didn't realise you could hear me?"
@@ -205278,7 +205312,10 @@
                 {
                   "type": "line",
                   "speaker": "Camel",
-                  "text": "Well I can, so watch what you say in future."
+                  "text": "Well I can, so watch what you say in future.",
+                  "speaker_ids": [
+                    4674
+                  ]
                 },
                 {
                   "player": "Righto!"
@@ -205294,7 +205331,10 @@
                 {
                   "type": "line",
                   "speaker": "Camel",
-                  "text": "You'll catch a stiff kick if you talk about me like that again!"
+                  "text": "You'll catch a stiff kick if you talk about me like that again!",
+                  "speaker_ids": [
+                    4674
+                  ]
                 },
                 {
                   "player": "Oooh, sorry, didn't realise you could hear me?"
@@ -205302,7 +205342,10 @@
                 {
                   "type": "line",
                   "speaker": "Camel",
-                  "text": "Well I can, so watch what you say in future."
+                  "text": "Well I can, so watch what you say in future.",
+                  "speaker_ids": [
+                    4674
+                  ]
                 },
                 {
                   "player": "Righto!"
@@ -213233,7 +213276,10 @@
             {
               "type": "line",
               "speaker": "Hassan",
-              "text": "Hey, do not treat the Emir's palace like a climbing frame for children, whoever you are!"
+              "text": "Hey, do not treat the Emir's palace like a climbing frame for children, whoever you are!",
+              "speaker_ids": [
+                4285
+              ]
             }
           ],
           "id": "vLjDeJ"
@@ -213245,7 +213291,10 @@
             {
               "type": "line",
               "speaker": "Hassan",
-              "text": "Hey, while you have our gratitude for saving the prince, you must earn our trust more fully before the Emir will tolerate you climbing through his windows like a thief!"
+              "text": "Hey, while you have our gratitude for saving the prince, you must earn our trust more fully before the Emir will tolerate you climbing through his windows like a thief!",
+              "speaker_ids": [
+                4285
+              ]
             }
           ],
           "id": "etorYU"
@@ -213260,7 +213309,10 @@
         {
           "type": "line",
           "speaker": "Hassan",
-          "text": "Greetings I am Hassan, Chancellor to the Emir of Al- Kharid."
+          "text": "Greetings I am Hassan, Chancellor to the Emir of Al- Kharid.",
+          "speaker_ids": [
+            4285
+          ]
         },
         {
           "type": "choice",
@@ -213285,7 +213337,10 @@
                 {
                   "type": "line",
                   "speaker": "Hassan",
-                  "text": "We manage, in our humble way. We are a wealthy town and we have water. It cures many thirsts."
+                  "text": "We manage, in our humble way. We are a wealthy town and we have water. It cures many thirsts.",
+                  "speaker_ids": [
+                    4285
+                  ]
                 },
                 {
                   "type": "message",
@@ -213300,7 +213355,10 @@
                 {
                   "type": "line",
                   "speaker": "Hassan",
-                  "text": "You are welcome. They are not expensive. We have them here to stop the elite guard being bothered. They are a little harder to kill."
+                  "text": "You are welcome. They are not expensive. We have them here to stop the elite guard being bothered. They are a little harder to kill.",
+                  "speaker_ids": [
+                    4285
+                  ]
                 }
               ]
             }
@@ -213311,7 +213369,10 @@
         {
           "type": "line",
           "speaker": "Hassan",
-          "text": "You are a friend of the town of Al-Kharid. If we have more tasks to complete, we will ask you. Please, keep in contact. Good employees are not easy to find."
+          "text": "You are a friend of the town of Al-Kharid. If we have more tasks to complete, we will ask you. Please, keep in contact. Good employees are not easy to find.",
+          "speaker_ids": [
+            4285
+          ]
         }
       ]
     }
@@ -319037,68 +319098,7 @@
                   ]
                 },
                 {
-                  "text": "The gauntlets are a family heirloom?",
-                  "steps": [
-                    {
-                      "player": "I thought these gauntlets were a family heirloom. How do you have several of them?"
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Dimintheis",
-                      "text": "I'm sorry for lying to you, [player name], it was just all part of the ploy to make our family seem wealthy.",
-                      "speaker_ids": [
-                        4984,
-                        12629
-                      ]
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Dimintheis",
-                      "text": "They're not heirlooms at all, we have crates full of the things hidden away in the basement.",
-                      "speaker_ids": [
-                        4984,
-                        12629
-                      ]
-                    },
-                    {
-                      "player": "And you still think that these are an acceptable reward for what I have done for your family?"
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Dimintheis",
-                      "text": "It's all I have to give...",
-                      "speaker_ids": [
-                        4984,
-                        12629
-                      ]
-                    },
-                    {
-                      "player": "Very well, I do admit, they are useful."
-                    },
-                    {
-                      "type": "choice",
-                      "options": [
-                        {
-                          "text": "Could I get some more gauntlets, please?",
-                          "steps": [
-                            {
-                              "type": "jump",
-                              "reference": "above",
-                              "id": "zokRtm"
-                            }
-                          ]
-                        },
-                        {
-                          "text": "See you another time, Dimintheis.",
-                          "steps": [
-                            {
-                              "player": "See you another time, Dimintheis."
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
+                  "text": "The gauntlets are a family heirloom?"
                 }
               ]
             }
@@ -319205,68 +319205,7 @@
                   ]
                 },
                 {
-                  "text": "The gauntlets are a family heirloom?",
-                  "steps": [
-                    {
-                      "player": "I thought these gauntlets were a family heirloom. How do you have several of them?"
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Dimintheis",
-                      "text": "I'm sorry for lying to you, [player name], it was just all part of the ploy to make our family seem wealthy.",
-                      "speaker_ids": [
-                        4984,
-                        12629
-                      ]
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Dimintheis",
-                      "text": "They're not heirlooms at all, we have crates full of the things hidden away in the basement.",
-                      "speaker_ids": [
-                        4984,
-                        12629
-                      ]
-                    },
-                    {
-                      "player": "And you still think that these are an acceptable reward for what I have done for your family?"
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Dimintheis",
-                      "text": "It's all I have to give...",
-                      "speaker_ids": [
-                        4984,
-                        12629
-                      ]
-                    },
-                    {
-                      "player": "Very well, I do admit, they are useful."
-                    },
-                    {
-                      "type": "choice",
-                      "options": [
-                        {
-                          "text": "Could I get some more gauntlets, please?",
-                          "steps": [
-                            {
-                              "type": "jump",
-                              "reference": "above",
-                              "id": "zokRtm"
-                            }
-                          ]
-                        },
-                        {
-                          "text": "See you another time, Dimintheis.",
-                          "steps": [
-                            {
-                              "player": "See you another time, Dimintheis."
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
+                  "text": "The gauntlets are a family heirloom?"
                 }
               ]
             }
@@ -352947,6 +352886,19 @@
                 },
                 {
                   "type": "condition",
+                  "text": "If the player has their goldsmith gauntlets:",
+                  "steps": [
+                    {
+                      "npc": "You asked Avan to convert them into goldsmithing gauntlets, didn't you? I think you must still have them somewhere."
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "6oqHtM"
+                },
+                {
+                  "type": "condition",
                   "text": "If the player has their gauntlets:",
                   "steps": [
                     {
@@ -353034,7 +352986,7 @@
               ]
             },
             {
-              "text": "The gauntlets are a family heirloom?",
+              "text": "I thought these gauntlets were a family heirloom.",
               "steps": [
                 {
                   "player": "I thought these gauntlets were a family heirloom. How do you have several of them?"
@@ -353062,7 +353014,7 @@
                       "steps": [
                         {
                           "type": "jump",
-                          "id": "zokRtm",
+                          "id": "hk0U76",
                           "steps": [
                             {
                               "type": "call",
@@ -389408,7 +389360,10 @@
         {
           "type": "line",
           "speaker": "Cat",
-          "text": "Get your hands off that, you dirty human!"
+          "text": "Get your hands off that, you dirty human!",
+          "speaker_ids": [
+            2346
+          ]
         },
         {
           "type": "line",
@@ -400964,7 +400919,125 @@
                   "type": "choice",
                   "options": [
                     {
-                      "text": "Well if you gave me a ferret I could take it back for you."
+                      "text": "Well if you gave me a ferret I could take it back for you.",
+                      "steps": [
+                        {
+                          "player": "Well if you gave me a ferret I could take it back for you."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Nickolaus",
+                          "text": "Well that's very kind of you, but I'm afraid all my equipment is down at the camp site.",
+                          "speaker_ids": [
+                            1484,
+                            1485,
+                            1486
+                          ]
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Nickolaus",
+                          "text": "I'd go with you but currently I'm somewhat, er...",
+                          "speaker_ids": [
+                            1484,
+                            1485,
+                            1486
+                          ]
+                        },
+                        {
+                          "player": "Trapped?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Nickolaus",
+                          "text": "Well I think trapped is quite a negative way of looking at it.",
+                          "speaker_ids": [
+                            1484,
+                            1485,
+                            1486
+                          ]
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Nickolaus",
+                          "text": "I will admit however that getting out of here may be a little tricky. I did have a plan, but unfortunately it didn't involve being stuck in this nest.",
+                          "speaker_ids": [
+                            1484,
+                            1485,
+                            1486
+                          ]
+                        },
+                        {
+                          "type": "choice",
+                          "options": [
+                            {
+                              "text": "Could I help at all?",
+                              "steps": [
+                                {
+                                  "player": "Could I help at all?"
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Nickolaus",
+                                  "text": "Actually I believe you could. I need to somehow trick the eagles into thinking I'm one of them. Could you fashion some sort of disguise for me?",
+                                  "speaker_ids": [
+                                    1484,
+                                    1485,
+                                    1486
+                                  ]
+                                },
+                                {
+                                  "player": "What would that involve?"
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Nickolaus",
+                                  "text": "Well, you could go and speak to the fancy dress shop owner in Varrock.  He can make anything if you give him the right materials. In fact you should probably get a couple of disguises, one for each of us.",
+                                  "speaker_ids": [
+                                    1484,
+                                    1485,
+                                    1486
+                                  ]
+                                },
+                                {
+                                  "player": "That's a good idea. There are plenty of feathers around here. I'll see what I can do."
+                                }
+                              ]
+                            },
+                            {
+                              "text": "Well it'll give you a lot of time to study the eagles",
+                              "steps": [
+                                {
+                                  "player": "Well it'll give you a lot of time to study the eagles."
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Nickolaus",
+                                  "text": "Very true, and certainly an opportunity I wouldn't want to miss.",
+                                  "speaker_ids": [
+                                    1484,
+                                    1485,
+                                    1486
+                                  ]
+                                },
+                                {
+                                  "player": "Well, I'll let you get on with your work then."
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Nickolaus",
+                                  "text": "It's always a pleasure to discuss my discoveries.",
+                                  "speaker_ids": [
+                                    1484,
+                                    1485,
+                                    1486
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
                     },
                     {
                       "text": "So it's not that you're trapped then?",
@@ -402848,7 +402921,131 @@
           "type": "choice",
           "options": [
             {
-              "text": "Well if you gave me a ferret I could take it back for you."
+              "text": "Well if you gave me a ferret I could take it back for you.",
+              "steps": [
+                {
+                  "player": "Well if you gave me a ferret I could take it back for you."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Nickolaus",
+                  "text": "Well that's very kind of you, but I'm afraid all my equipment is down at the camp site.",
+                  "speaker_ids": [
+                    1484,
+                    1485,
+                    1486
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Nickolaus",
+                  "text": "I'd go with you but currently I'm somewhat, er...",
+                  "speaker_ids": [
+                    1484,
+                    1485,
+                    1486
+                  ]
+                },
+                {
+                  "player": "Trapped?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Nickolaus",
+                  "text": "Well I think trapped is quite a negative way of looking at it.",
+                  "speaker_ids": [
+                    1484,
+                    1485,
+                    1486
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Nickolaus",
+                  "text": "I will admit however that getting out of here may be a little tricky. I did have a plan, but unfortunately it didn't involve being stuck in this nest.",
+                  "speaker_ids": [
+                    1484,
+                    1485,
+                    1486
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Could I help at all?",
+                      "steps": [
+                        {
+                          "player": "Could I help at all?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Nickolaus",
+                          "text": "Actually I believe you could. I need to somehow trick the eagles into thinking I'm one of them. Could you fashion some sort of disguise for me?",
+                          "speaker_ids": [
+                            1484,
+                            1485,
+                            1486
+                          ]
+                        },
+                        {
+                          "player": "What would that involve?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Nickolaus",
+                          "text": "Well, you could go and speak to the fancy dress shop owner in Varrock.  He can make anything if you give him the right materials. In fact you should probably get a couple of disguises, one for each of us.",
+                          "speaker_ids": [
+                            1484,
+                            1485,
+                            1486
+                          ]
+                        },
+                        {
+                          "player": "That's a good idea. There are plenty of feathers around here. I'll see what I can do."
+                        },
+                        {
+                          "type": "end"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Well it'll give you a lot of time to study the eagles",
+                      "steps": [
+                        {
+                          "player": "Well it'll give you a lot of time to study the eagles."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Nickolaus",
+                          "text": "Very true, and certainly an opportunity I wouldn't want to miss.",
+                          "speaker_ids": [
+                            1484,
+                            1485,
+                            1486
+                          ]
+                        },
+                        {
+                          "player": "Well, I'll let you get on with your work then."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Nickolaus",
+                          "text": "It's always a pleasure to discuss my discoveries.",
+                          "speaker_ids": [
+                            1484,
+                            1485,
+                            1486
+                          ]
+                        },
+                        {
+                          "type": "end"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
             },
             {
               "text": "So it's not that you're trapped then?",
@@ -465937,7 +466134,7 @@
                   ]
                 },
                 {
-                  "player": "I have been sent by your father. He wishes the Fitzharmon Crest be restored."
+                  "player": "I have been sent by your father. He wishes the Fitzharmon Crest to be restored."
                 },
                 {
                   "type": "line",
@@ -466088,15 +466285,15 @@
               ]
             },
             {
-              "text": "I see you are a chef, will you cook me anything?",
+              "text": "I see you are a chef. Can you cook me anything?",
               "steps": [
                 {
-                  "player": "I see you are a chef... Could you cook me something?"
+                  "player": "I see you are a chef. Can you cook me anything?"
                 },
                 {
                   "type": "line",
                   "speaker": "Caleb",
-                  "text": "I would, but I am very busy. I am trying to increase my reknown as one of the worlds' leading chefs by preparing a special and unique fish salad.",
+                  "text": "I would, but I am very busy. I am trying to increase my reknown as one of the world's leading chefs by preparing a special and unique fish salad.",
                   "speaker_ids": [
                     4317,
                     5433
@@ -466158,64 +466355,8 @@
                   "text": "Uh... what happened to the rest of it?",
                   "steps": [
                     {
-                      "player": "Uh... what happened to the rest of it?"
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Caleb",
-                      "text": "Well... my brothers and I had a slight disagreement about it... we all wanted to be heir to my fathers' lands, and we each ended up with a piece of the crest.",
-                      "speaker_ids": [
-                        4317,
-                        5433
-                      ]
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Caleb",
-                      "text": "None of us wanted to give up our rights to our brothers, so we didn't want to give up our pieces of the crest, but none of us wanted to face our father by",
-                      "speaker_ids": [
-                        4317,
-                        5433
-                      ]
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Caleb",
-                      "text": "returning to him with an incomplete crest... We each went our seperate ways many years past, none of us seeing our father or willing to give up our fragments.",
-                      "speaker_ids": [
-                        4317,
-                        5433
-                      ]
-                    },
-                    {
-                      "player": "So do you know where I could find any of your brothers?"
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Caleb",
-                      "text": "Well, we haven't really kept in touch... what with the dispute over the crest and all... I did hear from my brother Avan a while ago though.",
-                      "speaker_ids": [
-                        4317,
-                        5433
-                      ]
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Caleb",
-                      "text": "He said he was on some kind of search for treasure, or gold, or something out in the desert east of Lumbridge. You might want to ask the traders there about him.",
-                      "speaker_ids": [
-                        4317,
-                        5433
-                      ]
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Caleb",
-                      "text": "Avan always did have expensive tastes however. You may find he is not prepared to hand over his crest piece to you as easily as I have.",
-                      "speaker_ids": [
-                        4317,
-                        5433
-                      ]
+                      "type": "call",
+                      "branch": "QoYeTQ"
                     }
                   ]
                 },
@@ -466240,6 +466381,39 @@
             }
           ],
           "id": "rCeyS0"
+        }
+      ],
+      "caleb-talking-to-caleb-after-getting-his-crest-piece": [
+        {
+          "type": "line",
+          "speaker": "Caleb",
+          "text": "Hello again. I'm just putting the finishing touches to my masterful salad.",
+          "speaker_ids": [
+            4317,
+            5433
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Uh.. what happened to the rest of the crest?",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "QoYeTQ"
+                }
+              ]
+            },
+            {
+              "text": "Good luck with that then.",
+              "steps": [
+                {
+                  "player": "Good luck with that then."
+                }
+              ]
+            }
+          ]
         }
       ],
       "caleb-talking-to-caleb-again-after-obtaining-the-first-crest-piece": [
@@ -467036,7 +467210,7 @@
           "type": "choice",
           "options": [
             {
-              "text": "Why are you hanging around a in a scorpion pit?",
+              "text": "Why are you hanging around in a scorpion pit?",
               "steps": [
                 {
                   "player": "Why are you lurking around a scorpion pit?"
@@ -467054,7 +467228,7 @@
               ]
             },
             {
-              "text": "I'm looking for a man named Avan Fitzharmon",
+              "text": "I'm looking for a man named Avan Fitzharmon.",
               "steps": [
                 {
                   "player": "I'm looking for a man... his name is Avan Fitzharmon."
@@ -467252,19 +467426,6 @@
               "steps": [
                 {
                   "player": "Hello short person."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Boot",
-                  "text": "Hello tall person.",
-                  "speaker_ids": [
-                    4985
-                  ]
-                },
-                {
-                  "type": "jump",
-                  "reference": "initial",
-                  "id": "YnSmT9"
                 }
               ]
             },
@@ -467963,7 +468124,7 @@
         {
           "type": "line",
           "speaker": "Avan",
-          "text": "I have received word from my father of your assistance to our family in this matter. You have my thanks for restoring our honour.",
+          "text": "I received word from my father of your assistance to our family. You have my thanks for restoring our honour.",
           "speaker_ids": [
             385,
             386,
@@ -468000,7 +468161,7 @@
               "text": "That sounds good, improve them for me.",
               "steps": [
                 {
-                  "player": "That sounds good, improve them for me!"
+                  "player": "That sounds good, improve them for me."
                 },
                 {
                   "type": "message",
@@ -468046,7 +468207,7 @@
         {
           "type": "line",
           "speaker": "Johnathon",
-          "text": "And right he is at that. Although my skill with Death Rune magiks was not great enough to defeat Chronozon, I am adequately skilled at Chaos Rune magiks.",
+          "text": "And right he is at that. Although my skill with Death Rune magicks was not great enough to defeat Chronozon, I am adequately skilled at Chaos Rune magicks.",
           "speaker_ids": [
             5443,
             5445
@@ -468268,6 +468429,1103 @@
         },
         {
           "type": "end"
+        }
+      ],
+      "QoYeTQ": [
+        {
+          "player": "Uh... what happened to the rest of it?"
+        },
+        {
+          "type": "line",
+          "speaker": "Caleb",
+          "text": "Well... my brothers and I had a slight disagreement about it... we all wanted to be heir to my fathers' lands, and we each ended up with a piece of the crest.",
+          "speaker_ids": [
+            4317,
+            5433
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Caleb",
+          "text": "None of us wanted to give up our rights to our brothers, so we didn't want to give up our pieces of the crest, but none of us wanted to face our father by",
+          "speaker_ids": [
+            4317,
+            5433
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Caleb",
+          "text": "returning to him with an incomplete crest... We each went our seperate ways many years past, none of us seeing our father or willing to give up our fragments.",
+          "speaker_ids": [
+            4317,
+            5433
+          ]
+        },
+        {
+          "player": "So do you know where I could find any of your brothers?"
+        },
+        {
+          "type": "line",
+          "speaker": "Caleb",
+          "text": "Well, we haven't really kept in touch... what with the dispute over the crest and all... I did hear from my brother Avan a while ago though.",
+          "speaker_ids": [
+            4317,
+            5433
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Caleb",
+          "text": "He said he was on some kind of search for treasure, or gold, or something out in the desert east of Lumbridge. You might want to ask the traders there about him.",
+          "speaker_ids": [
+            4317,
+            5433
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Caleb",
+          "text": "Avan always did have expensive tastes however. You may find he is not prepared to hand over his crest piece to you as easily as I have.",
+          "speaker_ids": [
+            4317,
+            5433
+          ]
+        }
+      ]
+    }
+  },
+  "Family Pest": {
+    "default": "starting-out-talking-to-dimintheis",
+    "variants": {
+      "starting-out-talking-to-dimintheis": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Have you got any quests for me?",
+              "steps": [
+                {
+                  "player": "Do you have any quests for me? I really want one. I really want to help out!"
+                },
+                {
+                  "type": "message",
+                  "text": "You murmur under your breath something about how great the rewards were last time you did a quest for Dimintheis.",
+                  "id": "ol-6ye"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "My family consider what you did for us a great service. We couldn't possibly trouble you further.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "There must be SOMETHING you need help with. I am a great adventurer after all."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "There really isn't anything, I am very content with life right now.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "I guess money does buy happiness.",
+                      "steps": [
+                        {
+                          "player": "I guess money really does buy happiness."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Dimintheis",
+                          "text": "What was that? I didn't quite catch that.",
+                          "speaker_ids": [
+                            4984,
+                            12629
+                          ]
+                        },
+                        {
+                          "player": "Nothing..."
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Oh come on, however menial, I want to help!",
+                      "steps": [
+                        {
+                          "player": "Oh come on, surely there's something I can help out with! I want to help, however menial it is."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Dimintheis",
+                          "text": "Okay okay. Fine then. Whilst I don't have anything for you, how about you try my sons, they are always wanting something done.",
+                          "speaker_ids": [
+                            4984,
+                            12629
+                          ]
+                        },
+                        {
+                          "player": "Fantastic! I'll get straight to it!"
+                        },
+                        {
+                          "type": "message",
+                          "text": "You smell the sweet smell of the great rewards that may soon come.",
+                          "id": "bWguXE"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Other"
+            }
+          ]
+        }
+      ],
+      "starting-out-talking-to-dimintheis-again": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Family Pest",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "Have you spoke to Avan, Caleb and Johnathon yet?",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "Nope, not yet!"
+                }
+              ]
+            },
+            {
+              "text": "Other"
+            }
+          ]
+        }
+      ],
+      "avan-talking-to-avan": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Family Pest",
+              "steps": [
+                {
+                  "player": "Hello there Avan, I've had a bit of spare time lately, and I was wondering whether you had anything I could help you out with, like a quest or something?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Avan",
+                  "text": "Honestly [player name], everything is fantastic! What you did for me and my family is amazing. My lady was very impressed with the perfect jewellery you obtained for me!",
+                  "speaker_ids": [
+                    385,
+                    386,
+                    387
+                  ]
+                },
+                {
+                  "player": "You know, I really have a LOT of spare time right now. Anything, I will help out with anything."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Avan",
+                  "text": "I couldn't bring myself to trouble you any further [player name]. Thank you for everything, but I am content.",
+                  "speaker_ids": [
+                    385,
+                    386,
+                    387
+                  ]
+                },
+                {
+                  "type": "condition",
+                  "text": "If Avan is the first brother the player talks to:",
+                  "steps": [
+                    {
+                      "player": "Very well, I'll go and see if your other brothers need anything..."
+                    },
+                    {
+                      "type": "message",
+                      "text": "The sweet smell of the great rewards that may come fades slightly.",
+                      "id": "vO9Msy"
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "0Z2G5M"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Avan is the second brother the player talks to:",
+                  "steps": [
+                    {
+                      "player": "Very well, I'll go and see if your other brothers need anything..."
+                    },
+                    {
+                      "type": "message",
+                      "text": "The sweet smell of the great rewards that may come fades even more.",
+                      "id": "MKsgWG"
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "-BnNZh"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Avan is the last brother the player talks to:",
+                  "steps": [
+                    {
+                      "player": "I do one quest for you all and it solves all of your problems? Amazing... I'll go and tell your father how happy you all are!"
+                    },
+                    {
+                      "type": "message",
+                      "text": "The sweet smell of the great rewards that may come has almost faded completely.",
+                      "id": "W78NPP"
+                    }
+                  ],
+                  "id": "5896B7"
+                }
+              ]
+            },
+            {
+              "text": "Gauntlets"
+            }
+          ]
+        }
+      ],
+      "avan-talking-to-avan-again": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Family Pest",
+              "steps": [
+                {
+                  "player": "Are you absolutely sure there is nothing I can help you out with?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Avan",
+                  "text": "Look, I really just want to get on with my life, your insistence on wanting another quest is getting annoying!",
+                  "speaker_ids": [
+                    385,
+                    386,
+                    387
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Gauntlets"
+            }
+          ]
+        }
+      ],
+      "caleb-talking-to-caleb": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Family Pest",
+              "steps": [
+                {
+                  "player": "Caleb! As an adventurer, I am ready to help you with whatever you need... again! What can I help you with?"
+                },
+                {
+                  "type": "message",
+                  "text": "You daydream briefly of what the rich family could offer you this time as a reward.",
+                  "id": "Ztw3Dv"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Caleb",
+                  "text": "... and that's when I found the broken lamping stick. Maybe you could help me investigate?",
+                  "speaker_ids": [
+                    4317,
+                    5433
+                  ]
+                },
+                {
+                  "player": "Sorry, I didn't quite catch that, my mind was erm... elsewhere."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Caleb",
+                  "text": "Well if you aren't going to listen to the problem, it's fine, don't worry about it. Nothing an experienced chef can't solve himself!",
+                  "speaker_ids": [
+                    4317,
+                    5433
+                  ]
+                },
+                {
+                  "player": "I'm sorry! Please let me help."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Caleb",
+                  "text": "No! Not every problem in my life needs an adventurer to come solve it for me anyway. I'm happy and there's nothing else either!",
+                  "speaker_ids": [
+                    4317,
+                    5433
+                  ]
+                },
+                {
+                  "type": "condition",
+                  "text": "If Caleb is the first brother the player talks to:",
+                  "steps": [
+                    {
+                      "player": "Very well, I'll go and see if your other brothers need anything..."
+                    },
+                    {
+                      "type": "message",
+                      "text": "The sweet smell of the great rewards that may come fades slightly.",
+                      "id": "8u1FT1"
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "VKMk-e"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Caleb is the second brother the player talks to:",
+                  "steps": [
+                    {
+                      "player": "Very well, I'll go and see if your other brothers need anything..."
+                    },
+                    {
+                      "type": "message",
+                      "text": "The sweet smell of the great rewards that may come fades even more.",
+                      "id": "X77A3l"
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "69zQoo"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Caleb is the last brother the player talks to:",
+                  "steps": [
+                    {
+                      "player": "I do one quest for you all and it solves all of your problems? Amazing... I'll go and tell your father how happy you all are!"
+                    },
+                    {
+                      "type": "message",
+                      "text": "The sweet smell of the great rewards that may come has almost faded completely.",
+                      "id": "du3UlA"
+                    }
+                  ],
+                  "id": "I4h7VD"
+                }
+              ]
+            },
+            {
+              "text": "Gauntlets"
+            }
+          ]
+        }
+      ],
+      "caleb-talking-to-caleb-again": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Family Pest",
+              "steps": [
+                {
+                  "player": "Are you sure there's nothing I can do, a chef can always do with help in their kitchen right?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Caleb",
+                  "text": "I'm a very competent cook! I do not need your assistance [player name]. Please leave me be.",
+                  "speaker_ids": [
+                    4317,
+                    5433
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Gauntlets"
+            }
+          ]
+        }
+      ],
+      "johnathon-talking-to-johnathon": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Family Pest",
+              "steps": [
+                {
+                  "player": "I killed demons, I cured your poison and restored your family's honour! What can I help you with next Johnathon?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Johnathon",
+                  "text": "Actually, come to think of it...",
+                  "speaker_ids": [
+                    5443,
+                    5445
+                  ]
+                },
+                {
+                  "type": "message",
+                  "text": "Your eyes light up.",
+                  "id": "utXHum"
+                },
+                {
+                  "player": "Yes..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Johnathon",
+                  "text": "I've been having this issue. You see the lady I seek is trapped up the top of a very large tower of a very large castle, and has been for all of her life so far.",
+                  "speaker_ids": [
+                    5443,
+                    5445
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Johnathon",
+                  "text": "There is but one problem, a fierce dragon circles the castle, breathing fire at anyone who dares go near.",
+                  "speaker_ids": [
+                    5443,
+                    5445
+                  ]
+                },
+                {
+                  "type": "message",
+                  "text": "The sweet smell of the great rewards sweeps over you with incredible speed.",
+                  "id": "4imv5i"
+                },
+                {
+                  "player": "This is sounding like a great opportunity to be heroic, shall I go get her for you?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Johnathon",
+                  "text": "Ha ha! You would believe anything. That was just a children's story!",
+                  "speaker_ids": [
+                    5443,
+                    5445
+                  ]
+                },
+                {
+                  "player": "Very funny Johnathon, I can't help but laugh..."
+                },
+                {
+                  "player": "So do you actually have any problems I can help you with?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Johnathon",
+                  "text": "Everything is fantastic [player name]! You adventurers really do seem to love quests, but I do not have one for you today.",
+                  "speaker_ids": [
+                    5443,
+                    5445
+                  ]
+                },
+                {
+                  "type": "condition",
+                  "text": "If Johnathon is the first brother the player talks to:",
+                  "steps": [
+                    {
+                      "player": "Very well, I'll go and see if your other brothers need anything..."
+                    },
+                    {
+                      "type": "message",
+                      "text": "The sweet smell of the great rewards that may come fades slightly.",
+                      "id": "pBJrAt"
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "UBpmo9"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Johnathon is the second brother the player talks to:",
+                  "steps": [
+                    {
+                      "player": "Very well, I'll go and see if your other brothers need anything..."
+                    },
+                    {
+                      "type": "message",
+                      "text": "The sweet smell of the great rewards that may come fades even more.",
+                      "id": "qSGdup"
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "lCw8u9"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Johnathon is the last brother the player talks to:",
+                  "steps": [
+                    {
+                      "player": "I do one quest for you all and it solves all of your problems? Amazing... I'll go and tell your father how happy you all are!"
+                    },
+                    {
+                      "type": "message",
+                      "text": "The sweet smell of the great rewards that may come has almost faded completely.",
+                      "id": "H1XDlA"
+                    }
+                  ],
+                  "id": "tgqBpd"
+                }
+              ]
+            },
+            {
+              "text": "Gauntlets"
+            }
+          ]
+        }
+      ],
+      "johnathon-talking-to-johnathon-again": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Family Pest",
+              "steps": [
+                {
+                  "player": "Are you sure there's nothing I can do, perhaps even teach you about Death Rune magicks, where your skills do not live up to mine."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Johnathon",
+                  "text": "I find that very insulting [player name]. You do not need to remind me of your superior skills. Leave me be.",
+                  "speaker_ids": [
+                    5443,
+                    5445
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Gauntlets"
+            }
+          ]
+        }
+      ],
+      "returning-to-dimintheis-talking-to-dimintheis": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Family Pest",
+              "steps": [
+                {
+                  "player": "I have been and spoken to Avan, Caleb and Johnathon and none of them need anything from me!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "That is excellent news [player name]. It's good to hear they are doing well.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "type": "message",
+                  "text": "The sweet smell of great rewards is a distant memory.",
+                  "id": "93fYWN"
+                },
+                {
+                  "player": "Yeah... you're welcome."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "Come to think of it, there is something you can help me out with!",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "Yes! I accept your quest!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "Slow down. I haven't told you what it is yet!",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "I need 500,000 coins. Can you help me out with that?",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "You just want coins?! Aren't you wealthy! Why do you need coins from me?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "Okay, I suppose there will be no time better than this to tell you the truth.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "Go on..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "Our family just pretends to be rich [player name]. We gave ourselves a fancy surname, pretended the gauntlets are a family heirloom and asked adventurers to solve our family issues.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "Wait, so all of this was for nothing? You just lied to me!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "No no, your work was indeed very helpful, the crest is important to us, it helps to portray that we are indeed wealthy, despite the fact we are not.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "I mean, if you were wealthy, would you live in a tiny house in the darkest corner of Varrock? Not a chance. This is your chance to do us a final favour, may I have 500,000 coins from you?",
+                  "steps": [
+                    {
+                      "type": "condition",
+                      "text": "If the player does not have enough coins:",
+                      "id": "ekpb2Q"
+                    },
+                    {
+                      "player": "I don't have enough coins on me."
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "prompt": "Hand Dimintheis 500,000 coins?",
+                  "options": [
+                    {
+                      "text": "Yes",
+                      "steps": [
+                        {
+                          "type": "message",
+                          "text": "You hand over 500,000 coins to Dimintheis.",
+                          "id": "zSiAsd"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Dimintheis",
+                          "text": "Thank you very much. In appreciation, I will inform Avan, Caleb and Johnathon that you did yet another great deed for the family, and that you would find more pairs of those gauntlets useful.",
+                          "speaker_ids": [
+                            4984,
+                            12629
+                          ]
+                        },
+                        {
+                          "player": "Well this didn't feel very heroic..."
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Refuse",
+                      "steps": [
+                        {
+                          "player": "You don't need 500,000 coins from me! I don't believe you! You can keep your rewards."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Dimintheis",
+                          "text": "I will be here if you change your mind.",
+                          "speaker_ids": [
+                            4984,
+                            12629
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Other"
+            }
+          ]
+        }
+      ],
+      "returning-to-dimintheis-talking-to-dimintheis-again-before-handing-out-the-money": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Family Pest",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "I need 500,000 coins. Can you help me out with that?",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "You just want coins?! Aren't you wealthy! Why do you need coins from me?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "Okay, I suppose there will be no time better than this to tell you the truth.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "Go on..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "Our family just pretends to be rich [player name]. We gave ourselves a fancy surname, pretended the gauntlets are a family heirloom and asked adventurers to solve our family issues.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "Wait, so all of this was for nothing? You just lied to me!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "No no, your work was indeed very helpful, the crest is important to us, it helps to portray that we are indeed wealthy, despite the fact we are not.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "I mean, if you were wealthy, would you live in a tiny house in the darkest corner of Varrock? Not a chance. This is your chance to do us a final favour, may I have 500,000 coins from you?",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "prompt": "Hand Dimintheis 500,000 coins?",
+                  "options": [
+                    {
+                      "text": "Yes",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "reference": "above",
+                          "id": "awx8Pt"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Refuse",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "reference": "above",
+                          "id": "sUsTdM"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Other"
+            }
+          ]
+        }
+      ],
+      "post-miniquest-dialogue-dimintheis": [
+        {
+          "player": "Hello Dimintheis."
+        },
+        {
+          "type": "line",
+          "speaker": "Dimintheis",
+          "text": "I will not forget what you did for my family [player name]. Those 500,000 coins have allowed us to put food on the table.",
+          "speaker_ids": [
+            4984,
+            12629
+          ]
+        },
+        {
+          "player": "That's no problem."
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Could I get another pair of gauntlets?",
+              "steps": [
+                {
+                  "player": "Anyway, I was wondering if I could get more of those gauntlets?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "You may, but you'll have to ask my sons for them, unless you just want a pair of the Steel gauntlets.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Yes please!",
+                      "steps": [
+                        {
+                          "player": "Yes, I do want a pair of steel gauntlets please."
+                        },
+                        {
+                          "type": "message",
+                          "text": "Dimintheis hands you a pair of Steel gauntlets.",
+                          "id": "Ra0R7_"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Dimintheis",
+                          "text": "Here you go.",
+                          "speaker_ids": [
+                            4984,
+                            12629
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "No thanks!",
+                      "steps": [
+                        {
+                          "player": "No thanks Dimintheis."
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "The gauntlets are a family heirloom?",
+              "steps": [
+                {
+                  "player": "I thought these gauntlets were a family heirloom, how come you have several of them?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "I'm sorry for lying to you [player name], it was just all part of the ploy to make our family seem wealthy.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "They're not heirlooms at all, we have crates full of the things hidden away in the basement.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "And you still think that these are an acceptable reward for what I have done for your family?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "It's all I have to give...",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "Very well, I do admit, they are useful."
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "post-miniquest-dialogue-avan": [
+        {
+          "type": "line",
+          "speaker": "Avan",
+          "text": "I have received word from my father that you assisted us again! I get the feeling you weren't going to stop trying until you did though.",
+          "speaker_ids": [
+            385,
+            386,
+            387
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Avan",
+          "text": "As a token of my appreciation, I will happily forge you as many pairs of Goldsmith gauntlets as you desire.",
+          "speaker_ids": [
+            385,
+            386,
+            387
+          ]
+        },
+        {
+          "type": "message",
+          "text": "Avan hands you a pair of Goldsmith gauntlets.",
+          "id": "iU8xSL"
+        },
+        {
+          "type": "line",
+          "speaker": "Avan",
+          "text": "You will find the rate you gain experience when smelting gold much improved whilst wearing these gauntlets.",
+          "speaker_ids": [
+            385,
+            386,
+            387
+          ]
+        },
+        {
+          "player": "Thank you."
+        }
+      ],
+      "post-miniquest-dialogue-caleb": [
+        {
+          "type": "line",
+          "speaker": "Caleb",
+          "text": "I have received word from my father that you assisted us again! I get the feeling you weren't going to stop trying until you did though.",
+          "speaker_ids": [
+            4317,
+            5433
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Caleb",
+          "text": "As thanks, I'll provide you with as many pairs of Cooking gauntlets as you wish.",
+          "speaker_ids": [
+            4317,
+            5433
+          ]
+        },
+        {
+          "type": "message",
+          "text": "Caleb hands you a pair of Cooking gauntlets.",
+          "id": "PO-GM2"
+        },
+        {
+          "type": "line",
+          "speaker": "Caleb",
+          "text": "You will find the rate you burn certain foods is much reduced whilst wearing these gauntlets.",
+          "speaker_ids": [
+            4317,
+            5433
+          ]
+        },
+        {
+          "player": "Thank you."
+        }
+      ],
+      "post-miniquest-dialogue-johnathon": [
+        {
+          "type": "line",
+          "speaker": "Johnathon",
+          "text": "I have received word from my father that you assisted us again! I get the feeling you weren't going to stop trying until you did though.",
+          "speaker_ids": [
+            5443,
+            5445
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Johnathon",
+          "text": "If you want, I'll provide you with as many pairs of Chaos gauntlets as you wish to say thanks!",
+          "speaker_ids": [
+            5443,
+            5445
+          ]
+        },
+        {
+          "type": "message",
+          "text": "Johnathon hands you a pair of Chaos gauntlets.",
+          "id": "Uwmot-"
+        },
+        {
+          "type": "line",
+          "speaker": "Johnathon",
+          "text": "You will find the power of bolt spells increases substantially whilst wearing these gauntlets.",
+          "speaker_ids": [
+            5443,
+            5445
+          ]
+        },
+        {
+          "player": "Thank you."
         }
       ]
     }
@@ -558416,7 +559674,10 @@
                   {
                     "type": "line",
                     "speaker": "Banker",
-                    "text": "Why? You don't use the bank."
+                    "text": "Why? You don't use the bank.",
+                    "speaker_ids": [
+                      6084
+                    ]
                   },
                   {
                     "player": "Oh yeah... Never mind then."
@@ -590031,7 +591292,10 @@
         {
           "type": "line",
           "speaker": "Hrafn",
-          "text": "Meow!"
+          "text": "Meow!",
+          "speaker_ids": [
+            1898
+          ]
         }
       ],
       "standard-dialogue-when-spoken-to-with-a-catspeak-amulet": [
@@ -590041,7 +591305,10 @@
         {
           "type": "line",
           "speaker": "Hrafn",
-          "text": "One does not wish to be disturbed."
+          "text": "One does not wish to be disturbed.",
+          "speaker_ids": [
+            1898
+          ]
         },
         {
           "player": "What?"
@@ -619522,9 +620789,6 @@
                   "type": "message",
                   "text": "Sir Galahad gives you a cup of tea.",
                   "id": "UM_Nt9"
-                },
-                {
-                  "type": "end"
                 }
               ]
             },
@@ -619598,9 +620862,6 @@
                           "speaker_ids": [
                             4064
                           ]
-                        },
-                        {
-                          "type": "end"
                         }
                       ]
                     },
@@ -619628,9 +620889,6 @@
                           "action": "receive",
                           "text": "a cup of tea",
                           "id": "7SPxqF"
-                        },
-                        {
-                          "type": "end"
                         }
                       ]
                     },
@@ -619720,55 +620978,43 @@
                   "type": "message",
                   "text": "Sir Galahad gives you a cup of tea.",
                   "id": "lIuD4R"
+                }
+              ]
+            },
+            {
+              "text": "I seek an item from the realm of the Fisher King.",
+              "steps": [
+                {
+                  "player": "I seek an item from the realm of the Fisher King."
                 },
                 {
-                  "type": "end"
+                  "type": "line",
+                  "speaker": "Galahad",
+                  "text": "Funny you should mention that, but when I left there I took this small cloth from the table as a keepsake.",
+                  "speaker_ids": [
+                    4064
+                  ]
+                },
+                {
+                  "player": "I don't suppose I could borrow that? It could come in useful on my quest."
+                },
+                {
+                  "type": "message",
+                  "text": "Galahad reluctantly passes you a small cloth.",
+                  "id": "TCOaoy"
+                },
+                {
+                  "type": "action",
+                  "action": "receive",
+                  "text": "a Holy table napkin",
+                  "id": "IWEKeT"
                 }
-              ]
+              ],
+              "id": "PpNsXe",
+              "condition": "If the player talked to the High Priest of Entrana first:",
+              "condition_id": "4-e5Br"
             }
           ]
-        },
-        {
-          "type": "condition",
-          "text": "If the player talked to the High Priest of Entrana first:",
-          "steps": [
-            {
-              "type": "choice",
-              "options": [
-                {
-                  "text": "I seek an item from the realm of the Fisher King.",
-                  "steps": [
-                    {
-                      "player": "I seek an item from the realm of the Fisher King."
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Galahad",
-                      "text": "Funny you should mention that, but when I left there I took this small cloth from the table as a keepsake.",
-                      "speaker_ids": [
-                        4064
-                      ]
-                    },
-                    {
-                      "player": "I don't suppose I could borrow that? It could come in useful on my quest."
-                    },
-                    {
-                      "type": "message",
-                      "text": "Galahad reluctantly passes you a small cloth.",
-                      "id": "TCOaoy"
-                    },
-                    {
-                      "type": "action",
-                      "action": "receive",
-                      "text": "a Holy table napkin",
-                      "id": "IWEKeT"
-                    }
-                  ]
-                }
-              ]
-            }
-          ],
-          "id": "4-e5Br"
         }
       ],
       "talking-to-sir-galahad-blowing-on-the-magic-whistle": [
@@ -663295,19 +664541,24 @@
       ],
       "standard-dialogue-after-completing-family-pest": [
         {
-          "npc": "I have received word from my father that you assisted us again! I get the feeling you weren't going to stop trying until you did though."
+          "npc": "I received word from my father that you assisted us again! I get the feeling you weren't going to stop trying until you did though."
         },
         {
           "type": "condition",
           "text": "If this is the first time the player has talked to Johnathon after completing Family Pest:",
           "steps": [
             {
-              "npc": "If you want, I'll provide you with as many pairs of Chaos gauntlets as you wish to say thanks!"
+              "npc": "If you want, I'll provide you with as many pairs of chaos gauntlets as you wish, to say thanks."
+            },
+            {
+              "type": "input",
+              "text": "How many would you like to take?",
+              "id": "9bws-b"
             },
             {
               "type": "message",
-              "text": "Johnathon hands you a pair of Chaos gauntlets.",
-              "id": "eNdtqa"
+              "text": "Johnathon hands you some chaos gauntlets.",
+              "id": "xIoYqJ"
             },
             {
               "npc": "You will find the power of bolt spells increases substantially whilst wearing these gauntlets."
@@ -752761,7 +754012,11 @@
         {
           "type": "line",
           "speaker": "Rologarth",
-          "text": "How goes it, friend?"
+          "text": "How goes it, friend?",
+          "speaker_ids": [
+            1270,
+            1271
+          ]
         },
         {
           "player": "I stole the Ring of Charos from Fenkenstrain."
@@ -752769,7 +754024,11 @@
         {
           "type": "line",
           "speaker": "Rologarth",
-          "text": "I saw him climb up into the Tower to hide it. It doesn't matter - soon the werewolves will come for him, and his experiments will be forever ceased."
+          "text": "I saw him climb up into the Tower to hide it. It doesn't matter - soon the werewolves will come for him, and his experiments will be forever ceased.",
+          "speaker_ids": [
+            1270,
+            1271
+          ]
         },
         {
           "player": "Do you want the ring back? It is yours after all."
@@ -752777,7 +754036,11 @@
         {
           "type": "line",
           "speaker": "Rologarth",
-          "text": "No, you keep it, my friend. Werewolves hunger for the scent of live flesh - I have no need for the ring. I have my castle back, if not my soul."
+          "text": "No, you keep it, my friend. Werewolves hunger for the scent of live flesh - I have no need for the ring. I have my castle back, if not my soul.",
+          "speaker_ids": [
+            1270,
+            1271
+          ]
         }
       ]
     }
@@ -813056,6 +814319,17 @@
         {
           "type": "line",
           "speaker": "Sir Kay",
+          "text": "'Tis a magick most powerful and foul.",
+          "speaker_ids": [
+            3521,
+            4349,
+            4352,
+            4355
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Sir Kay",
           "text": "The only person I know of who would possibly have been of help is Merlin...",
           "speaker_ids": [
             3521,
@@ -813239,7 +814513,17 @@
         {
           "type": "line",
           "speaker": "Sir Tristram",
-          "text": "Funnily enough...absolutely nothing.",
+          "text": "Funnily enough...",
+          "speaker_ids": [
+            3523,
+            4346,
+            4359
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Sir Tristram",
+          "text": "Absolutely nothing.",
           "speaker_ids": [
             3523,
             4346,
@@ -813330,18 +814614,8 @@
                       "text": "Any idea how to get into Morgan Le Faye's stronghold?",
                       "steps": [
                         {
-                          "player": "Any idea how to get into Morgan Le Faye's stronghold?"
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Sir Gawain",
-                          "text": "No, you've got me stumped there...",
-                          "speaker_ids": [
-                            3520,
-                            4348,
-                            4351,
-                            4356
-                          ]
+                          "type": "call",
+                          "branch": "Hu5XBH"
                         }
                       ]
                     },
@@ -813558,6 +814832,41 @@
             3523,
             4346,
             4359
+          ]
+        }
+      ],
+      "investigating-keep-le-faye-sir-gawain": [
+        {
+          "type": "line",
+          "speaker": "Sir Gawain",
+          "text": "Good day to you!",
+          "speaker_ids": [
+            3520,
+            4348,
+            4351,
+            4356
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Any idea how to get into Morgan Le Faye's stronghold?",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "Hu5XBH"
+                }
+              ]
+            },
+            {
+              "text": "Hello again.",
+              "steps": [
+                {
+                  "player": "Hello again."
+                }
+              ]
+            }
           ]
         }
       ],
@@ -814131,12 +815440,7 @@
                           "id": "kOxDPU"
                         }
                       ]
-                    }
-                  ]
-                },
-                {
-                  "type": "choice",
-                  "options": [
+                    },
                     {
                       "text": "OK I will do all that.",
                       "steps": [
@@ -814146,7 +815450,7 @@
                         {
                           "type": "message",
                           "text": "Morgan Le Faye vanishes.",
-                          "id": "N1Z186"
+                          "id": "62Y8K5"
                         }
                       ]
                     },
@@ -814177,7 +815481,7 @@
                         {
                           "type": "jump",
                           "reference": "other",
-                          "id": "TLmhNn"
+                          "id": "Pwa7Rx"
                         }
                       ]
                     }
@@ -814263,6 +815567,14 @@
                   "type": "line",
                   "speaker": "Candle maker",
                   "text": "I still dunno...",
+                  "speaker_ids": [
+                    3199
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Candle maker",
+                  "text": "Tell you what. I'll supply you with a black candle...",
                   "speaker_ids": [
                     3199
                   ]
@@ -814562,7 +815874,20 @@
           "type": "choice",
           "options": [
             {
-              "text": "Who are you?"
+              "text": "Who are you?",
+              "steps": [
+                {
+                  "player": "Who are you?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "The Lady of the Lake",
+                  "text": "I am the Lady of the Lake.",
+                  "speaker_ids": [
+                    3530
+                  ]
+                }
+              ]
             },
             {
               "text": "Good day.",
@@ -814650,84 +815975,78 @@
           "type": "choice",
           "options": [
             {
-              "text": "Yes certainly."
-            }
-          ]
-        },
-        {
-          "type": "condition",
-          "text": "If the player has bread in their inventory:",
-          "steps": [
-            {
-              "player": "Yes, certainly."
-            },
-            {
-              "type": "message",
-              "text": "You give the bread to the beggar.",
-              "id": "emEYqa"
-            },
-            {
-              "type": "line",
-              "speaker": "Beggar",
-              "text": "Thank you very much!",
-              "speaker_ids": [
-                3532
+              "text": "Yes certainly.",
+              "steps": [
+                {
+                  "type": "condition",
+                  "text": "If the player has bread in their inventory:",
+                  "steps": [
+                    {
+                      "player": "Yes, certainly."
+                    },
+                    {
+                      "type": "message",
+                      "text": "You give the bread to the beggar.",
+                      "id": "nwLfk0"
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Beggar",
+                      "text": "Thank you very much!",
+                      "speaker_ids": [
+                        3532
+                      ]
+                    },
+                    {
+                      "type": "message",
+                      "text": "The beggar has turned into the Lady of the Lake!",
+                      "id": "BVKMHf"
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "The Lady of the Lake",
+                      "text": "Well done. You have passed my test.",
+                      "speaker_ids": [
+                        3530
+                      ]
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "The Lady of the Lake",
+                      "text": "Here is Excalibur, guard it well.",
+                      "speaker_ids": [
+                        3530
+                      ]
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "f2nU4m"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player has no bread in their inventory:",
+                  "steps": [
+                    {
+                      "player": "Yes, certainly."
+                    },
+                    {
+                      "player": "... except I don't have any bread on me at the moment..."
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Beggar",
+                      "text": "Well, if you get some, you know where to come.",
+                      "speaker_ids": [
+                        3532
+                      ]
+                    }
+                  ],
+                  "id": "TTqIpl"
+                }
               ]
             },
-            {
-              "type": "message",
-              "text": "The beggar has turned into the Lady of the Lake!",
-              "id": "4DJqdx"
-            },
-            {
-              "type": "line",
-              "speaker": "The Lady of the Lake",
-              "text": "Well done. You have passed my test.",
-              "speaker_ids": [
-                3530
-              ]
-            },
-            {
-              "type": "line",
-              "speaker": "The Lady of the Lake",
-              "text": "Here is Excalibur, guard it well.",
-              "speaker_ids": [
-                3530
-              ]
-            },
-            {
-              "type": "end"
-            }
-          ],
-          "id": "Ab4k10"
-        },
-        {
-          "type": "condition",
-          "text": "If the player has no bread in their inventory:",
-          "steps": [
-            {
-              "player": "Yes, certainly."
-            },
-            {
-              "player": "... except I don't have any bread on me at the moment..."
-            },
-            {
-              "type": "line",
-              "speaker": "Beggar",
-              "text": "Well, if you get some, you know where to come.",
-              "speaker_ids": [
-                3532
-              ]
-            },
-            {
-              "type": "end"
-            }
-          ],
-          "id": "yXizE3"
-        },
-        {
-          "type": "choice",
-          "options": [
             {
               "text": "No I don't have any bread with me.",
               "steps": [
@@ -814760,76 +816079,70 @@
           "type": "choice",
           "options": [
             {
-              "text": "Yes, here you go."
-            }
-          ]
-        },
-        {
-          "type": "condition",
-          "text": "If the player has bread in their inventory:",
-          "steps": [
-            {
-              "player": "Yes, here you go."
-            },
-            {
-              "type": "message",
-              "text": "You give the bread to the beggar.",
-              "id": "aS5Xkw"
-            },
-            {
-              "type": "line",
-              "speaker": "Beggar",
-              "text": "Thank you very much!",
-              "speaker_ids": [
-                3532
+              "text": "Yes, here you go.",
+              "steps": [
+                {
+                  "type": "condition",
+                  "text": "If the player has bread in their inventory:",
+                  "steps": [
+                    {
+                      "player": "Yes, here you go."
+                    },
+                    {
+                      "type": "message",
+                      "text": "You give the bread to the beggar.",
+                      "id": "l56X2t"
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Beggar",
+                      "text": "Thank you very much!",
+                      "speaker_ids": [
+                        3532
+                      ]
+                    },
+                    {
+                      "type": "message",
+                      "text": "The beggar has turned into the Lady of the Lake!",
+                      "id": "UTsfYc"
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "The Lady of the Lake",
+                      "text": "Well done. You have passed my test.",
+                      "speaker_ids": [
+                        3530
+                      ]
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "The Lady of the Lake",
+                      "text": "Here is Excalibur, guard it well.",
+                      "speaker_ids": [
+                        3530
+                      ]
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "Z5t9Wk"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player has no bread in their inventory:",
+                  "steps": [
+                    {
+                      "player": "Yes, here you go."
+                    },
+                    {
+                      "player": "Actually, I'm wrong. I still don't have any bread. Sorry."
+                    }
+                  ],
+                  "id": "5CjN_l"
+                }
               ]
             },
-            {
-              "type": "message",
-              "text": "The beggar has turned into the Lady of the Lake!",
-              "id": "IgIzfo"
-            },
-            {
-              "type": "line",
-              "speaker": "The Lady of the Lake",
-              "text": "Well done. You have passed my test.",
-              "speaker_ids": [
-                3530
-              ]
-            },
-            {
-              "type": "line",
-              "speaker": "The Lady of the Lake",
-              "text": "Here is Excalibur, guard it well.",
-              "speaker_ids": [
-                3530
-              ]
-            },
-            {
-              "type": "end"
-            }
-          ],
-          "id": "nxaoXZ"
-        },
-        {
-          "type": "condition",
-          "text": "If the player has no bread in their inventory:",
-          "steps": [
-            {
-              "player": "Yes, here you go."
-            },
-            {
-              "player": "Actually, I'm wrong. I still don't have any bread. Sorry."
-            },
-            {
-              "type": "end"
-            }
-          ],
-          "id": "m_1ATt"
-        },
-        {
-          "type": "choice",
-          "options": [
             {
               "text": "No, I still have none.",
               "steps": [
@@ -815193,6 +816506,22 @@
             3519,
             4344,
             4354
+          ]
+        }
+      ],
+      "Hu5XBH": [
+        {
+          "player": "Any idea how to get into Morgan Le Faye's stronghold?"
+        },
+        {
+          "type": "line",
+          "speaker": "Sir Gawain",
+          "text": "No, you've got me stumped there...",
+          "speaker_ids": [
+            3520,
+            4348,
+            4351,
+            4356
           ]
         }
       ]
@@ -867268,7 +868597,12 @@
         {
           "type": "line",
           "speaker": "Guard",
-          "text": "Sorry, you can't come in here."
+          "text": "Sorry, you can't come in here.",
+          "speaker_ids": [
+            1910,
+            1911,
+            1912
+          ]
         }
       ],
       "dig-site-gate-without-153-kudos": [
@@ -867286,7 +868620,12 @@
           "type": "line",
           "speaker": "Guard",
           "text": "Sorry - workman's gate only.",
-          "presentation": "overhead"
+          "presentation": "overhead",
+          "speaker_ids": [
+            1910,
+            1911,
+            1912
+          ]
         },
         {
           "npc": "Hello there! Sorry, I can't stop to talk. I'm guarding this workman's gate. I'm afraid you can't come through here - you'll need to find another way around."
@@ -867302,7 +868641,12 @@
           "type": "line",
           "speaker": "Guard",
           "text": "Sorry - workman's gate only.",
-          "presentation": "overhead"
+          "presentation": "overhead",
+          "speaker_ids": [
+            1910,
+            1911,
+            1912
+          ]
         }
       ],
       "dig-site-gate-with-153-kudos": [
@@ -867319,7 +868663,12 @@
         {
           "type": "line",
           "speaker": "Guard",
-          "text": "Welcome! Would you like to go into the Dig Site archaeology cleaning area?"
+          "text": "Welcome! Would you like to go into the Dig Site archaeology cleaning area?",
+          "speaker_ids": [
+            1910,
+            1911,
+            1912
+          ]
         },
         {
           "type": "choice",
@@ -867366,7 +868715,12 @@
         {
           "type": "line",
           "speaker": "Guard",
-          "text": "Sorry, you can't come in here unless you've completed the Dig Site quest."
+          "text": "Sorry, you can't come in here unless you've completed the Dig Site quest.",
+          "speaker_ids": [
+            1910,
+            1911,
+            1912
+          ]
         }
       ],
       "museum-doors-dialogue-after-completing-the-dig-site": [
@@ -867393,7 +868747,12 @@
         {
           "type": "line",
           "speaker": "Guard",
-          "text": "Hold up there, workman coming through! You'll have to wait a moment; don't want to fall into that wheelbarrow!"
+          "text": "Hold up there, workman coming through! You'll have to wait a moment; don't want to fall into that wheelbarrow!",
+          "speaker_ids": [
+            1910,
+            1911,
+            1912
+          ]
         }
       ]
     }
@@ -948508,9 +949867,6 @@
                                         }
                                       ],
                                       "id": "wpVFFv"
-                                    },
-                                    {
-                                      "type": "end"
                                     }
                                   ]
                                 },
@@ -948519,9 +949875,6 @@
                                   "steps": [
                                     {
                                       "player": "Oh, I'll not bother then."
-                                    },
-                                    {
-                                      "type": "end"
                                     }
                                   ]
                                 }
@@ -948546,42 +949899,30 @@
                             14984,
                             14985
                           ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "(Charm) You don't need to look through my things.",
+                      "steps": [
+                        {
+                          "player": "You don't need to look through my things."
                         },
                         {
-                          "type": "end"
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "type": "condition",
-                  "text": "If the player is wearing the Ring of Charos(a):",
-                  "steps": [
-                    {
-                      "type": "choice",
-                      "options": [
-                        {
-                          "text": "(Charm) You don't need to look through my things.",
-                          "steps": [
-                            {
-                              "player": "You don't need to look through my things."
-                            },
-                            {
-                              "type": "line",
-                              "speaker": "Customs officer",
-                              "text": "Oh, I think I do. If you don't want to let me search your possessions, then you're not coming aboard this ship.",
-                              "speaker_ids": [
-                                14984,
-                                14985
-                              ]
-                            }
+                          "type": "line",
+                          "speaker": "Customs officer",
+                          "text": "Oh, I think I do. If you don't want to let me search your possessions, then you're not coming aboard this ship.",
+                          "speaker_ids": [
+                            14984,
+                            14985
                           ]
                         }
-                      ]
+                      ],
+                      "id": "DDoK7v",
+                      "condition": "If the player is wearing the Ring of Charos(a):",
+                      "condition_id": "Ytnuk6"
                     }
-                  ],
-                  "id": "Ytnuk6"
+                  ]
                 }
               ]
             },
@@ -1030161,125 +1031502,116 @@
                   ]
                 }
               ]
-            }
-          ]
-        },
-        {
-          "type": "condition",
-          "text": "If the player has a message for him:",
-          "steps": [
+            },
             {
-              "type": "choice",
-              "options": [
+              "text": "The Wise Old Man of Draynor Village sent you this message.",
+              "steps": [
                 {
-                  "text": "The Wise Old Man of Draynor Village sent you this message.",
+                  "player": "The Wise Old Man of Draynor Village sent you this message."
+                },
+                {
+                  "npc": "Ah, I am always delighted to hear from him. You would not imagine the depths of his wisdom!"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player has no inventory space for a reward:",
                   "steps": [
                     {
-                      "player": "The Wise Old Man of Draynor Village sent you this message."
+                      "npc": "I'd give you a reward, but you don't seem to have any space for it. Come back when you do."
                     },
                     {
-                      "npc": "Ah, I am always delighted to hear from him. You would not imagine the depths of his wisdom!"
-                    },
+                      "type": "end"
+                    }
+                  ],
+                  "id": "8-sbDP"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player has at least one inventory space for a reward:",
+                  "steps": [
                     {
-                      "type": "condition",
-                      "text": "If the player has no inventory space for a reward:",
-                      "steps": [
+                      "type": "random",
+                      "options": [
                         {
-                          "npc": "I'd give you a reward, but you don't seem to have any space for it. Come back when you do."
+                          "text": "If the player receives coins:",
+                          "steps": [
+                            {
+                              "type": "message",
+                              "text": "Reldo gives you some coins.",
+                              "styled": "<col=000080>Reldo gives you some coins</col>.",
+                              "id": "BfjLdv"
+                            },
+                            {
+                              "type": "action",
+                              "action": "receive",
+                              "text": "some coins",
+                              "id": "f5CkYf"
+                            },
+                            {
+                              "npc": "King Roald has been very generous with my salary, so I can spare you some coins for your trouble."
+                            },
+                            {
+                              "type": "end"
+                            }
+                          ]
                         },
                         {
-                          "type": "end"
-                        }
-                      ],
-                      "id": "8-sbDP"
-                    },
-                    {
-                      "type": "condition",
-                      "text": "If the player has at least one inventory space for a reward:",
-                      "steps": [
+                          "text": "If the player receives seeds:",
+                          "steps": [
+                            {
+                              "type": "message",
+                              "text": "Reldo gives you some seeds.",
+                              "styled": "<col=000080>Reldo gives you some seeds.</col>",
+                              "id": "dUlBWy"
+                            },
+                            {
+                              "type": "action",
+                              "action": "receive",
+                              "text": "assorted seeds",
+                              "id": "FMeJg4"
+                            },
+                            {
+                              "npc": "These little things seem to be everywhere these days! Perhaps you'd like them?"
+                            },
+                            {
+                              "type": "end"
+                            }
+                          ]
+                        },
                         {
-                          "type": "random",
-                          "options": [
+                          "text": "If the player receives runes:",
+                          "steps": [
                             {
-                              "text": "If the player receives coins:",
-                              "steps": [
-                                {
-                                  "type": "message",
-                                  "text": "Reldo gives you some coins.",
-                                  "styled": "<col=000080>Reldo gives you some coins</col>.",
-                                  "id": "BfjLdv"
-                                },
-                                {
-                                  "type": "action",
-                                  "action": "receive",
-                                  "text": "some coins",
-                                  "id": "f5CkYf"
-                                },
-                                {
-                                  "npc": "King Roald has been very generous with my salary, so I can spare you some coins for your trouble."
-                                },
-                                {
-                                  "type": "end"
-                                }
-                              ]
+                              "type": "message",
+                              "text": "Reldo gives you some runes.",
+                              "styled": "<col=000080>Reldo gives you some runes.</col>",
+                              "id": "SzA69R"
                             },
                             {
-                              "text": "If the player receives seeds:",
-                              "steps": [
-                                {
-                                  "type": "message",
-                                  "text": "Reldo gives you some seeds.",
-                                  "styled": "<col=000080>Reldo gives you some seeds.</col>",
-                                  "id": "dUlBWy"
-                                },
-                                {
-                                  "type": "action",
-                                  "action": "receive",
-                                  "text": "assorted seeds",
-                                  "id": "FMeJg4"
-                                },
-                                {
-                                  "npc": "These little things seem to be everywhere these days! Perhaps you'd like them?"
-                                },
-                                {
-                                  "type": "end"
-                                }
-                              ]
+                              "type": "action",
+                              "action": "receive",
+                              "text": "assorted runes",
+                              "id": "nTuSuc"
                             },
                             {
-                              "text": "If the player receives runes:",
-                              "steps": [
-                                {
-                                  "type": "message",
-                                  "text": "Reldo gives you some runes.",
-                                  "styled": "<col=000080>Reldo gives you some runes.</col>",
-                                  "id": "SzA69R"
-                                },
-                                {
-                                  "type": "action",
-                                  "action": "receive",
-                                  "text": "assorted runes",
-                                  "id": "nTuSuc"
-                                },
-                                {
-                                  "npc": "My old friend Aubury sent me some runes in return for some books he wanted. Perhaps you'd like them?"
-                                },
-                                {
-                                  "type": "end"
-                                }
-                              ]
+                              "npc": "My old friend Aubury sent me some runes in return for some books he wanted. Perhaps you'd like them?"
+                            },
+                            {
+                              "type": "end"
                             }
                           ]
                         }
-                      ],
-                      "id": "s8c04w"
+                      ]
                     }
-                  ]
+                  ],
+                  "id": "s8c04w"
                 }
-              ]
+              ],
+              "id": "b6-VeS",
+              "condition": "If the player has a message for him:",
+              "condition_id": "FeOKl3"
             }
-          ],
-          "id": "FeOKl3"
+          ]
         },
         {
           "type": "choice",
@@ -1041065,7 +1042397,10 @@
       {
         "type": "line",
         "speaker": "Ben",
-        "text": "Daddy I'm tired."
+        "text": "Daddy I'm tired.",
+        "speaker_ids": [
+          7012
+        ]
       },
       {
         "type": "line",
@@ -1141252,6 +1142587,46 @@
         }
       ],
       "after-making-history": [
+        {
+          "npc": "Silver! Silver! Best prices for buying and selling in all Kandarin!"
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Yes please.",
+              "steps": [
+                {
+                  "player": "Yes please."
+                },
+                {
+                  "type": "action",
+                  "action": "open_shop",
+                  "target": "Ardougne Silver Stall.",
+                  "id": "XHvPMh"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Ask about the outpost.",
+              "steps": []
+            },
+            {
+              "text": "No thank you.",
+              "steps": [
+                {
+                  "player": "No thank you."
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            }
+          ]
+        },
         {
           "player": "Hello again."
         },
@@ -1263362,14 +1264737,22 @@
         {
           "type": "line",
           "speaker": "Pupil",
-          "text": "Aww, but miss, it's sooo exciting."
+          "text": "Aww, but miss, it's sooo exciting.",
+          "speaker_ids": [
+            1913,
+            1922
+          ]
         }
       ],
       "the-teacher-and-pupil-on-the-2nd-floor": [
         {
           "type": "line",
           "speaker": "Pupil",
-          "text": "That man over there talks funny, miss."
+          "text": "That man over there talks funny, miss.",
+          "speaker_ids": [
+            1913,
+            1922
+          ]
         },
         {
           "type": "line",
@@ -1410577,9 +1411960,6 @@
                       "branch": "jump-1378b4bf47817c03"
                     }
                   ]
-                },
-                {
-                  "type": "end"
                 }
               ]
             },
@@ -1410597,81 +1411977,72 @@
                   ]
                 }
               ]
-            }
-          ]
-        },
-        {
-          "type": "condition",
-          "text": "If the player does not have Excalibur in their bank or inventory:",
-          "steps": [
+            },
             {
-              "type": "choice",
-              "options": [
+              "text": "I seek the sword Excalibur.",
+              "steps": [
                 {
-                  "text": "I seek the sword Excalibur.",
+                  "player": "I seek the sword Excalibur."
+                },
+                {
+                  "npc": "Aye, I have that artefact in my possession."
+                },
+                {
+                  "npc": "'Tis very valuable, and not an artefact to be given away lightly."
+                },
+                {
+                  "npc": "...But you have already proved thyself to be worthy of wielding it once already. I shall return it to you if you can prove yourself to still be worthy."
+                },
+                {
+                  "player": "...And how can I do that?"
+                },
+                {
+                  "npc": "Why, by proving yourself to be above material goods."
+                },
+                {
+                  "npc": "500 gold coins ought to do it."
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player has at least 500 coins in their inventory:",
                   "steps": [
                     {
-                      "player": "I seek the sword Excalibur."
+                      "player": "Ok, here you go."
                     },
                     {
-                      "npc": "Aye, I have that artefact in my possession."
+                      "npc": "You are still worthy to wield Excalibur! And thanks for the cash! I felt like getting a new haircut!"
                     },
                     {
-                      "npc": "'Tis very valuable, and not an artefact to be given away lightly."
+                      "type": "action",
+                      "action": "receive",
+                      "text": "Excalibur",
+                      "id": "eytHdp"
                     },
                     {
-                      "npc": "...But you have already proved thyself to be worthy of wielding it once already. I shall return it to you if you can prove yourself to still be worthy."
-                    },
-                    {
-                      "player": "...And how can I do that?"
-                    },
-                    {
-                      "npc": "Why, by proving yourself to be above material goods."
-                    },
-                    {
-                      "npc": "500 gold coins ought to do it."
-                    },
-                    {
-                      "type": "condition",
-                      "text": "If the player has at least 500 coins in their inventory:",
-                      "steps": [
-                        {
-                          "player": "Ok, here you go."
-                        },
-                        {
-                          "npc": "You are still worthy to wield Excalibur! And thanks for the cash! I felt like getting a new haircut!"
-                        },
-                        {
-                          "type": "action",
-                          "action": "receive",
-                          "text": "Excalibur",
-                          "id": "eytHdp"
-                        },
-                        {
-                          "type": "end"
-                        }
-                      ],
-                      "id": "7SJ4CH"
-                    },
-                    {
-                      "type": "condition",
-                      "text": "If the player does not have at least 500 coins in their inventory:",
-                      "steps": [
-                        {
-                          "player": "I don't have that kind of money..."
-                        },
-                        {
-                          "npc": "Well, come back when you do."
-                        }
-                      ],
-                      "id": "Q9DcHQ"
+                      "type": "end"
                     }
-                  ]
+                  ],
+                  "id": "7SJ4CH"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player does not have at least 500 coins in their inventory:",
+                  "steps": [
+                    {
+                      "player": "I don't have that kind of money..."
+                    },
+                    {
+                      "npc": "Well, come back when you do."
+                    }
+                  ],
+                  "id": "Q9DcHQ"
                 }
-              ]
+              ],
+              "id": "kJpG5a",
+              "condition": "If the player does not have Excalibur in their bank or inventory:",
+              "condition_id": "59whJB"
             }
-          ],
-          "id": "59whJB"
+          ]
         }
       ],
       "treasure-trails-easy": [

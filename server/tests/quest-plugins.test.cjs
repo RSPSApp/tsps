@@ -302,6 +302,7 @@ test('Family Crest brothers swap gauntlets for free or 25,000 coins, and Chronoz
   const messages = [];
   const player = {
     getAttribute: () => 0,
+    setAttribute: () => {},
     sendMessage: m => messages.push(m),
     getInventory: () => ({
       getAmount: id => items.get(id) ?? 0,
@@ -351,13 +352,12 @@ test('Family Crest brothers swap gauntlets for free or 25,000 coins, and Chronoz
     return event.preventDeath;
   };
 
+  // "Chronozon weakens..." comes with each Blast cast (magic:cast-committed; tests/family-crest-capture.test.cjs), not the hit.
   messages.length = 0;
   impact(null);
-  assert.deepEqual(messages, [], 'spell-less magic damage does not count as the selected Blast');
   impact(CombatSpells.FIRE_BLAST);
   impact(CombatSpells.WIND_BLAST);
-  assert.deepEqual(messages, ['Chronozon weakens...', 'Chronozon weakens...'],
-    'a manual Wind Blast counts while Fire Blast is autocast');
+  assert.deepEqual(messages, [], 'hits say nothing');
   impact(CombatSpells.WATER_BLAST);
   assert.equal(beforeDeath(), true, 'Chronozon returns to full health without all four blasts');
   assert.equal(npc.hp, 170);
@@ -7798,6 +7798,17 @@ test('Desert Treasure II enters the cache Ancient Vault and requires the four st
     assert.ok(interfaces.includes(749), 'the plaque opens woodplaque');
     interactions.find((entry) => entry.name === 'Asgarnia Smith').options['Talk-to']({ player, npcId: 1 });
     assert.equal(quest.getStage(player), 2, 'only the four statues and plaque advance the vault step');
+    // rsprox 1827, 3168: a statue holding its medallion says so; one still empty doesn't.
+    const statueText = () => {
+      const box = statements.at(-1).getDialogues().get(0);
+      return box.text ?? box.getText?.() ?? JSON.stringify(box);
+    };
+    attrs.set('desert-treasure-ii:medallions-placed', 1);
+    assert.equal(inspect(49499, 3941, 9635), true);
+    assert.match(statueText(), /The statue is holding a medallion\..*Carnifex Maximus Vardorvis/s);
+    assert.equal(inspect(49501, 3931, 9635), true);
+    assert.match(statueText(), /meant to be holding something\..*The Whisperer/s);
+    assert.equal(quest.getStage(player), 2, 'inspecting after the vault step does not move the quest');
     assert.equal(inspect(O.STEPS_23, 3925, 9630), true, 'the actual entrance steps let the player leave');
     assert.deepEqual([player.location.x, player.location.y, player.location.z], [3510,2971,0]);
     objectInteractions.find(h => h.name === 'handleObjectInteraction')(outerDoor);
@@ -16096,6 +16107,8 @@ test('Gertrude sells a replacement kitten for 100 coins after her quest', () => 
   });
   delete require.cache[require.resolve('../plugins/quests/quests/GertrudesCat.Quest')];
   require('../plugins/quests/quests/GertrudesCat.Quest')(api);
+  // The sale itself is the Gertrude plugin's (issue 6772: the quest's copy never ran from her page).
+  require('../plugins/npcs/Gertrude.plugin').register(api);
   const attrs = new Map([['quest.gertrudes_cat.stage', 6]]);
   const inventory = new Map([[api.core.ItemIdentifiers.COINS, 123]]);
   const player = {
@@ -16115,7 +16128,9 @@ test('Gertrude sells a replacement kitten for 100 coins after her quest', () => 
   for (const handler of handlers.custom.get('npc-dialogue:action') ?? []) handler(event);
   assert.equal(event.handled, true);
   assert.equal(inventory.get(api.core.ItemIdentifiers.COINS), 23);
-  assert.equal(inventory.get(api.core.ItemIdentifiers.PET_KITTEN), 1);
+  // A random colour without the Ring of Charos(a) (Wiki, Gertrude).
+  const kittens = [1555, 1556, 1557, 1558, 1559, 1560].reduce((sum, id) => sum + (inventory.get(id) ?? 0), 0);
+  assert.equal(kittens, 1);
 });
 
 
@@ -23497,6 +23512,9 @@ test('a quest not started yet opens the overview with its start sentence', () =>
       getSkillManager: () => ({ getCombatLevel: () => 3, getMaxLevel: () => 1, getCurrentLevel: () => 1 }),
       getInventory: () => ({ contains: () => false, getAmount: () => 0 }), getEquipment: () => ({ contains: () => false }),
     };
+    // The Enchanted Key's row before Making History: live's overview text for it is not recorded,
+    // so it opens nothing (docs/quests/the-enchanted-key/README.md).
+    if (quest.key === 'the_enchanted_key') continue;
     openJournal(player, quest);
     const setup = scripts.find(([id]) => id === overviewSetup);
     if (!setup) {

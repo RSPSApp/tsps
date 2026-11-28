@@ -87,6 +87,12 @@ class LobbyParty {
     this.broadcastMembers();
   }
 
+  /** Swap adjacent lobby rows, taking the new leader's settings if first place changes. */
+  swap(first, second) {
+    [this.players[first], this.players[second]] = [this.players[second], this.players[first]];
+    if (first === 0 || second === 0) this.settings = settingsOf(this.leader);
+  }
+
   memberList() {
     const names = Array.from({ length: Shared.MAX_PARTY_SIZE }, (_, i) =>
       this.players[i] ? Shared.displayName(this.players[i]) : "-");
@@ -141,7 +147,7 @@ class LobbyParty {
       inherited.kcRequirement = this.settings.kcRequirement;
       this.settings = inherited;
     }
-    if (this.players.length === 0) this.unlist();
+    if (this.players.length === 0 && !this.insideRaid()) this.unlist();
     if (clearOverlay) sendEmptyPartyOverlay(player);
     return true;
   }
@@ -178,7 +184,7 @@ function sendEmptyPartyOverlay(player) {
 
 function createParty(leader) {
   const party = new LobbyParty(leader);
-  lobbyParties.push(party);
+  lobbyParties.unshift(party);
   return party;
 }
 

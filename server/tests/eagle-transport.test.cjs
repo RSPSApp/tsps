@@ -114,18 +114,14 @@ test('every id resolves from the cache', () => {
   }
 });
 
-test("a player who has done the quest gets their own Quick-travel eagles in a far eyrie; they fly to the Peak", () => {
-  const player = fakePlayer(3425, 9569, 0);
-  Flight.showEagles(player, 'desert');
-  assert.equal(spawned.length, 2);
-  assert.ok(spawned.every((n) => n.id === 1487 && n.ownerOnly === true && n.owner === player));
-  assert.deepEqual(spawned.map((n) => [n.x, n.y]), [[3422, 9568], [3428, 9565]]);
-  assert.deepEqual(Flight.destination(spawned[0]), [2022, 4960, 3], 'back to the Peak, not out again');
-  Flight.removeEagles(player);
-  assert.equal(removed.length, 2);
-  questDone = false;
-  Flight.showEagles(player, 'desert');
-  assert.equal(spawned.length, 2, 'none before the quest is done');
+test("the far eyries' eagles are their own spawns (1491-1493), shown at eaglepeak_quest 40; they fly to the Peak", () => {
+  for (const [far, peak] of [[1491, 1487], [1492, 1488], [1493, 1489]]) {
+    const def = core.CacheDefinitions.getNpc(far);
+    assert.equal(def.transformVarbit, 2780);
+    assert.equal(def.transforms[40], peak, `${far} shows as ${peak} once the quest is done`);
+  }
+  const npc = { getId: () => 1491, getLocation: () => new core.Location(3422, 9568, 0) };
+  assert.deepEqual(Flight.destination(npc), Common.data.peak.arrive, 'back to the Peak, not out again');
 });
 
 test('a second click mid-flight does nothing; dying on the way is left to the death', () => {
@@ -330,10 +326,14 @@ test('the Uzer boulder: 45 Strength pushes past it, either way', () => {
   assert.equal(Eyries.pushBoulder({ player, npc: { getId: () => 1 } }), false);
 });
 
-test("Eagles' Peak's own stages are untouched: eaglepeak_quest is not driven to 40", () => {
+test("Eagles' Peak's saved stage is eaglepeak_quest itself, 40 once complete: the value the far eagles show at", () => {
+  const state = require('../plugins/quests/eaglespeak/State.EaglesPeak')({ core, persistAttribute() {} });
+  assert.equal(state.VARBIT.QUEST, 2780);
+  assert.equal(state.STAGE.COMPLETE, 40);
   const source = require('node:fs').readFileSync(path.join(__dirname, '..', 'plugins', 'quests', 'quests', 'EaglesPeak.Quest.js'), 'utf8');
-  assert.doesNotMatch(source, /varbitValue/);
-  assert.match(source, /EagleTransport\.plugin\.js/);
+  assert.match(source, /varbitId: state\.VARBIT\.QUEST/);
+  assert.match(source, /completionValue: state\.STAGE\.COMPLETE/);
+  assert.doesNotMatch(source, /varbitValue/, 'the saved stage is sent as it is');
 });
 
 test('a closed connection cannot arrive while real combat keeps the player registered', () => {

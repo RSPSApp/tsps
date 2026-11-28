@@ -86,7 +86,7 @@ test("heading math", () => {
 
 test("a stopped boat stays put", () => {
   const boat = makeRaft(NORTH);
-  assert.deepEqual(tickBoat(boat, openSea), { moved: false, turned: false, blocked: false });
+  assert.deepEqual(tickBoat(boat, openSea), { moved: false, turned: false, blocked: false, slid: false });
 });
 
 /** How far the boat moves on each of `ticks` ticks, in fine units. */
@@ -135,7 +135,7 @@ test("a stopped boat drifts on, losing half a tile a tick (rsprox: 2.5, 2, 1.5, 
   boat.moveMode = BoatMoveMode.Stopped;
   assert.deepEqual(steps(boat, 6), [256, 192, 128, 64, 0, 0]);
   assert.equal(boat.velocity, 0);
-  assert.deepEqual(tickBoat(boat, openSea), { moved: false, turned: false, blocked: false }, "then stays put");
+  assert.deepEqual(tickBoat(boat, openSea), { moved: false, turned: false, blocked: false, slid: false }, "then stays put");
 });
 
 test("running aground loses all way at once", () => {
@@ -159,6 +159,134 @@ test("a fast boat stops at a one-tile strip of land instead of hopping it", () =
   for (const tile of hullTiles(boat, boat.fineX, boat.fineY, boat.angle)) {
     assert.ok(tile % 0x8000 < 102, "hull never crosses the strip");
   }
+});
+
+const NORTH_EAST = 1280;
+
+/** A boat with a half-tile square hull, so which tiles it covers is plain. */
+function smallBoat(angle) {
+  const boat = new Boat({ ...makeRaftInit(), hull: { offsetX: 0, offsetY: 0, width: 64, length: 64 }, angle });
+  boat.heading = angle;
+  boat.moveMode = BoatMoveMode.Full;
+  boat.velocity = 192;
+  return boat;
+}
+
+test("a boat blocked on one axis slides along the other at full length and keeps its speed (rsprox)", () => {
+  // A wall east of x 102 that ends at y 106: the boat heading north-east slides north along it,
+  // the blocked east-west part exactly 0, then takes up its full diagonal again once clear.
+  const wall = (x, y) => x < 103 || y >= 106;
+  const boat = smallBoat(NORTH_EAST);
+  const full = angleToFineDelta(NORTH_EAST, 192);
+  const moves = [];
+  for (let i = 0; i < 8; i++) {
+    const x = boat.fineX;
+    const y = boat.fineY;
+    const step = tickBoat(boat, wall);
+    moves.push({ dx: boat.fineX - x, dy: boat.fineY - y, slid: step.slid, blocked: step.blocked });
+  }
+  const freeMove = { dx: full.dx, dy: full.dy, slid: false, blocked: false };
+  const slide = { dx: 0, dy: full.dy, slid: true, blocked: false };
+  assert.deepEqual(moves[0], freeMove, "free at first");
+  const first = moves.findIndex((move) => move.slid);
+  const last = moves.findLastIndex((move) => move.slid);
+  assert.ok(first > 0 && last > first, "slides for several ticks along the wall");
+  for (const move of moves.slice(first, last + 1)) assert.deepEqual(move, slide, "only the north part, at full length");
+  assert.equal(boat.velocity, 192, "no way lost while sliding");
+  assert.deepEqual(moves[last + 1], freeMove, "the full move again past the wall");
+});
+
+test("when either part alone would fit, the slide takes the north-south part (rsprox)", () => {
+  const rock = (x, y) => !(x === 101 && y === 101);
+  const boat = smallBoat(NORTH_EAST);
+  const x = boat.fineX;
+  const y = boat.fineY;
+  assert.equal(tickBoat(boat, rock).slid, true);
+  assert.equal(boat.fineX, x, "the east-west part is dropped");
+  assert.equal(boat.fineY - y, angleToFineDelta(NORTH_EAST, 192).dy);
+});
+
+/** Loads the map squares round a tile with the real cache, restoring the region table after. */
+function withRealMap(tiles, run) {
+  const regions = new Map(RegionManager.regions);
+  RegionManager.init();
+  try {
+    for (const [x, y] of tiles) RegionManager.loadMapFiles(x, y);
+    return run();
+  } finally {
+    RegionManager.regions.clear();
+    for (const [id, region] of regions) RegionManager.regions.set(id, region);
+  }
+}
+
+function realRaft(x, y, angle, init = {}) {
+  const boat = new Boat({ ...makeRaftInit(), fineX: Math.round(x * 128), fineY: Math.round(y * 128), angle, ...init });
+  boat.heading = angle;
+  boat.moveMode = BoatMoveMode.Full;
+  boat.velocity = boat.baseSpeed;
+  return boat;
+}
+
+function makeRaftInit() {
+  const raft = makeRaft();
+  return {
+    entityIndex: raft.entityIndex, configId: 1, ownerPlayerId: 1, deckRegionX: 1200, deckRegionY: 1200,
+    sizeX: 8, sizeZ: 8, hull: raft.hull, deckCentreX: 448, deckCentreY: 448, level: 0, fineX: raft.fineX, fineY: raft.fineY,
+  };
+}
+
+test("blocked-flagged water is unsailable: jetty and bridge edges, not open sea", () => {
+  withRealMap([[3047, 3203], [3114, 3186]], () => {
+    const sailable = (x, y) => BoatManager.isSailable(x, y, 0);
+    // Port Sarim: the water round the north jetty (y 3202-3204) and its seaward end (x 3051).
+    for (const [x, y] of [[3046, 3201], [3051, 3203], [3046, 3205]]) assert.equal(sailable(x, y), false, `${x},${y} by the jetty`);
+    // Wizards' Tower bridge: its railing columns x 3111 and 3116.
+    for (const y of [3184, 3186, 3193]) {
+      assert.equal(sailable(3111, y), false, `bridge west railing at y ${y}`);
+      assert.equal(sailable(3116, y), false, `bridge east railing at y ${y}`);
+    }
+    for (const [x, y] of [[3055, 3203], [3106, 3186], [3120, 3186]]) assert.equal(sailable(x, y), true, `${x},${y} is open sea`);
+  });
+});
+
+test("a raft can't sail over the Wizards' Tower bridge (user's capture: it crossed at y 3193.7)", () => {
+  withRealMap([[3100, 3193], [3114, 3193]], () => {
+    // The user's tsps recording sailed due east from (3100.4, 3193.7) straight over it; live
+    // boats never get past x 3109 on its west side (rsprox 03838, 03836, 00983, 01009).
+    const boat = realRaft(3100.4296875, 3193.6640625, EAST);
+    for (let i = 0; i < 20; i++) tickBoat(boat, BoatManager.isSailable);
+    for (const tile of hullTiles(boat, boat.fineX, boat.fineY, boat.angle)) {
+      assert.ok(Math.floor(tile / 0x8000) < 3111, "hull stays west of the bridge");
+    }
+    assert.equal(boat.velocity, 0, "ran aground against it");
+  });
+});
+
+test("a skiff heading east-north-east slides north along the Wizards' Tower bridge (rsprox 00983 ticks 376-381)", () => {
+  withRealMap([[3108, 3186], [3114, 3190]], () => {
+    // Live: from (3108.25, 3186.5) at angle 1408 the skiff moved (0, +1) a tick for 6 ticks,
+    // x held at 3108.25, after moving (+2.25, +1) a tick before reaching the bridge.
+    const boat = realRaft(3108.25, 3186.5, 1408, { configId: 2, hull: { offsetX: 0, offsetY: 0, width: 256, length: 640 }, baseSpeed: 320 });
+    const startX = boat.fineX;
+    for (let i = 0; i < 5; i++) {
+      const y = boat.fineY;
+      const step = tickBoat(boat, BoatManager.isSailable);
+      assert.equal(step.slid, true, `tick ${i} slides`);
+      assert.equal(boat.fineX, startX, "x held against the bridge");
+      assert.equal(boat.fineY - y, angleToFineDelta(1408, 320).dy, "the full north part of a 2.5-tile move");
+    }
+  });
+});
+
+test("a raft can't sail onto the Port Sarim jetty (user's capture: it crossed at x 3045-3047)", () => {
+  withRealMap([[3047, 3200], [3047, 3204]], () => {
+    // The user's tsps recording sailed north from (3047.2, 3200.4) over the jetty at y 3202-3204.
+    const boat = realRaft(3047.0, 3199.0, NORTH);
+    for (let i = 0; i < 10; i++) tickBoat(boat, BoatManager.isSailable);
+    for (const tile of hullTiles(boat, boat.fineX, boat.fineY, boat.angle)) {
+      assert.ok(tile % 0x8000 < 3201, "hull stays south of the jetty");
+    }
+  });
 });
 
 test("reverse keeps the bow on the heading and backs up half a tile a tick, whatever the hull (rsprox)", () => {
@@ -823,10 +951,13 @@ test("a boat leaving the sea puts its guests ashore where it last docked", () =>
         if (leave === "disembark") assert.equal(Sailing.disembark(owner, ELSEWHERE.id), null);
         else if (leave === "escape") Sailing.escape(owner);
         else Sailing.onLogout(owner);
-        assert.deepEqual(emitted.map(([name, payload]) => [name, payload.player, payload.reason]), [
+        const expected = [
           ["sailing:guest-left", guest, "evicted"],
           ["sailing:left", owner, leave === "escape" ? "sunk" : leave],
-        ], leave);
+        ];
+        // A boat that goes down also tells the cargo plugins its hold went with it.
+        if (leave === "escape") expected.push(["sailing:boat-sunk", owner, undefined]);
+        assert.deepEqual(emitted.map(([name, payload]) => [name, payload.player, payload.reason]), expected, leave);
       });
       assert.equal(BoatManager.getBoat(instance.entityIndex), undefined, leave);
       assert.equal(guest.getArea() ?? null, null, leave);

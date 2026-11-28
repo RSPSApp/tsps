@@ -99,7 +99,10 @@ test("real reward owners preserve noted bank identity and miniquest overflow", a
         varpId: 604, completionValue: 5, questPoints: 3 });
       require("../plugins/quests/makinghistory/EnchantedKey.MakingHistory")(commandApi, making);
       QuestCommand.register(commandApi);
-      for (const quest of QuestRuntime.getRegisteredQuests()) quest.setStage(player, quest.completionValue);
+      // Every quest but the miniquest under test, which ::quest all then finishes.
+      for (const quest of QuestRuntime.getRegisteredQuests()) {
+        if (quest.key !== "the_enchanted_key") quest.setStage(player, quest.completionValue);
+      }
       const capacity = core.Bank.getCapacity(player);
       player.getBank(0).setItems(Array.from({ length: capacity }, (_, slot) => new core.Item(1277, 1).setMeta({ slot })));
       inventory.setItems(Array.from({ length: 28 }, () => new core.Item(1277, 1)));
@@ -128,6 +131,24 @@ test("real reward owners preserve noted bank identity and miniquest overflow", a
       assert.deepEqual(awarded.map(item => item.getItem().getAmount()), quantities);
       assert.equal(inventory.add, original.add);
       assert.equal(inventory.forceAdd, original.forceAdd);
+    });
+    clear();
+    await t.test("admin bulk completion refreshes a target's open bank", t => {
+      const itemId = core.ItemIdentifiers.MITHRIL_ORE;
+      const snapshot = t.mock.method(player.getPacketSender(), "sendBankSnapshot");
+      player.setStatus(core.PlayerStatus.BANKING).setInterfaceId(core.Bank.MAIN_INTERFACE_ID);
+      t.after(() => player.setStatus(core.PlayerStatus.NONE).setInterfaceId(-1));
+      QuestCommand.register({
+        ...routingApi,
+        registerCommand() {},
+        onCustomEvent() {},
+        emitCustomEvent(_name, { player }) {
+          player.getInventory().add(new core.Item(itemId, 5), false);
+        },
+      });
+      QuestCommand._test.adminQuestRequest({ player, action: "complete-all" });
+      assert.equal(bankAmount(itemId), 5);
+      assert.equal(snapshot.mock.callCount(), 1);
     });
   } finally {
     inventory.add = original.add;
@@ -220,4 +241,94 @@ test("the admin plugin event lists named quests and reuses completion and reset 
   const invalid = { player, key: "missing", action: "complete" };
   QuestCommand._test.adminQuestRequest(invalid);
   assert.match(invalid.error, /registered quest/);
+});
+
+test("admin bulk quest actions preserve command completion and registered quest reset semantics", () => {
+  const player = createPlayer();
+  const inventory = { add() {}, forceAdd() {}, refreshItems() {}, getAmount: () => 0, deleted() {} };
+  player.getInventory = () => inventory;
+  let miniquestComplete = false;
+  let request;
+  QuestCommand.register({
+    core: { Bank: { isOpen: () => false } },
+    registerCommand() {},
+    // The Enchanted Key (registered by the first test) pays its treasures: they go to the stub inventory.
+    emitCanBankItem: () => false,
+    onCustomEvent(name, handler) {
+      assert.equal(name, "quests:admin");
+      request = action => {
+        const event = { player, action };
+        handler(event);
+        return event;
+      };
+    },
+    emitCustomEvent(name, event) {
+      assert.equal(name, "quest:complete-all-miniquests");
+      assert.equal(event.player, player);
+      assert.ok(grandTree.isComplete(player));
+      if (!miniquestComplete) event.completed.push("Fixture miniquest");
+      miniquestComplete = true;
+    },
+  });
+  player.setAttribute(QuestRuntime.QUEST_POINTS_ATTRIBUTE, 1);
+  const quests = QuestRuntime.getRegisteredQuests();
+  const totalPoints = quests.reduce((points, quest) => points + quest.questPoints, 1);
+  const unlock = request("complete-all");
+  assert.equal(unlock.handled, true);
+  assert.match(unlock.message, new RegExp(`\\b${quests.length + 1} completed, 0 already complete, 0 errors`));
+  assert.ok(unlock.quests.every(quest => quest.complete));
+  assert.equal(player.getAttribute(QuestRuntime.QUEST_POINTS_ATTRIBUTE), totalPoints);
+  assert.match(request("complete-all").message, /^Quest completion: 0 completed,/);
+  assert.equal(player.getAttribute(QuestRuntime.QUEST_POINTS_ATTRIBUTE), totalPoints);
+
+  run(player, "quest grand tree 40");
+  const reset = request("reset-all");
+  assert.equal(reset.handled, true);
+  assert.ok(reset.quests.every(quest => quest.stage === 0 && !quest.complete));
+  assert.equal(player.getAttribute(QuestRuntime.QUEST_POINTS_ATTRIBUTE), 1);
+  assert.equal(miniquestComplete, true);
+  assert.match(request("reset-all").message, /0 reset, 0 errors/);
+});
+
+// `::quest <key> reset` clears what the quest handed out too: a quest's own onReset runs before
+// the stage goes back to 0, so plugin-owned state (Pandemonium's port-task crate) goes with it
+// (#6878 review, note 3).
+test("a reset runs the quest's onReset before the stage changes, and a throwing hook still resets", () => {
+  const seen = [];
+  QuestRuntime.registerQuest(api, {
+    key: "reset_hook_probe",
+    name: "Reset Hook Probe",
+    varpId: 7001,
+    completionValue: 5,
+    onReset: (player) => seen.push(player.getAttribute("quest.reset_hook_probe.stage")),
+  });
+  const probe = QuestRuntime.getRegisteredQuests().find((quest) => quest.key === "reset_hook_probe");
+  const player = createPlayer();
+  probe.setStage(player, 3);
+
+  run(player, "quest reset hook probe reset");
+
+  assert.equal(probe.getStage(player), 0, "the stage still resets");
+  assert.deepEqual(seen, [3], "onReset saw the stage it was leaving");
+
+  QuestRuntime.registerQuest(api, {
+    key: "reset_boom_probe",
+    name: "Reset Boom Probe",
+    varpId: 7002,
+    completionValue: 5,
+    onReset: () => { throw new Error("boom"); },
+  });
+  const boom = QuestRuntime.getRegisteredQuests().find((quest) => quest.key === "reset_boom_probe");
+  const victim = createPlayer();
+  boom.setStage(victim, 2);
+  const errors = [];
+  const realError = console.error;
+  console.error = (...args) => errors.push(args.join(" "));
+  try {
+    run(victim, "quest reset boom probe reset");
+  } finally {
+    console.error = realError;
+  }
+  assert.equal(boom.getStage(victim), 0, "a throwing onReset does not keep the stage");
+  assert.match(errors.join("\n"), /Reset Boom Probe/, "and the failure is logged");
 });

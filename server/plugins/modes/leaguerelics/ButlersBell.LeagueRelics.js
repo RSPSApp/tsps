@@ -9,15 +9,20 @@
  * (data/league-butlers-bell.json). His work runs on the clock, offline too: what is owed is
  * reckoned whenever he is spoken to, from the minutes since the job began, the fraction carried.
  * A processed item shares its 10 XP (the row's processed_xp) in the row's skill as it is
- * collected. Talk-to and Collect follow the Wiki transcript word for word: a new job only once
- * the last is collected, the job's process-or-raw choice with both rates, "Show me what you've
- * collected so far." when he holds anything, and the collection shown on "The Fruits of Your
- * Butler's Labour" (954, inventory butlers_bell_collection).
+ * collected. Talk-to, Collect and the new-job flow follow the Wiki transcript word for word:
+ * asking for a new job while he holds anything plays the apology, the collection is shown, and
+ * the conversation ends — the player re-talks him for the new job; the job's process-or-raw
+ * choice comes with both rates, "Show me what you've collected so far." when he holds anything,
+ * and the collection shown on "The Fruits of Your Butler's Labour" (954, inventory
+ * butlers_bell_collection).
  *
  * Ours, with no source (no recording of the bell exists): the job menu (the rows' raw nouns in
  * action_id order, the default title), where he stands (the random events' free tile beside the
  * player) and that he leaves at logout or out of view, and that the collection goes to the bank
- * (what it can't take stays with him). Not here: the bell's Check (its line is in no source).
+ * (what it can't take stays with him). The change's collection also stops his work — nothing
+ * accrues until a new job starts, offline too — so a fast job cannot outrun the re-talk; a
+ * request left half-done (the dialogue closed, nothing collected) leaves the old job running,
+ * as live. Not here: the bell's Check (its line is in no source).
  */
 const Common = require("./Common.LeagueRelics");
 const DATA = require("../data/league-butlers-bell.json");
@@ -92,11 +97,12 @@ function roll(table) {
 
 /**
  * Brings the job up to now: every whole item its rate has earned since it began goes into the
- * butler's store (the fraction carried by moving the start on), and a processed item's XP is owed.
+ * butler's store (the fraction carried by moving the start on), and a processed item's XP is
+ * owed. A job stopped by the change's collection accrues nothing.
  */
 function catchUp(player, now = Date.now()) {
   const current = job(player);
-  const row = current && jobTable().get(current.action);
+  const row = current && !current.paused && jobTable().get(current.action);
   if (!row) return;
   const rate = rateOf(row, current.processing);
   const items = Math.floor(((now - current.since) / MINUTE_MS) * rate);
@@ -180,14 +186,29 @@ function chooseProcessing(player, row) {
   ])]);
 }
 
+/** The change's collection stops his work until a new job starts: nothing accrues, offline too. */
+function pauseJob(player) {
+  const current = job(player);
+  if (current && !current.paused) player.setAttribute(JOB_ATTRIBUTE, { ...current, since: Date.now(), paused: true });
+}
+
 function newJob(player) {
   catchUp(player);
+  const rows = [...jobTable().values()].sort((a, b) => a.action - b.action);
+  const menuStep = menu(player, null, rows.map((row) => [row.raw, () => chooseProcessing(player, row)]));
   if (holds(player)) {
-    chain(player, [playerSays(line(player, "newJob")), npcSays(player, line(player, "collectFirst")), then(() => collect(player))]);
+    // The collection runs on the apology's continue and stops his work there (nothing accrues
+    // until a new job starts, offline too); as the live transcript, the conversation ends there,
+    // and the player re-talks the butler for the new job. A request closed before the
+    // collection leaves the old job running, as live.
+    chain(player, [
+      playerSays(line(player, "newJob")),
+      npcSays(player, line(player, "collectFirst")),
+      then(() => { collect(player); pauseJob(player); }),
+    ]);
     return;
   }
-  const rows = [...jobTable().values()].sort((a, b) => a.action - b.action);
-  chain(player, [playerSays(line(player, "newJob")), menu(player, null, rows.map((row) => [row.raw, () => chooseProcessing(player, row)]))]);
+  chain(player, [playerSays(line(player, "newJob")), menuStep]);
 }
 
 function showCollection(player, said) {

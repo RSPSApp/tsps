@@ -5,7 +5,7 @@ const ArdougneCastleDoors = require("./thieving/ArdougneCastleDoors.Thieving");
 
 module.exports = {
   name: "Thieving",
-  description: "Thieving: pickpocketing NPCs (with the Civitas urchins' distractions of the Wealthy citizens), opening coin pouches, stealing from stalls, blackjacking, the ham trapdoor, the Ardougne castle doors, Dorgesh-Kaan's rich and average chests, the Isle of Souls Dungeon chest, the Aldarin villa chests, the Sailing pirate chests, the Lizardman Temple chests, the lock-pick doors of the magic axe hut, Pirates' Hideout, East Ardougne and the Chaos Druid Tower, the Ardougne Sewers gate, the Crumbling Tower's Dark Chest and Civitas illa Fortis's house robbery (stealing valuables).",
+  description: "Thieving: pickpocketing NPCs (with the Civitas urchins' distractions of the Wealthy citizens), opening coin pouches, stealing from stalls, blackjacking, the ham trapdoor, the H.A.M. Hideout's concussions and jail door, the Ardougne castle doors, Dorgesh-Kaan's rich and average chests, the Isle of Souls Dungeon chest, the Aldarin villa chests, the Sailing pirate chests, the Lizardman Temple chests, the lock-pick doors of the magic axe hut, Pirates' Hideout, East Ardougne and the Chaos Druid Tower, the Ardougne Sewers gate, the Crumbling Tower's Dark Chest and Civitas illa Fortis's house robbery (stealing valuables).",
   members: true,
   register(api) {
     Pickpocket.register(api);
@@ -14,6 +14,7 @@ module.exports = {
     require("./thieving/Blackjacking.Thieving")(api);
     Stalls(api);
     require("./thieving/HamTrapdoor.Thieving")(api);
+    require("./thieving/HamHideout.Thieving")(api);
     ArdougneCastleDoors.register(api);
     require("./thieving/DorgeshKaanChests.Thieving")(api);
     require("./thieving/SoulChest.Thieving")(api);

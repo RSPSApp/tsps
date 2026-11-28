@@ -68,6 +68,7 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   const SITHIKS_DRAWERS_ID = ObjectIdentifiers.DRAWERS_11;
   const SITHIKS_CUPBOARD_ID = ObjectIdentifiers.CUPBOARD_30;
   const SITHIKS_WARDROBE_ID = ObjectIdentifiers.WARDROBE_7;
+  const SITHIK_TEA_TILE = { x: 2593, y: 3103, z: 1 };
   const CUP_OF_TEA_OBJECT_ID = 4838; // zogre_cup_of_tea_sithix: no ObjectIdentifiers entry, ground object fallback
   /** Sithik's ladder down (laddertop2 at 2597,3107,1): going down it after the tea transforms him (tick 1558). */
   const SITHIK_LADDER = { id: ObjectIdentifiers.LADDER_193, x: 2597, y: 3107, z: 1 };
@@ -925,6 +926,25 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     startTranscript(api, event.player, npcId, page, variant, select);
   }
 
+  /** Sithik guards his placed tea, not ordinary tea or cups dropped elsewhere. */
+  function isSithiksTea(groundItem) {
+    const at = groundItem?.getPosition?.();
+    return groundItem?.getItem?.().getId() === CUP_OF_TEA && at
+      && at.getX() === SITHIK_TEA_TILE.x && at.getY() === SITHIK_TEA_TILE.y && at.getZ() === SITHIK_TEA_TILE.z;
+  }
+
+  function protectTeaPickup(event) {
+    if (event.handled || !isSithiksTea(event.groundItem)) return;
+    event.handled = true;
+    startTranscript(api, event.player, sithikSpeakerId(event.player), "Sithik Ints", "standard-dialogue-attempting-to-take-his-cup-of-tea");
+  }
+
+  function protectTeaTelegrab(request) {
+    if (request.allow === false || !isSithiksTea(request.groundItem)) return;
+    request.allow = false;
+    startTranscript(api, request.player, sithikSpeakerId(request.player), "Sithik Ints", "standard-dialogue-attempting-to-use-telekinetic-grab-on-his-tea");
+  }
+
   function pourPotion(player) {
     if (quest.getStage(player) < STAGE_SITHIK || !has(player, STRANGE_POTION)) {
       player.sendMessage("Nothing interesting happens.");
@@ -1273,6 +1293,8 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onItemOnGroundItem(handleItemOnGroundItem);
+  api.onGroundItemPickup(protectTeaPickup);
+  api.onCustomEvent("magic:can-telekinetic-grab", protectTeaTelegrab);
   api.onObjectInteraction(handleObjectInteraction);
   api.onNpcDeath(tomb.handleNpcDeath);
   api.onPlayerLogin(handleLogin);

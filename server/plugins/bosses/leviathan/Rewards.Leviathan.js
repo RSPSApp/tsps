@@ -21,14 +21,23 @@ function context(event) {
   const fight = current(event.npc, event.player);
   if (fight && event.context) event.context.perfectKill = fight.perfect;
 }
+/**
+ * rsprox 227 (286 kills): the loot (and its spotanim 85) lands on 18 different tiles, wherever the
+ * player stood, never on one fixed spot. Off the arena floor it falls back to the authored tile.
+ */
 function location(event) {
   const fight = current(event.npc, event.player);
-  if (fight) event.location = fight.session.tile(Common.data.arena.loot);
+  if (!fight) return;
+  const at = fight.hazards.playerTile();
+  event.location = fight.session.tile(fight.hazards.floor.has(`${at[0]},${at[1]}`) ? [...at, 0] : Common.data.arena.loot);
 }
 function died({ npc, killer }) {
   const fight = current(npc, killer);
   if (!fight || fight.rewarded || killer !== fight.player) return;
   fight.rewarded = true;
+  // rsprox 227 (286/286 kills): "Fight duration" runs from the spawn to this kill message, after the
+  // six-tick death animation, not to the lethal hit.
+  fight.finishedTicks = Math.max(1, Common.core.World.getProcessCycle() - fight.startCycle);
   const { player, session, awakened } = fight;
   const key = awakened ? Common.AWAKENED_KILLS_ATTRIBUTE : Common.KILLS_ATTRIBUTE;
   const kills = awakened ? Common.count(player, key) + 1 : Math.max(fight.normalKillsAtStart + 1, Common.normalKills(player));
@@ -57,6 +66,9 @@ function died({ npc, killer }) {
       if (ticks * 0.6 < seconds) complete(`Leviathan Speed-${name}`);
   }
   session.scheduleRespawn?.(fight);
+  // The island rowboat becomes "Leave" (49214) at the kill, and the rubble crumbles a tick later.
+  session.killed?.();
+  Common.later(Common.data.rubbleCrumbleTicks, () => { if (!session.ended && session.fight === fight) fight.hazards.crumble(); });
 }
 function counts(request) { const count = Common.count(request.player, Common.KILLS_ATTRIBUTE); if (count) request.counts[MONSTER] = Math.max(count, Number(request.counts[MONSTER]) || 0); }
 function best(request) {

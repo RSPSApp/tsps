@@ -57,6 +57,14 @@ class UpstreamRunInvertTest {
         entity.forEachIndexed { i, (offset, transform) -> check(offset, transform) { OpWorldEntity(73, it, i + 1) } }
     }
 
+    @Test fun `a loc sub-menu row goes as LOC_INTERACT with its option and 1-based row`() {
+        upstream.handle(OpLocV3(29495, 3129, 3496, false, 4, 3))
+        assertArrayEquals(
+            byteArrayOf(231.toByte(), 10, 0x73, 0x37, 0x0c, 0x39, 0x0d, 0xa8.toByte(), 0, 0, 4, 3),
+            sent.removeLast(),
+        )
+    }
+
     @Test fun `inventory use and spell targeting preserve Ctrl on every world target`() {
         for (component in listOf(CombinedId((149 shl 16) or 0), CombinedId((218 shl 16) or 1))) {
             val inventory = component.combinedId == (149 shl 16)

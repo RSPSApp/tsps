@@ -1873,6 +1873,23 @@ test('the long route planner finds detours past walls and through gates, and giv
   assert.equal(planRoute({ from: { x: 250, y: 300, z: 0 }, to: { x: 300, y: 300 }, getFlag: island }), null);
 });
 
+test('the long route planner goes through a closed door that blocks its whole tile (a diagonal door)', () => {
+  const { planRoute } = require('../plugins/bots/behaviours/navigation/LongRoutePlanner.PlayerBots');
+  const LOC = 0x100, BLOCK_WALK = 0x200000;
+  // A one-tile corridor north-south at x=158, y=120..160, blocked floor all round; a closed
+  // diagonal door stands on (158, 140), the only way from the north half to the south half.
+  const corridor = (door) => (x, y) => (x !== 158 || y < 120 || y > 160 ? BLOCK_WALK : y === 140 && door ? LOC : 0);
+  const isDoor = (x, y) => x === 158 && y === 140;
+  const route = planRoute({ from: { x: 158, y: 152, z: 0 }, to: { x: 158, y: 125 }, getFlag: corridor(true), isDoor, exactOnly: true });
+  assert.ok(route, 'a route through the door');
+  // The walk stops before the door, and the door's own tile is the crossing the bot must stand on.
+  const at = route.waypoints.findIndex((point) => point.door);
+  assert.deepEqual(route.waypoints[at], { x: 158, y: 140, z: 0, door: true });
+  assert.deepEqual(route.waypoints[at - 1], { x: 158, y: 141, z: 0 });
+  // Any other loc blocking the tile still blocks it.
+  assert.equal(planRoute({ from: { x: 158, y: 152, z: 0 }, to: { x: 158, y: 125 }, getFlag: corridor(true), exactOnly: true }), null);
+});
+
 test('a planned walk never skips the far side of a gate it has not crossed', () => {
   const { nextWaypoint } = require('../plugins/bots/behaviours/navigation/LongRoutes.PlayerBots');
   const { Location: Loc } = require('../dist/game/model/Location');
@@ -3971,4 +3988,19 @@ test('admin bot deployment works without registering or calling the standalone b
   const bot=runtime.entriesByUsername.values().next().value.player;
   const request={actor:owner,action:'apply',operation:'behavior',mode:'manual',username:bot.getUsername()};
   hooks.get('admin:bot-controls')(request);assert.equal(request.error,undefined);assert.equal(runtime.entriesByUsername.get(bot.getUsername()).behaviorPaused,true);
+});
+
+test('expired object claims are swept without waiting for the claim map to fill', () => {
+  const { CLAIMS, claim } = require('../plugins/bots/brain/actions/InteractObject.PlayerBots');
+  CLAIMS.clear();
+  const t0 = Date.now() + 1e7; // past any sweep earlier tests scheduled on the real clock
+  const loggedOut = { isRegistered: () => false };
+  const miner = { isRegistered: () => true };
+  claim('rock:1', loggedOut, t0);
+  claim('rock:2', miner, t0);
+  claim('rock:3', miner, t0 + 29_000); // well past the first claims' lifetime
+  assert.equal(CLAIMS.has('rock:1'), false, 'the expired claim no longer holds its logged-out bot');
+  assert.equal(CLAIMS.has('rock:2'), false, 'an expired claim is swept even while its bot is online');
+  assert.equal(CLAIMS.has('rock:3'), true);
+  CLAIMS.clear();
 });

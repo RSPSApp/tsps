@@ -167,6 +167,16 @@ export const CREATION_MENU_MAX_QUANTITY = 28;
 // last (clientscript 2046 reads it for every menu whose enum 3623 entry is 1, the default).
 export const CREATION_MENU_LAST_ITEM_VARP = 2673;
 export const CREATION_MENU_LAST_ITEM_ATTRIBUTE = "creation-menu:last-item";
+// Clientscript 2046 looks up its first argument (the menu's mode) in this enum (default 1) and
+// gives the space key to the remembered item only when it is 1. The cache's one entry is 34 -> 0,
+// the Vale Totems carving menu: live keeps the other menus' last choice through a carve (issue 6841).
+const CREATION_MENU_REMEMBERS_LAST_ENUM = 3623;
+
+/** Whether a pick in a menu of this mode is the one the next menus' space key goes to. */
+export function creationMenuRemembersLastItem(mode: unknown): boolean {
+  const key = Number.isInteger(mode) ? mode as number : 0;
+  return CacheDefinitions.getEnumValues(CREATION_MENU_REMEMBERS_LAST_ENUM).get(key) !== 0;
+}
 // Widget transmit flags: bit (opIndex+1) must be set for that op to reach the server (see
 // WidgetActionRouter.shouldTransmitAction on the client) - ops 1-5 are Make 1/5/10/X/All.
 const CREATION_MENU_OP_FLAGS = (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5);
@@ -241,6 +251,8 @@ export class PacketSender {
   private busyModalHeld = false;
   private chatboxUnclamped = false;
   private chatboxOwner: object | undefined;
+  /** Components of the open chatbox whose pause button (IF_SETEVENTS bit 0) was turned off: a held box. */
+  private readonly chatboxPauseOff = new Set<number>();
   private presentingChatboxOwner: object | undefined;
   private player: any;
   constructor(player: any) {
@@ -630,6 +642,7 @@ export class PacketSender {
     const previous = this.chatboxGroupId;
     this.chatboxOwner = this.presentingChatboxOwner;
     this.chatboxGroupId = id;
+    this.chatboxPauseOff.clear();
     if (previous >= 0 && previous !== id) this.emitInterfaceClosed(previous);
     // A (re)mounted group starts with its cache text, so resend everything written to it. The
     // client also rewrites some itself (a dialogue's "Click here to continue" becomes "Please
@@ -1015,6 +1028,11 @@ export class PacketSender {
 
   public isChatboxInterface(groupId: number): boolean {
     return groupId === this.chatboxGroupId;
+  }
+
+  /** This open chatbox component was sent with its continue turned off (a held box, "" for its text). */
+  public isChatboxPauseOff(uid: number): boolean {
+    return uid >>> 16 === this.chatboxGroupId && this.chatboxPauseOff.has(uid);
   }
 
   public hasInterruptibleInterface(): boolean {
@@ -1749,6 +1767,10 @@ export class PacketSender {
    * ops 11-32 - the bank's op 11 Examine.
    */
   sendInterfaceFlagsRange(uid: number, fromSlot: number, toSlot: number, flags: number, ops?: number): this {
+    if (this.chatboxGroupId >= 0 && uid >>> 16 === this.chatboxGroupId && fromSlot === -1) {
+      if ((flags & 1) !== 0) this.chatboxPauseOff.delete(uid);
+      else this.chatboxPauseOff.add(uid);
+    }
     this.player.getSession().sendClientPacket(ops === undefined
       ? encodeWidgetSetFlagsRange(uid, fromSlot, toSlot, flags)
       : encodeWidgetSetFlagsRangeV2(uid, fromSlot, toSlot, flags, ops));

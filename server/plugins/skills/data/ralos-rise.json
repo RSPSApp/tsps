@@ -25,6 +25,18 @@
     ],
     "_extra": "Already blessed, so broken down without the altar (Wiki: Sun-kissed bones, Blessed bone statuette)."
   },
+  "sunfireWine": {
+    "splinter": "sunfiresplinter",
+    "splinters": 2,
+    "wine": "jug_wine",
+    "product": "jug_sunfire_wine",
+    "tool": "pestle_and_mortar",
+    "seq": "human_herbing_grind_restart",
+    "sound": 2608,
+    "soundDelay": 25,
+    "intervalTicks": 4,
+    "_intervalTicks": "Wiki (Jug of sunfire wine recipe): 'Crushing sunfire splinters is 1, then 4 ticks'; recording 4054 tick 3954 (+0, +4). Two sunfire splinters and a jug of wine make one jug, with a pestle and mortar carried; no experience (Wiki)."
+  },
   "bowl": {
     "level": 30,
     "chargeVarbit": "varlamore_prayer_winequant",
@@ -63,7 +75,8 @@
     "refill": "You pour some more blessed wine into the libation bowl.",
     "bowlLevel": "You need a Prayer level of {level} to sacrifice at the libation bowl.",
     "check": "The libation bowl has enough {wine} left to sacrifice {count} more blessed bone shards.",
-    "noSoulShards": "You don't have any soul shards to sacrifice into the libation bowl."
+    "noSoulShards": "You don't have any soul shards to sacrifice into the libation bowl.",
+    "sunfireWineMissing": "You need two sunfire splinters, a jug of wine, and a pestle and<br>mortar to create sunfire wine."
   },
   "_messages": "Ours (no recording or Wiki text): altarLevel, superiorLevel, breakdownLevel, noChisel, bowlLevel, check and noSoulShards. The recordings show the bless lines only for 7 to 24 items, so they are used for one too."
 }

@@ -1,6 +1,7 @@
 // Run after `yarn build`: node --test tests/ralos-rise.test.cjs
 // Ralos' Rise prayer training (docs/ralos-rise.md): the exposed altar's blessing, the chisel's
-// shards, and the libation bowl's fill, sacrifice loop, refill, refusals, Check and saved state.
+// shards, the libation bowl's fill, sacrifice loop, refill, refusals, Check and saved state, and
+// making sunfire wine from splinters.
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { test, before, afterEach } = require("node:test");
@@ -16,6 +17,7 @@ const RalosRise = require("../plugins/skills/RalosRise.plugin");
 const Altar = require("../plugins/skills/ralosrise/ExposedAltar.RalosRise");
 const Bones = require("../plugins/skills/ralosrise/BlessedBones.RalosRise");
 const Bowl = require("../plugins/skills/ralosrise/LibationBowl.RalosRise");
+const Sunfire = require("../plugins/skills/ralosrise/SunfireWine.RalosRise");
 const BONES = require("../plugins/skills/data/bones.json");
 const DATA = require("../plugins/skills/data/ralos-rise.json");
 const LEAGUE = require("../plugins/modes/data/league-relics.json");
@@ -50,7 +52,10 @@ before(async () => {
   core = {
     ...PluginManager.getCoreApi(),
     World: { getProcessCycle: () => cycle },
-    TaskManager: { submit: (task) => { task.setRunning(true); submitted.push(task); } },
+    TaskManager: {
+      submit: (task) => { task.setRunning(true); submitted.push(task); },
+      cancelTasks: (key) => submitted.filter((task) => task.key === key).forEach((task) => task.stop()),
+    },
   };
   api.core = core;
   RalosRise.register(api);
@@ -539,4 +544,88 @@ test("a real refused conversion preserves item metadata through save/load and ca
   itemActions.get("Blessed bones")["Break-down"]({ player, itemId: bone.getId() });
   assert.equal(inventory.getAmount(id("blessed_bones")), 0, "a refused attempt did not spend the tick");
   assert.equal(inventory.getAmount(id("blessed_bone_shard")), 2147483647);
+});
+
+const sunfireHook = () => itemOnItem.find((entry) => entry.a === "Sunfire splinters" && entry.b === "Jug of wine");
+
+test("splinters on a jug of wine make one jug at once and one every 4 ticks, 2 splinters each (rsprox 4054)", () => {
+  const player = playerWith(["pestle_and_mortar", ["sunfiresplinter", 5], "jug_wine", "jug_wine", "jug_wine"]);
+  assert.equal(sunfireHook().handler({ player, usedItemId: id("sunfiresplinter"), usedWithItemId: id("jug_wine") }), true);
+  assert.equal(player.slots[2].getId(), id("jug_sunfire_wine"), "made in the wine's own slot");
+  assert.equal(player.amountOf(id("sunfiresplinter")), 3);
+  assert.deepEqual(player.sent.animations, [CacheDefinitions.getSeqId("human_herbing_grind_restart")]);
+  assert.deepEqual(player.sent.sounds, [2608]);
+  runTicks(3);
+  assert.equal(player.amountOf(id("jug_sunfire_wine")), 1);
+  runTicks(1);
+  assert.equal(player.amountOf(id("jug_sunfire_wine")), 2);
+  assert.equal(player.amountOf(id("sunfiresplinter")), 1);
+  runTicks(8);
+  assert.equal(player.amountOf(id("jug_sunfire_wine")), 2, "one splinter left is not enough");
+  assert.equal(player.amountOf(id("jug_wine")), 1);
+  assert.equal(player.amountOf(id("pestle_and_mortar")), 1, "the pestle and mortar is kept");
+  assert.deepEqual(player.sent.xp, [], "no experience");
+  assert.deepEqual(player.sent.boxes, [], "running out stops silently");
+  assert.equal(submitted.at(-1).isRunning(), false);
+});
+
+test("the jug used on the splinters works too, and several clicks in one tick make one jug", () => {
+  const player = playerWith(["pestle_and_mortar", ["sunfiresplinter", 10], "jug_wine", "jug_wine", "jug_wine"]);
+  cycle++;
+  for (let i = 0; i < 3; i++) sunfireHook().handler({ player, usedItemId: id("jug_wine"), usedWithItemId: id("sunfiresplinter") });
+  assert.equal(player.amountOf(id("jug_sunfire_wine")), 1);
+  assert.equal(player.amountOf(id("sunfiresplinter")), 8);
+  cycle++;
+  sunfireHook().handler({ player, usedItemId: id("sunfiresplinter"), usedWithItemId: id("jug_wine") });
+  assert.equal(player.amountOf(id("jug_sunfire_wine")), 2, "a click a tick later makes the next at once");
+});
+
+test("without a pestle and mortar or two splinters, a message box and nothing made (rsprox 4054 tick 3939)", () => {
+  const text = "You need two sunfire splinters, a jug of wine, and a pestle and<br>mortar to create sunfire wine.";
+  for (const items of [[["sunfiresplinter", 2], "jug_wine"], ["pestle_and_mortar", "sunfiresplinter", "jug_wine"]]) {
+    const player = playerWith(items);
+    assert.equal(sunfireHook().handler({ player, usedItemId: id("sunfiresplinter"), usedWithItemId: id("jug_wine") }), true);
+    assert.deepEqual(boxText(player), [text]);
+    assert.equal(player.amountOf(id("jug_wine")), 1);
+    assert.equal(player.amountOf(id("jug_sunfire_wine")), 0);
+  }
+});
+
+test("only plain wine takes splinters: other jugs pass through to Nothing interesting happens", () => {
+  // The hook is on the names; "Jug of wine" is the plain jug's alone, but the ids are checked anyway.
+  const player = playerWith(["pestle_and_mortar", ["sunfiresplinter", 4], "jug_wine_blessed"]);
+  assert.equal(sunfireHook().handler({ player, usedItemId: id("sunfiresplinter"), usedWithItemId: id("jug_wine_blessed") }), false);
+  assert.equal(player.amountOf(id("sunfiresplinter")), 4);
+});
+
+test("a real player's inventory: splinters stack, wine becomes sunfire wine in its slot", (t) => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const player = new Player(new PlayerSession({ kind: "test", isOpen: () => true, send: () => true,
+    close() {}, onData() {}, onError() {}, onClose() {} }));
+  player.setIndex(9137).setUsername("sunfire9137").setRegistered(true);
+  t.after(() => { Sunfire.sessions.get(player)?.stop(); player.setRegistered(false); });
+  const inventory = player.getInventory();
+  inventory.adds(id("pestle_and_mortar"), 1);
+  inventory.adds(id("sunfiresplinter"), 3);
+  inventory.adds(id("jug_wine"), 1);
+  inventory.adds(id("jug_wine"), 1);
+  const wineSlot = inventory.getSlotForItemId(id("jug_wine"));
+  cycle++;
+  sunfireHook().handler({ player, usedItemId: id("sunfiresplinter"), usedWithItemId: id("jug_wine") });
+  assert.equal(inventory.getItems()[wineSlot].getId(), id("jug_sunfire_wine"));
+  assert.equal(inventory.getAmount(id("sunfiresplinter")), 1);
+  runTicks(4);
+  assert.equal(inventory.getAmount(id("jug_wine")), 1, "one splinter left");
+});
+
+test("starting sunfire wine stops a chisel loop the player had running", () => {
+  const player = playerWith(["chisel", "blessed_bones", "blessed_bones", "blessed_bones", "pestle_and_mortar", ["sunfiresplinter", 6], "jug_wine", "jug_wine", "jug_wine"]);
+  itemActions.get("Blessed bones")["Break-down"]({ player, itemId: id("blessed_bones") });
+  cycle++;
+  sunfireHook().handler({ player, usedItemId: id("sunfiresplinter"), usedWithItemId: id("jug_wine") });
+  runTicks(8);
+  assert.equal(player.amountOf(id("blessed_bones")), 2, "only the first bone broke");
+  assert.equal(player.amountOf(id("jug_sunfire_wine")), 3);
+  assert.equal(submitted[0].isRunning(), false, "the chisel loop was cancelled");
 });

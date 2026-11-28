@@ -112,8 +112,22 @@ function sessionOf(player) {
 function inBounds([minX, maxX, minY, maxY, plane], location) {
   return location?.getZ() === plane && location.getX() >= minX && location.getX() <= maxX && location.getY() >= minY && location.getY() <= maxY;
 }
-function sound(player, id) {
-  player.getPacketSender().sendSoundEffect(id, 1, 0, 255);
+function sound(player, id, delay = 0) {
+  player.getPacketSender().sendSoundEffect(id, 1, delay, 255);
+}
+/** A recorded group of [id, delay] SynthSounds sent on the same tick. */
+function sounds(player, entries) {
+  for (const [id, delay] of entries)
+    sound(player, id, delay);
+}
+function graphicAt(player, id, x, y, delay = 0) {
+  const graphic = new api.core.Graphic(id);
+  graphic.delay = delay;
+  player.getPacketSender().sendGraphic(graphic, new api.core.Location(x, y, 0));
+}
+/** Recorded model slots: slot0 swaps for the boss, extra slots for Shadow Realm tentacles. */
+function models(npc, ids) {
+  npc?.setModelCustomisation?.(ids ? ids.map((modelId, slot) => ({ slot, modelId })) : null);
 }
 function messageBox(player, text) {
   player.getDialogueManager().startDialogues(new api.core.DialogueChainBuilder().add(new api.core.StatementDialogue(0, text)));
@@ -125,4 +139,4 @@ module.exports = { data, init, get api() {
     return api;
   }, get core() {
     return api.core;
-  }, later, location, random, protectedFrom, damage, meleeDamage, cancelDamage, remove, sync, fragment, sessions, sessionOf, inBounds, sound, messageBox, objectBox, INSIDE_ATTRIBUTE, KILLS_ATTRIBUTE, BEST_ATTRIBUTE, DEATHS_ATTRIBUTE, MONSTER };
+  }, later, location, random, protectedFrom, damage, meleeDamage, cancelDamage, remove, sync, fragment, sessions, sessionOf, inBounds, sound, sounds, graphicAt, models, messageBox, objectBox, INSIDE_ATTRIBUTE, KILLS_ATTRIBUTE, BEST_ATTRIBUTE, DEATHS_ATTRIBUTE, MONSTER };

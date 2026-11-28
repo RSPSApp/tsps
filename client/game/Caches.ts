@@ -1,4 +1,5 @@
-import { isIos, isLowEndDevice, isSafari } from "../common/utils/DeviceUtil";
+import { isIos, isSafari } from "../common/utils/DeviceUtil";
+import { getPerformancePolicy } from "./performance/PerformancePolicy";
 import { getCacheBaseUrl, getCacheListUrl } from "../config/clientEnv";
 import { CacheFiles, ProgressListener } from "../rs/cache/CacheFiles";
 import { CacheInfo, getLatestCache } from "../rs/cache/CacheInfo";
@@ -491,9 +492,9 @@ async function loadCacheFilesSparse(
 
     // A prior session already stored the complete dat2; the regular path
     // restores it from storage without any network traffic.
-    // Not on a low-end device: the full path holds the whole dat2 in memory, past a phone's or
-    // a tablet's tab limit.
-    if (!isLowEndDevice && await Js5Persistence.hasFullDat2(info.name, dat2Path)) {
+    // Only presets with the full-cache budget do this: holding the whole dat2 in memory is past
+    // a phone's or tablet's tab limit.
+    if (getPerformancePolicy().cacheFullDat2 && await Js5Persistence.hasFullDat2(info.name, dat2Path)) {
         return undefined;
     }
 
@@ -605,10 +606,11 @@ async function loadCacheFilesSparse(
     await persistence.writeManifest(dat2Version);
 
     // Restore ranges fetched in previous sessions.
-    // A low-end device skips it: restoring brings back everything earlier sessions fetched,
-    // models and all, which its tab cannot hold. It reads stored ranges back as it needs them
-    // instead (the eager regions below, then Js5RangeClient.readStored).
-    const restored = isLowEndDevice ? 0 : await persistence.restore((offset, bytes) => store.applyRange(offset, bytes));
+    // Low/Auto mobile skip it: restoring brings back everything earlier sessions fetched, models
+    // and all, which its tab cannot hold. It reads stored ranges back as it needs them instead.
+    const restored = getPerformancePolicy().cacheRestore
+        ? await persistence.restore((offset, bytes) => store.applyRange(offset, bytes))
+        : 0;
 
     // Eager regions: reference tables (idx255 meta region) + every
     // non-deferred index. Deferred indices only need their reference tables.
@@ -648,7 +650,9 @@ async function loadCacheFilesSparse(
     for (const run of missing) {
         const startByte = run.start * Sector.SIZE;
         const endByte = Math.min(run.end * Sector.SIZE, totalSize);
-        const stored = isLowEndDevice ? await persistence.read(startByte, endByte - startByte) : undefined;
+        const stored = getPerformancePolicy().cacheRestore
+            ? undefined
+            : await persistence.read(startByte, endByte - startByte);
         if (stored) {
             dat2.write(startByte, stored);
             onEagerChunk(stored.byteLength);
@@ -698,8 +702,11 @@ async function loadCacheFilesSparse(
     // (crossOriginIsolated); without it workers hold private copies and only
     // benefit from session 2 via Js5Persistence. Fix by routing worker misses
     // through the main thread's Js5RangeClient if Safari startup matters.
-    // No background prefetch on a low-end device: it would fill the cache's chunks past the limit.
-    const prefetchIds = isPrefetchDisabled() || isLowEndDevice ? [] : getPrefetchIndexIds(info);
+    // No background prefetch when the preset has no cache budget: it would fill the cache's
+    // chunks past the limit.
+    const prefetchIds = isPrefetchDisabled() || !getPerformancePolicy().cachePrefetch
+        ? []
+        : getPrefetchIndexIds(info);
     if (prefetchIds.length > 0) {
         const startPrefetch = () => {
             if (signal?.aborted) return;

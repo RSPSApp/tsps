@@ -47,6 +47,7 @@ The dials are varbits 3985/3986/3987 and count **anticlockwise**: by value 0-3 t
 ## Implementation
 
 - A player not on the ring's tile steps onto it first, for every option, and the flowers follow a tick later: the capture shows that for Confirm, so Last-destination and Zanaris from beside the ring do the same. The ring is solid in the cache (clip type 1), so the step bypasses collision, as agility's forced walks do.
+- **Locked codes** (the Wiki's per-code requirements): AJQ, BJS, CIP, CLR and DLS need their quest done; AIS, AJP and CKQ need a visit to Varlamore (`varlamore_visited`, set by the quetzals' first Fortis landing — or at creation, by `AreaUnlocks.LeagueMode`, for a league character whose starting areas include Varlamore, i.e. Demonic Pacts); AKP, BLQ and BJR need a quest stage. Only the Varlamore line is recorded (226/01695); the rest are TSPS wording in its style.
 - Closing the dials by any route runs `meslayer_close [28]`, so Close and Escape close the search box too.
 
 - The table is read at startup; the Wiki-based `fairy-rings.json` it replaces is gone.

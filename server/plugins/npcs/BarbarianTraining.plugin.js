@@ -35,6 +35,8 @@
  * creating a pyre ship") makes it 3: the training done. Mangled bones do not count (Wiki).
  */
 
+const Hastae = require("./barbariantraining/Hastae.BarbarianTraining");
+
 const STATE_ATTRIBUTE = "barbarian-training";
 /**
  * Cache varbits (osrs-dumps varbit.sym): brut_fishing_s 3757, brut_fishing_r 3758, brut_fire 3759,
@@ -44,6 +46,8 @@ const VARBITS = { harpoon: 3757, fishingRod: 3758, firemaking: 3759, herblore: 3
 const TASKED = 1;
 const DONE = 2;
 const TOLD = 3;
+/** The shop whose page lists the pearl barbarian rod under "===With Barbarian Training===". */
+const ALCHEMY_SHOP = "Alry the Angler's Angling Accessories";
 // TaiBwoWannaiTrio.Quest owns this reward state: claimTamayuSpear sets 5 when combat training is claimed.
 const TAMAYU_TRAINING_ATTRIBUTE = "quest.tai_bwo_wannai_trio.tamayu";
 const TAMAYU_TRAINING_CLAIMED = 5;
@@ -81,6 +85,8 @@ const TOPIC = {
   hasta: "What of the one-handed spears of which you spoke?",
   farming: "How can I use my strength in the ways of agriculture?",
   leave: "I'd better get going.",
+  /** rsprox recording 1529: the top-level menu's training entry, shown while the player carries a hastae item. */
+  training: "Let's talk about my training.",
 };
 // Transcript boundary guards, not replacement dialogue: a truncated export must not teach early.
 const SMITHING_FINAL_REPLY = {
@@ -107,6 +113,7 @@ const ROD_ALREADY = "You already have a heavy fishing rod.";
 
 let api;
 let core;
+let hastae;
 
 function state(player) {
   const saved = player.getAttribute(STATE_ATTRIBUTE);
@@ -162,9 +169,34 @@ function answerBarehand(request) {
   request.allowed = state(request.player).harpoon >= TASKED;
 }
 
+/**
+ * "shop:stock-visible": the pearl barbarian rod waits for the rod-fishing section. Wiki, Pearl
+ * barbarian rod: it "can only be purchased if the relevant part of the Barbarian Training
+ * miniquest is completed with Otto Godblessed". osrsreboxed-db merges the store table Alry's page
+ * keeps under "===With Barbarian Training===" (its shop parser reads every table a quest or
+ * requirement section adds), so the row is in shops.json and this hides it until the section is
+ * done — TOLD, i.e. after Otto hears of the catch, which is when this plugin completes it.
+ * Unlike using the rod (answerFishingUnlock, from TASKED), the purchase waits for the whole section.
+ */
+function stockVisible(event) {
+  if (!event?.player || event.shopName !== ALCHEMY_SHOP) return;
+  if (event.itemId !== core.ItemIdentifiers.PEARL_BARBARIAN_ROD || event.player.isPlayerBot?.()) return;
+  if (state(event.player).fishingRod !== TOLD) event.visible = false;
+}
+
 function finishedFishing(player) {
   const current = state(player);
   return current.fishingRod === TOLD && current.harpoon === TOLD;
+}
+
+/** The Smithing part told to Otto: the hasta reported (Wiki: Barbarian Training). */
+function learnedHastae(player) {
+  return state(player).hasta === TOLD;
+}
+
+/** Wiki (Zamorakian hasta): Otto converts spears after the Fishing and Smithing parts. */
+function canConvertSpears(player) {
+  return finishedFishing(player) && learnedHastae(player);
 }
 
 function hasSmithingBaseLevel(player) {
@@ -239,10 +271,12 @@ function play(player, npcId, lines, next = null) {
   player.getDialogueManager().startDialogues(chain);
 }
 
-function ask(player, options) {
+function ask(player, options, title = null) {
   const chain = new core.DialogueChainBuilder();
-  chain.add(new core.OptionDialogue(0, { executeOption: (option) => options[Number(option) - 1]?.[1]?.() },
-    ...options.map(([text]) => text)));
+  const menu = new core.OptionDialogue(0, { executeOption: (option) => options[Number(option) - 1]?.[1]?.() },
+    ...options.map(([text]) => text));
+  if (title) menu.setTitle?.(title);
+  chain.add(menu);
   player.getDialogueManager().startDialogues(chain);
 }
 
@@ -528,6 +562,20 @@ function herbloreDone(player, talk) {
   });
 }
 
+/**
+ * rsprox recording 1529: carrying a Zamorakian spear, the greeting led to live's top-level menu.
+ * Ours: only a player with something for the hastae service gets it; the rest of that menu (My
+ * notes, the spirits) isn't here, so the others go straight to the training topics as before.
+ */
+function opening(player, talk) {
+  if (!hastae.offered(player).length) { menu(player, talk); return; }
+  ask(player, [
+    [TOPIC.training, () => menu(player, talk)],
+    [Hastae.TEXT.top, () => hastae.topic(player, talk)],
+    [TOPIC.leave, () => play(player, talk.npcId, [{ player: TOPIC.leave }])],
+  ]);
+}
+
 function talkToOtto(event) {
   if (event.handled) return;
   const definition = event.definition ?? event.npc?.getCurrentDefinition?.(event.player);
@@ -535,7 +583,7 @@ function talkToOtto(event) {
   event.handled = true;
   const { player } = event;
   const talk = { event, npc: event.npc, npcId: event.npcId ?? definition.getId?.() ?? core.NpcIdentifiers.OTTO_GODBLESSED };
-  play(player, talk.npcId, [{ npc: GREETING }], () => menu(player, talk));
+  play(player, talk.npcId, [{ npc: GREETING }], () => opening(player, talk));
 }
 
 // ---------------------------------------------------------------- the bed, the catch and the mix
@@ -604,6 +652,7 @@ function attach(pluginApi) {
   api = pluginApi;
   core = api.core;
   api.persistAttribute(STATE_ATTRIBUTE, {});
+  hastae = Hastae.createHastae(api, { play, ask, near, restricted, canConvertSpears, learnedHastae });
   api.onCustomEvent("quest:complete-all-miniquests", completeForCommand);
   api.onPlayerLogin(loggedIn);
   api.onBeforeNpcInteraction(talkToOtto);
@@ -612,6 +661,7 @@ function attach(pluginApi) {
   api.onObjectInteraction(BED, { Search: searchBed });
   api.onCustomEvent("fishing:success", caughtFish);
   api.onCustomEvent("fishing:unlocked", answerFishingUnlock);
+  api.onCustomEvent("shop:stock-visible", stockVisible);
   api.onCustomEvent("herblore:made", madePotion);
   api.onCustomEvent("herblore:unlocked", answerUnlock);
   api.onCustomEvent("fishing:barehand-unlocked", answerBarehand);
@@ -621,12 +671,12 @@ function attach(pluginApi) {
 
 module.exports = {
   name: "BarbarianTraining",
-  description: "Adds Otto's Barbarian Training lessons and progression for fishing, firemaking, Herblore and spear/hasta smithing.",
+  description: "Adds Otto's Barbarian Training lessons and progression for fishing, firemaking, Herblore and spear/hasta smithing, and his hastae service (Zamorakian spear/hasta conversion, broken dragon hasta repair).",
   members: true,
   // TreasureTrails first: its before-hook answers clue steps that send the player to Otto (the
   // medium anagram and hard cipher), which this Talk-to must not take over.
   dependsOn: ["NpcDialogues", "Farming", "TreasureTrails"],
   register: attach,
-  _test: { STATE_ATTRIBUTE, VARBITS, TOPIC, LEARNED, ROD_TAKEN, ROD_NO_SPACE, state, topics, topicLines, answerUnlock, answerBarehand, talkToOtto,
-    searchBed, caughtFish, madePotion, setStage, builtPyre },
+  _test: { hastae: () => hastae, STATE_ATTRIBUTE, VARBITS, TOPIC, TASKED, DONE, TOLD, LEARNED, ROD_TAKEN, ROD_NO_SPACE, state, topics, topicLines, answerUnlock, answerBarehand, talkToOtto,
+    searchBed, caughtFish, madePotion, setStage, builtPyre, stockVisible, ALCHEMY_SHOP },
 };

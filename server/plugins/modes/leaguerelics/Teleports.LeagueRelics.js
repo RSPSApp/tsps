@@ -132,6 +132,7 @@ function go(player, key, destination, { wildernessLevel = ANY_WILDERNESS_LEVEL, 
   const definition = cast === true ? leagueCast(player) : cast || null;
   TeleportHandler.confirm(player, location, () => {
     onStart?.();
+    if (definition?.sound != null) player.getPacketSender().sendSoundEffect(definition.sound, 1, 0);
     if (definition) startHomeTeleport(Common.core, player, location, arrived, castOf(definition));
     else TeleportHandler.teleport(player, location, TeleportType.NORMAL, false, arrived);
   }, limit, { item });
@@ -139,26 +140,29 @@ function go(player, key, destination, { wildernessLevel = ANY_WILDERNESS_LEVEL, 
 }
 
 /**
- * An item's own cast from its data ({ tick, landTick, animation, graphic }, seq and spotanim by
- * gameval name): the animation and graphic on `tick`, locked from it, the move on `landTick`.
+ * An item's own cast from its data ({ tick, landTick, animation, graphic, sound }, seq and spotanim by
+ * gameval name): the animation and graphic on `tick`, locked from it, the move on `landTick`; its
+ * `sound` (a synth) as it starts.
  */
 function itemCast(spec) {
   const { CacheDefinitions } = Common.core;
   return {
     steps: [{ tick: spec.tick, animation: CacheDefinitions.getSeqId(spec.animation), graphic: CacheDefinitions.getSpotanimId(spec.graphic) }],
-    lockTick: spec.tick, landTick: spec.landTick,
+    lockTick: spec.tick, landTick: spec.landTick, sound: Number.isInteger(spec.sound) ? spec.sound : null,
   };
 }
 
 /** The item's last destination, or a message when there is none yet. */
-function goLast(player, key) {
+/** `options` as go's: an item's own cast, `onStart` given the tile. */
+function goLast(player, key, options = {}) {
   const last = player.getAttribute(lastAttribute(key));
   if (!last || !Number.isInteger(last.x)) {
     player.sendMessage(Common.message("noLastDestination"));
     return false;
   }
   const location = new Common.core.Location(last.x, last.y, last.z ?? 0);
-  return go(player, key, { label: last.label, location, wildernessLevel: last.wildernessLevel });
+  const onStart = options.onStart ? () => options.onStart(location) : null;
+  return go(player, key, { label: last.label, location, wildernessLevel: last.wildernessLevel }, { ...options, onStart });
 }
 
 /**

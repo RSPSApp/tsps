@@ -18,6 +18,7 @@ const itemOnItem = new Map();
 const itemActions = new Map();
 let itemAction;
 const customEvents = new Map();
+const emitted = [];
 let combatHitResolved;
 
 const baseMethod = new CombatMethod();
@@ -47,6 +48,7 @@ BloodFury.register({
   },
   registerCombatMethodResolver() {},
   onCustomEvent: (name, handler) => customEvents.set(name, handler),
+  emitCustomEvent: (name, payload) => emitted.push([name, payload]),
   onCombatHitResolved: (handler) => { combatHitResolved = handler; },
 });
 
@@ -121,10 +123,28 @@ test("a blood shard makes an amulet of blood fury with 10,000 charges", () => {
   useShard(player, fury, shard, "Blood shard>Amulet of fury");
 
   assert.equal(fury.getId(), ItemIdentifiers.AMULET_OF_FURY, "nothing is consumed before confirmation");
+  emitted.length = 0;
   choose(player, 1);
   assert.equal(fury.getId(), ItemIdentifiers.AMULET_OF_BLOOD_FURY);
   assert.equal(charges(fury), 10000);
   assert.equal(shard.getId(), -1, "the shard is consumed");
+  // The league task "Create an Amulet of Blood Fury" (#6854) counts this event.
+  assert.deepEqual(emitted, [["blood-fury:created", { player, itemId: ItemIdentifiers.AMULET_OF_BLOOD_FURY }]]);
+});
+
+test("declining the creation, or recharging an amulet, reports no new amulet", () => {
+  const player = createPlayer();
+  const fury = new Item(ItemIdentifiers.AMULET_OF_FURY, 1);
+  player.inventory.setItem(0, fury);
+  player.inventory.setItem(1, new Item(ItemIdentifiers.BLOOD_SHARD, 1));
+  useShard(player, fury, player.inventory.get(1), "Blood shard>Amulet of fury");
+  emitted.length = 0;
+  choose(player, 2);
+  assert.equal(fury.getId(), ItemIdentifiers.AMULET_OF_FURY);
+  const { player: charger, amulet } = setupCharge(10000);
+  choose(charger, 1);
+  assert.equal(charges(amulet), 20000);
+  assert.deepEqual(emitted.filter(([name]) => name === "blood-fury:created"), []);
 });
 
 function choose(player, option) {

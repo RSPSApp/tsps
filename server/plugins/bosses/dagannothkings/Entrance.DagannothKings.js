@@ -9,7 +9,7 @@
  * Captured: op2 (Slayer) walks to the task lair at (2900, 4385); op3 on the Private
  * variant is not implemented here. The Slayer lair needs a dagannoth task (Wiki);
  * the refusal line is ours, marked as such. Peek counts the public lair. The
- * Climb-up ladders (10229) in each lair walk back to the dungeon side.
+ * Climb-up from the public and Slayer lairs lands east of the down ladder on the click tick.
  */
 const Common = require("./Common.DagannothKings");
 const Area = require("./Area.DagannothKings");
@@ -93,7 +93,9 @@ function peek({ player, location, objectId }) {
 function climbOut({ player, location, objectId }) {
   if (!isExit({ location, objectId })) return false;
   Hud.hideForLeaver(player);
-  player.moveTo(Common.location([...Common.OUTSIDE_TILE]));
+  // The Echo instance shares the public lair's cache ladder.
+  const destination = player.getPrivateArea?.() ? Common.OUTSIDE_TILE : Common.EXIT_TILE;
+  player.moveTo(Common.location([...destination]));
   return true;
 }
 

@@ -14,9 +14,11 @@ test('real normal rewards persist recorded world kills and best times once witho
   h.kill(); h.step(8);
   assert.equal(writes.length, 1);
   assert.ok(writes[0].kills > 0);
-  assert.equal(writes[0].bestTicks, 1);
+  // rsprox 227 (286/286 kills): the duration runs to the kill message, after the six-tick death
+  // animation, so a kill on the first tick counts seven.
+  assert.equal(writes[0].bestTicks, 7);
   // rsprox 227/00100.txt:78155: "Fight duration: <col=ff0000>0:34.20</col> (new personal best)".
-  assert.ok(h.messages.includes("Fight duration: <col=ff0000>0:00.60</col> (new personal best)"), h.messages.join(" | "));
+  assert.ok(h.messages.includes("Fight duration: <col=ff0000>0:04.20</col> (new personal best)"), h.messages.join(" | "));
   h.dispatch('onNpcDeath', { npc: h.fight.boss, killer: h.p });
   assert.equal(writes.length, 1);
 });
@@ -131,8 +133,12 @@ test('actual lethal transition freezes perfect loot context and death awards onc
   assert.equal(h.p.getAttribute(h.Common.KILLS_ATTRIBUTE), 1);
   const where = { player: h.p, npc: h.fight.boss, location: h.fight.boss.getLocation() };
   h.api.emitCustomEvent('npc-drops:location', where);
-  assert.deepEqual(h.session.sourceTile(where.location), h.Common.data.arena.loot);
+  // rsprox 227 (286 kills): the loot lands where the player stands, on 18 different tiles.
+  assert.deepEqual(h.session.sourceTile(where.location), h.session.sourceTile(h.p.getLocation()));
   assert.equal(h.area.getClip(where.location) & 0x200100, 0);
+  h.move([2076, 6378]);
+  h.api.emitCustomEvent('npc-drops:location', where);
+  assert.deepEqual(h.session.sourceTile(where.location), [2076, 6378, 0]);
 });
 
 test('foreign killers and stale sessions never receive encounter context or counts', t => {

@@ -39,7 +39,8 @@
   "stock": [
     { "shop": "Quartermaster's Stores", "items": ["DRAGON_HALBERD"], "quest": "Regicide" },
     { "shop": "The Big Heist Lodge", "items": ["BANDITS_BREW"], "quest": "Desert Treasure I" },
-    { "shop": "The Other Inn.", "items": ["BRAINDEATH_RUM"], "quest": "Cabin Fever" }
+    { "shop": "The Other Inn.", "items": ["BRAINDEATH_RUM"], "quest": "Cabin Fever" },
+    { "shop": "Slayer Equipment (shop)", "items": ["REINFORCED_GOGGLES"], "quest": "A Porcine of Interest" }
   ],
   "_versions": "Shop versions whose names don't name their quest: the version that applies, for npc-dialogue:shop (dialogue and Trade).",
   "versions": [

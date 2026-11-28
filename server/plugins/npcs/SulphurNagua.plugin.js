@@ -16,6 +16,8 @@
  * The drain lands even if the nagua dies on that tick, and shows as prayer-drain hitsplat 59 with
  * no health bar (237/01137.txt tick 45: special at tick 42, [hit] id=59 value=5, prayer 71 to 66,
  * the nagua's death the same tick).
+ * The raise is still an attack, so it renews the nagua's single-way hold on the player like a hit
+ * would (Wiki: PJ timer); Combat does that for every NPC attack that hits nothing (issue 6811).
  *
  * Its -4 flat armour (Wiki) is applied with every other monster's by combat/FlatArmour.plugin.js.
  */
@@ -27,6 +29,11 @@ const NEXT_ATTACK_AFTER_SPECIAL = 6;
 const SPECIAL_GRAPHIC = { delay: 75, height: 150 };
 /** The recorded prayer-drain hitsplat ([hit] id=59); the recording shows only the target's own view. */
 const DRAIN_SPLAT = { mine: 59, others: 59 };
+
+/** Wiki: the normal Sulphur Nagua gives 5% bonus combat XP; the quest variant does not. */
+function configureExperience({ npc }) {
+  if (npc?.getId?.() === SULPHUR_NAGUA) npc.setCombatXpMultiplier(1.05);
+}
 
 /** npc -> ordinary attacks since its last special, this life. */
 const attacks = new WeakMap();
@@ -90,6 +97,7 @@ module.exports = {
       }
     }
     api.registerNpcCombatMethodProvider(SULPHUR_NAGUA, SulphurNaguaMelee);
+    api.onCustomEvent("npc:added", configureExperience);
     api.onNpcDeath(({ npc }) => {
       if (npc?.getId?.() === SULPHUR_NAGUA) attacks.delete(npc);
     });

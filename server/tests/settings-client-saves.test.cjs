@@ -151,6 +151,27 @@ test('a row sharing varp 1224 with Esc closes is kept from the same transmit', (
   assert.equal(next.getPacketSender().getVarbit(ESC_CLOSES), 1, 'Esc closes is left as it was');
 });
 
+test('World Switcher confirmation turned off by the World Switcher question is kept; the other rows on its varp are not taken', () => {
+  const WORLDSWITCHER_CONFIRMATION_OFF = 4100;
+  const SHARED_ROW = 12379; // another toggle row on varp 3075
+  assert.equal(CacheDefinitions.getVarbit(WORLDSWITCHER_CONFIRMATION_OFF).baseVar, 3075);
+  assert.equal(CacheDefinitions.getVarbit(SHARED_ROW).baseVar, 3075);
+  const p = login();
+  const client = player();
+  client.getPacketSender().sendConfig(3075, p.getPacketSender().getVarp(3075)).sendVarbit(WORLDSWITCHER_CONFIRMATION_OFF, 1).sendVarbit(SHARED_ROW, 1);
+  const transmission = { player: p, varpId: 3075, value: client.getPacketSender().getVarp(3075), handled: false };
+  for (const fn of events.get('player:varp-transmit')) fn(transmission);
+  assert.equal(transmission.handled, true);
+  assert.deepEqual(Object.keys(p.getAttribute('settings:values')), [`varbit:${WORLDSWITCHER_CONFIRMATION_OFF}`], 'only row 347 is taken from the transmit');
+  const next = login(p.attributes);
+  assert.equal(next.getPacketSender().getVarbit(WORLDSWITCHER_CONFIRMATION_OFF), 1, 'off at the next login');
+  assert.equal(next.getPacketSender().getVarbit(SHARED_ROW), 0);
+  // Turned back on in All Settings, in a later tick: the click toggles it as before.
+  assert.equal(click(next, 347), true);
+  assert.equal(next.getPacketSender().getVarbit(WORLDSWITCHER_CONFIRMATION_OFF), 0);
+  assert.equal(login(next.attributes).getPacketSender().getVarbit(WORLDSWITCHER_CONFIRMATION_OFF), 0);
+});
+
 const AntiDragDelay = require('../plugins/interface/AntiDragDelay.plugin')._test;
 const DELAY = 13830;
 const ENABLE_KEY = 13828;

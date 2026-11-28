@@ -1,14 +1,16 @@
 /**
  * Sleepwalkers, as captured: two ticks after she takes her blast form, the message and sleepwalkers
  * rising by the totems, walking to her from their fourth tick; one that reaches her is absorbed.
- * She blasts (11 ticks after they rise, 13 in Phosani's dream), the blast lands on everyone two ticks
+ * She blasts once the last of them is gone: a tick after the last one's death animation, or three
+ * after the last one is absorbed (it's removed two ticks after that animation) - 9 to 16 ticks after
+ * they rise (rsprox 3350, 14 of 14 phases; 1875 14700, 16978). The blast lands on everyone two ticks
  * after its graphic, and nine ticks after her animation she restores her shield.
  *
  * Any damage kills one (they have 10 hitpoints; Phosani's always take a max hit, Wiki). The blast
  * does 5 if none reached her, and 144 more spread over the ones that did (Wiki's table; with every
  * one absorbed it always kills). The Nightmare sends one per player in the dream (up to 24),
- * Phosani's two, three, then four. In Phosani's desperation phase they come one at a time and do
- * 15 each.
+ * Phosani's two, three, then four. In Phosani's desperation phase they come one at a time, every
+ * 8 ticks (rsprox 1148 7173-7197, 559 19679-19695), and do 15 each.
  */
 const Common = require("./Common.Nightmare");
 
@@ -35,7 +37,7 @@ function rise(fight, tile, desperate = false) {
 /** Her blast form: the sleepwalkers come, she blasts, then `done` (her next phase). */
 function summon(fight, done) {
   const { sleepwalkers, fight: messages } = Common.data;
-  const state = { spawned: 0, absorbed: 0 };
+  const state = { spawned: 0, absorbed: 0, risen: false, blasted: false, readyAt: 0, done };
   fight.sleepwalkState = state;
   fight.at(sleepwalkers.spawnTicks, () => {
     const players = fight.players();
@@ -46,23 +48,44 @@ function summon(fight, done) {
     const tiles = Common.shuffled(sleepwalkers.tiles);
     const total = howMany(fight);
     for (let i = 0; i < total; i++) if (rise(fight, tiles[i % tiles.length])) state.spawned++;
+    state.risen = true;
+    state.readyAt = fight.tick + 1;
+    // Should one never reach her nor die, she takes them all in at the latest captured blast.
+    fight.at(sleepwalkers.latestBlastTicks, () => {
+      if (fight.sleepwalkState !== state || state.blasted) return;
+      for (const npc of fight.walkers.filter((walker) => !walker.__nightmareWalker?.desperate)) absorb(fight, npc);
+    });
   });
-  const blastAt = sleepwalkers.spawnTicks + (fight.phosani ? 13 : sleepwalkers.blastTicks);
-  fight.at(blastAt, () => blast(fight, state));
-  fight.at(blastAt + sleepwalkers.restoreTicks, () => {
-    if (fight.stopped) return;
+}
+
+/** The last sleepwalker gone: her blast, then her shield nine ticks after it. */
+function blastWhenClear(fight) {
+  const state = fight.sleepwalkState;
+  if (!state || !state.risen || state.blasted || fight.stopped) return;
+  if (fight.walkers.some((npc) => !npc.__nightmareWalker?.desperate) || fight.tick < state.readyAt) return;
+  state.blasted = true;
+  blast(fight, state);
+  const { sleepwalkers, fight: messages } = Common.data;
+  fight.at(sleepwalkers.restoreTicks, () => {
+    if (fight.stopped || fight.sleepwalkState !== state) return;
     fight.sleepwalkState = null;
     const last = fight.phase >= fight.phaseCount;
     if (!last) for (const player of fight.players()) player.sendMessage(messages.messages.restores);
-    done();
+    state.done();
   });
+}
+
+/** One left the walk: the blast waits a tick after a death animation, three after an absorb. */
+function gone(fight, npc, ticks) {
+  fight.walkers = fight.walkers.filter((other) => other !== npc);
+  const state = fight.sleepwalkState;
+  if (state && !npc.__nightmareWalker?.desperate) state.readyAt = Math.max(state.readyAt, fight.tick + ticks);
 }
 
 function blast(fight, state) {
   if (fight.stopped) return;
   const { sleepwalkers } = Common.data;
   fight.boss.performAnimation(Common.animation(sleepwalkers.blastAnim));
-  for (const npc of [...fight.walkers]) absorb(fight, npc);
   for (const player of fight.players()) Common.sounds(player, sleepwalkers.blastSounds);
   const absorbed = state.absorbed;
   const spawned = Math.max(1, state.spawned);
@@ -85,8 +108,11 @@ function blastDamage(absorbed, spawned) {
 
 /** One reached her: absorbed, gone two ticks later. */
 function absorb(fight, npc) {
-  fight.walkers = fight.walkers.filter((other) => other !== npc);
-  if (!npc.isRegistered() || npc.getHitpoints() <= 0) return;
+  if (!npc.isRegistered() || npc.getHitpoints() <= 0) {
+    gone(fight, npc, 1);
+    return;
+  }
+  gone(fight, npc, Common.data.sleepwalkers.absorbBlastTicks);
   npc.performAnimation(Common.animation(Common.data.sleepwalkers.absorbAnim));
   const desperate = npc.__nightmareWalker?.desperate;
   require("./CombatAchievements.Nightmare").sleepwalkerReached(fight, desperate === true);
@@ -100,12 +126,15 @@ function absorb(fight, npc) {
 
 /** They walk a tile a tick to her, and she takes in any that reach her. */
 function process(fight) {
-  if (fight.walkers.length === 0) return;
+  if (fight.walkers.length === 0) {
+    blastWhenClear(fight);
+    return;
+  }
   const body = require("./Attacks.Nightmare").bodyBounds(fight.boss);
   for (const npc of [...fight.walkers]) {
     const walker = npc.__nightmareWalker;
     if (!npc.isRegistered() || npc.getHitpoints() <= 0) {
-      fight.walkers = fight.walkers.filter((other) => other !== npc);
+      gone(fight, npc, 1);
       continue;
     }
     if (fight.tick < walker.walkAt) continue;
@@ -120,9 +149,10 @@ function process(fight) {
     const dy = y < body.minY ? 1 : y > body.maxY ? -1 : 0;
     npc.getMovementQueue().walkStep(dx, dy);
   }
+  blastWhenClear(fight);
 }
 
-/** Phosani's desperation: one at a time from the edges, every 20 ticks. */
+/** Phosani's desperation: one at a time from the edges, every 8 ticks. */
 function desperation(fight) {
   const { sleepwalkers } = Common.data;
   const next = () => {
@@ -158,7 +188,7 @@ function modifyWalkerHit({ npc, hit }) {
 
 function walkerDied({ npc }) {
   const fight = npc?.__nightmareFight;
-  if (fight && npc.__nightmareWalker) fight.walkers = fight.walkers.filter((other) => other !== npc);
+  if (fight && npc.__nightmareWalker && fight.walkers.includes(npc)) gone(fight, npc, 1);
 }
 
 function attachSleepwalkers(api) {

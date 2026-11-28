@@ -11,8 +11,8 @@ const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemI
 const { Equipment } = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
 // rsprox 224/01440.txt ticks 15777-15780 (Ardougne to Brimhaven): "You pay Captain Barnaby 30 coins." with
 // the fade, then three ticks later "You board the ship and sail to Brimhaven." and the move onto the
-// ship's deck (2775,3233,1). The other two ports' boarding lines are the transcript's; their deck tiles
-// aren't recorded, so they still land on the dock.
+// ship's deck (2775,3233,1). Ardougne lands on its ship's deck too (2683,3263,1). The other boarding
+// lines are the transcript's; Rimmington's deck tile isn't known, so it still lands on the dock.
 const FERRY_ROUTES = require("./data/ferries.json").routes;
 const DIALOGUES = require("../../data/definitions/npc-dialogues.json");
 

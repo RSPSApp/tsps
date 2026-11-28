@@ -218,6 +218,7 @@ function respawn(session) {
   const [x, y] = Common.data.site.boss;
   session.figure = session.spawn(Common.data.npcs.boss, x, y);
   session.figure?.setNpcTransformationId(Common.data.npcs.figure);
+  session.figure?.performAnimation(new Common.core.Animation(Common.data.animations.figureIdle));
   Common.api.emitCustomEvent('boss-hud:hide', { player: session.player, fade: false, afterTicks: 0 });
 }
 function recover({ player }) {

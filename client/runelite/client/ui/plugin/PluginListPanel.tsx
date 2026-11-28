@@ -145,7 +145,7 @@ export function PluginListPanel({
                             setPluginPinned(configManager, pluginClass.descriptor.name, pin)
                         }
                         enabled={pluginManager.isEnabled(pluginClass)}
-                        onToggle={(enabled) =>
+                        onToggle={pluginClass.descriptor.toggleable === false ? undefined : (enabled) =>
                             void pluginManager.setPluginEnabled(pluginClass, enabled)
                         }
                         onOpenConfig={

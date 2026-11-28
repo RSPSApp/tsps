@@ -17,20 +17,23 @@ const Dream = require("../plugins/bosses/nightmare/Dream.Nightmare");
 
 const LINE = "This doesn't seem like a suitable place to take a pet.";
 const npcs = {};
+const emitted = [];
 
 before(async () => {
   await CachePipeline.initialize(process.cwd());
   const api = new Proxy({
     core: PluginManager.getCoreApi(),
     onNpcInteraction: (name, actions) => { npcs[name] = actions; },
+    emitCustomEvent: (name, payload) => emitted.push([name, payload]),
   }, { get: (target, key) => (key in target ? target[key] : () => {}) });
   Common.init(api);
   Dream.attachDream(api);
 });
 
-function player(t, pet) {
+function player(t, pet, { introduced = true } = {}) {
   const p = new Player(null);
   t.mock.method(p, "getSession", () => ({ sendClientPacket: () => true, write: () => true }));
+  if (introduced) p.setAttribute(Common.SHURA_INTRO_ATTRIBUTE, true);
   if (pet) p.setAttribute("pets:current", { isRegistered: () => true });
   const chains = [];
   t.mock.method(p.getDialogueManager(), "startDialogues", (chain) => chains.push(chain));
@@ -63,4 +66,25 @@ test("a pet that is no longer out does not count", (t) => {
   p.setAttribute("pets:current", { isRegistered: () => false });
   npcs["The Nightmare"].Disturb({ player: p, npc: {} });
   assert.notEqual(firstText(chains[0]), LINE);
+});
+
+test("before talking to Shura, Disturb and Inspect play her 'Come talk to me first' (rsprox 1148 2905)", (t) => {
+  for (const option of ["Disturb", "Inspect"]) {
+    const { p, chains } = player(t, false, { introduced: false });
+    emitted.length = 0;
+    assert.equal(npcs["The Nightmare"][option]({ player: p, npc: {} }), true);
+    assert.equal(chains.length, 0, "no warning or inspection");
+    const [name, request] = emitted.find(([event]) => event === "npc-dialogue:start") ?? [];
+    assert.equal(name, "npc-dialogue:start");
+    assert.equal(request.variant, Common.data.entry.shura.gateVariant);
+    assert.equal(p.getAttribute(Common.SHURA_INTRO_ATTRIBUTE), true, "heard once");
+    assert.ok(!Dream.dreamOf(p));
+  }
+});
+
+test("Inspect with nobody in the dream says so (rsprox 3284 1383)", (t) => {
+  const { p, chains } = player(t, false);
+  assert.equal(npcs["The Nightmare"].Inspect({ player: p, npc: {} }), true);
+  assert.equal(chains.length, 1);
+  assert.match(firstText(chains[0]), /There are no adventurers in the dream\. The fight has not yet started\./);
 });

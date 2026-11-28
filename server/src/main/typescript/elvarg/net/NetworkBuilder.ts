@@ -30,6 +30,7 @@ import {
   CREATION_MENU_FIRST_ITEM_COMPONENT,
   CREATION_MENU_MAX_QUANTITY,
   CREATION_MENU_LAST_ITEM_ATTRIBUTE,
+  creationMenuRemembersLastItem,
 } from "./packet/PacketSender";
 import { Equipment } from "../game/model/container/impl/Equipment";
 import { MapRegionReplacementManager } from "../game/collision/MapRegionReplacementManager";
@@ -841,7 +842,7 @@ export class ClientConnection {
           continue;
         case "object_option":
           if (this.player) OBJECT_ACTIONS.executeAction(
-            this.player, packet.id, packet.x, packet.y, packet.clickType, packet.action
+            this.player, packet.id, packet.x, packet.y, packet.clickType, packet.action, packet.subOpId
           );
           continue;
         case "player_option":
@@ -1009,8 +1010,11 @@ export class ClientConnection {
               const amount = Number.isInteger(packet.childIndex) && packet.childIndex > 0
                 ? Math.min(packet.childIndex, Number.isInteger(limit) ? limit : CREATION_MENU_MAX_QUANTITY)
                 : 1;
-              // Remembered for the space key next time (CREATION_MENU_LAST_ITEM_VARP).
-              this.player.setAttribute(CREATION_MENU_LAST_ITEM_ATTRIBUTE, creationChildId - CREATION_MENU_FIRST_ITEM_COMPONENT);
+              // Remembered for the space key next time (CREATION_MENU_LAST_ITEM_VARP), except in
+              // the menus whose space key ignores it (enum 3623: Vale Totems carving).
+              if (creationMenuRemembersLastItem(creationMenu.getOptions?.()?.mode)) {
+                this.player.setAttribute(CREATION_MENU_LAST_ITEM_ATTRIBUTE, creationChildId - CREATION_MENU_FIRST_ITEM_COMPONENT);
+              }
               this.player.getPacketSender().closeCreationMenu();
               creationMenu.execute(itemId, amount);
               continue;

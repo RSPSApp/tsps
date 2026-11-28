@@ -48,10 +48,9 @@ class Fight {
     Hazards.clear(this);
     for (const eye of Common.data.extremities)
       this.animateEye(eye, Common.data.animations.eyeWake);
-    this.at(1, () => {
-      for (const eye of Common.data.extremities)
-        this.animateEye(eye, Common.data.animations.eyeAwake);
-    });
+    // 1751/3285: the wake animation plays on the sleeping locs, which become
+    // their awake variants (id + 3) on the next tick.
+    this.at(1, () => this.placeEyes(Common.data.objects.eyeAwakeOffset));
     Preparation.refresh(this.session);
     this.boss.setNpcTransformationId(Common.data.npcs.awake);
     this.boss.setCombatOverride({ stats: Common.data.normal.stats });
@@ -68,8 +67,17 @@ class Fight {
   }
   process() {
     if (this.over) {
-      if (this.session.tick >= this.respawnAt && !this.session.ended)
-        this.session.reset();
+      if (this.stopped || this.session.ended)
+        return;
+      if (this.session.tick >= this.respawnAt) {
+        this.session.reset(true);
+        return;
+      }
+      // Only the kill's own follow-ups (the extremities closing) are scheduled by now.
+      const due = this.events.filter(e => e.due <= this.session.tick);
+      this.events = this.events.filter(e => e.due > this.session.tick);
+      for (const e of due)
+        e.action();
       return;
     }
     if (!this.valid())
@@ -110,6 +118,9 @@ class Fight {
     if (Model.melee(target)) {
       this.boss.performAnimation(new Common.core.Animation(animations.melee));
       this.boss.performGraphic(new Common.core.Graphic(graphics.meleeNpc));
+      const [rowX, rowY] = Common.data.site.boss;
+      // 1751/1827/1703: the slam sound is on the boss row (3039, 6452), one row north of the slam spotanims.
+      Common.areaSound(this.session, Common.data.sounds.melee, [rowX + 3, rowY]);
       // Normal-world recording 1703: the whole visual row is sent with the attack.
       // It does not establish a seven-tile damaging slam; the current Wiki describes
       // a 3x3 chip followed by an aimed 1x1 main hit.
@@ -142,6 +153,7 @@ class Fight {
     const destination = this.player.getLocation().clone();
     this.player.getPacketSender().sendProjectile(this.session.tile(Common.data.site.mouth), destination, 0, magic.endCycle, graphics.magicProjectile, magic.startHeight, magic.endHeight, this.player, magic.startCycle, magic.slope, magic.distanceOffset, null);
     this.player.performGraphicInSlot(magic.impactSlot, Common.core.Graphic.delayed(graphics.magicImpact, magic.endCycle));
+    Common.sound(this.player, Common.data.sounds.magic.id, Common.data.sounds.magic.delay);
     this.at(timing.magic, () => {
       const maximum = Common.protectedFrom(this.player, "PROTECT_FROM_MAGIC")
         ? normal.protectedMagic : normal.magic;
@@ -153,17 +165,33 @@ class Fight {
     const overlay = Common.data.gazeOverlay;
     this.player.getPacketSender().sendSubInterface((overlay.targetGroup << 16) | overlay.targetComponent, overlay.group, 1);
     this.gazeVisible = true;
+    const gazeId = this.gazeId = (this.gazeId ?? 0) + 1;
     this.boss.performAnimation(new Common.core.Animation(Common.data.animations.gaze));
-    this.player.sendMessage("<col=6800bf>Duke Sucellus turns his gaze upon you...");
-    this.at(Common.data.timing.gazeWarning, () => {
-      this.hideGaze();
+    const { messages, sounds, timing } = Common.data;
+    this.player.sendMessage(messages.gaze);
+    Common.sound(this.player, sounds.gazeStart);
+    // The overlay closes six ticks after it opens (1751 7962/7968, 9803/9809; 91, 555, 3285 agree).
+    this.at(timing.gaze, () => {
+      if (this.gazeId === gazeId)
+        this.hideGaze();
+    });
+    // The outcome is four ticks after the gaze starts in every recording (91, 555, 1703, 1751, 3285).
+    this.at(timing.gazeWarning, () => {
+      Common.sound(this.player, sounds.gazeResolved);
       if (Model.hidden(Common.source(this.session, this.player.getLocation()))) {
-        // Spam, as recorded (226/01703.txt:232438; the failure in red, 227/00555.txt:361498).
-        spam(this.player, "<col=06600c>You manage to avoid Duke Sucellus' gaze.");
+        // Spam, as recorded (226/01703.txt:232438).
+        spam(this.player, messages.gazeAvoided);
       }
       else {
-        spam(this.player, "<col=ff3045>You failed to avoid Duke Sucellus' gaze.");
-        this.at(1, () => Common.hurt(this, Common.data.normal.gaze));
+        // Normal kills in 1751 (ticks 9807/9808, 11055/11056): the failure line and spotanim 369,
+        // then the freeze line and the damage a tick later.
+        spam(this.player, messages.gazeFailed);
+        this.player.performGraphicInSlot(Common.data.preparation.iceFreezeSlot, new Common.core.Graphic(Common.data.graphics.gazeFail));
+        this.at(1, () => {
+          this.player.getTimers().registers(Common.core.TimerKey.FREEZE, timing.gazeFreeze);
+          this.player.sendMessage(messages.gazeFrozen);
+          Common.hurt(this, Common.data.normal.gaze);
+        });
       }
     });
   }
@@ -183,6 +211,7 @@ class Fight {
     const spit = () => {
       this.lastAttackCycle = Common.core.World.getProcessCycle();
       this.boss.performAnimation(new Common.core.Animation(Common.data.animations.gas));
+      Common.sound(this.player, Common.data.sounds.gasSpit);
       const here = Common.source(this.session, this.player.getLocation());
       const vents = [...Common.data.vents].sort((a, b) => Math.hypot(a[0] - here[0], a[1] - here[1]) - Math.hypot(b[0] - here[0], b[1] - here[1]));
       this.player.getPacketSender().sendProjectile(this.session.tile(Common.data.site.mouth), this.session.tile(vents[0]), 0, 90, Common.data.graphics.gasProjectile, 87.5, 0, null, 20, 5, 32, null);
@@ -200,13 +229,23 @@ class Fight {
     for (const eye of Common.data.extremities)
       this.animateEye(eye, Common.data.animations.eyeSleep);
   }
+  /** Swap every extremity to its sleeping (offset 0), awake (3) or dead (6) loc. */
+  placeEyes(offset) {
+    for (const eye of Common.data.extremities)
+      this.session.place(eye.id + offset, eye.tile, eye.face);
+  }
   freeze(ticks, ice = false) {
     const { graphics, preparation } = Common.data;
     this.player.getTimers().registers(Common.core.TimerKey.FREEZE, ticks);
-    this.player.sendMessage("<col=e00a19>You've been frozen in place!");
+    this.player.sendMessage(Common.data.messages.frozen);
     this.player.performGraphicInSlot(preparation.freezeSlot, new Common.core.Graphic(graphics.freeze, 0, preparation.freezeHeight));
-    if (ice)
+    if (ice) {
       this.player.performGraphicInSlot(preparation.iceFreezeSlot, new Common.core.Graphic(graphics.iceFreeze));
+      for (const id of Common.data.sounds.iceFreeze)
+        Common.sound(this.player, id);
+    }
+    else
+      Common.sound(this.player, Common.data.sounds.eyeFreeze);
   }
   preparationHazards() {
     Hazards.preparation(this);
@@ -231,8 +270,15 @@ class Fight {
     Hazards.clear(this);
     this.coldFeetEligible = this.perfect && !this.session.ranSinceKill;
     this.session.ranSinceKill = false;
-    this.finishedTicks = Math.max(1, Common.core.World.getProcessCycle() - this.started);
     this.respawnAt = this.session.tick + Common.data.timing.respawn;
+    // 1751/3285: the extremities close (10190, sent on two ticks), then become their dead locs.
+    for (const eye of Common.data.extremities)
+      this.animateEye(eye, Common.data.animations.eyeDeath);
+    this.at(1, () => {
+      for (const eye of Common.data.extremities)
+        this.animateEye(eye, Common.data.animations.eyeDeath);
+    });
+    this.at(Common.data.timing.eyeDeadSwap, () => this.placeEyes(Common.data.objects.eyeDeadOffset));
     this.session.setExit(false);
     Common.api.emitCustomEvent('boss-hud:update', { player: this.player, current: 0 });
   }
@@ -240,6 +286,9 @@ class Fight {
     if (!this.over || this.wonAlready || killer !== this.player || this.session.fight !== this)
       return;
     this.wonAlready = true;
+    // The timer runs from waking to the kill count message (3285: ticks 20197 to 20267 show 0:42;
+    // since 25 June 2025 it no longer includes preparation).
+    this.finishedTicks = Math.max(1, Common.core.World.getProcessCycle() - this.started);
     const count = Math.max(this.baselineKills + 1, Common.count(this.player, Common.KILLS) + 1, Common.kills(this.player)), ticks = this.finishedTicks;
     this.player.setAttribute(Common.KILLS, count);
     this.player.getPacketSender().sendConfig(Common.data.killCountVarp, count);
@@ -248,7 +297,13 @@ class Fight {
     if (!previous || ticks < previous)
       this.player.setAttribute(Common.BEST, ticks);
     Records.kill(ticks);
-    this.player.sendMessage(`Fight duration: ${(ticks * .6).toFixed(1)} seconds.`);
+    this.player.sendMessage(!previous || ticks < previous
+      ? `Fight duration: <col=ff0000>${Common.formatTicks(ticks)}</col> (new personal best)`
+      : `Fight duration: <col=ff0000>${Common.formatTicks(ticks)}</col>. Personal best: ${Common.formatTicks(previous)}`);
+    // Spotanim 85 on the loot tile and Prison Break with the kill count (91, 1751, 1827, 3285).
+    const loot = Common.data.graphics.loot;
+    Common.graphic(this.session, loot.id, Common.data.site.loot, 0, loot.height);
+    this.player.getPacketSender().sendSong(Common.data.music.kill);
     if (this.perfect)
       this.session.perfectKills++;
     if (this.coldFeetEligible)

@@ -1,5 +1,5 @@
 /**
- * Gold and silver jewellery at a furnace, Family Crest's 'perfect' jewellery, and stringing
+ * Gold and silver jewellery at a furnace (Family Crest's 'perfect' ruby ring and necklace through the gold menu), and stringing
  * amulets.
  *
  * Wiki (Crafting#Jewellery): a gold bar used on a furnace with a ring, necklace, amulet or
@@ -81,8 +81,8 @@ function data() {
     perfect: perfect.recipes.map((recipe) => ({
       ...recipe, itemId: Shared.itemId(recipe.item), mouldId: Shared.itemId(recipe.mould),
     })),
-    strung: new Map(strungAmulets.pairs.map(([unstrung, strung, noun = "amulet", material = "BALL_OF_WOOL"]) =>
-      [`${Shared.itemId(material)}:${Shared.itemId(unstrung)}`, { itemId: Shared.itemId(strung), noun }])),
+    strung: new Map(strungAmulets.pairs.map(([unstrung, strung, noun = "amulet", material = "BALL_OF_WOOL", xp = strungAmulets.xp]) =>
+      [`${Shared.itemId(material)}:${Shared.itemId(unstrung)}`, { itemId: Shared.itemId(strung), noun, xp }])),
     stringXp: strungAmulets.xp,
     animation: new Animation(FURNACE_ANIMATION_ID),
     sound: new Sound(FURNACE_SOUND, 1, 0, 0),
@@ -160,16 +160,38 @@ function storeLastItem(player, buttonId) {
   if (Number.isInteger(value) && varbitId != null) player.getPacketSender().sendVarbit(varbitId, value);
 }
 
-function goldProduct(player, component) {
+/**
+ * The gold bar a gold-menu product is made from. Family Crest's 'perfect' gold bar works as a gold bar (Wiki,
+ * 'perfect' gold bar: other jewellery comes out without the prefix): it is used when it opened the menu, or when no
+ * plain gold bar is carried. Ours: no recording holds both bars.
+ */
+function goldBarFor(player, menu) {
+  const { ItemIds: I } = Shared.getCore();
+  const inventory = player.getInventory();
+  if (inventory.contains(I.PERFECT_GOLD_BAR) && (menu?.bar === I.PERFECT_GOLD_BAR || !inventory.contains(I.GOLD_BAR))) {
+    return I.PERFECT_GOLD_BAR;
+  }
+  return I.GOLD_BAR;
+}
+
+function goldProduct(player, component, menu) {
   const { ItemIds: I } = Shared.getCore();
   const { goldTypes, goldGems, slayerRing } = data();
-  if (component === slayerRing.component) return slayerRingProduct(player, slayerRing);
+  if (component === slayerRing.component) return slayerRingProduct(player, slayerRing, menu);
   const type = goldTypes.find(({ components }) => components.includes(component));
   if (!type) return null;
   const gemIndex = type.components.indexOf(component);
   const [itemId, level, xp] = type.products[gemIndex];
   const gemId = goldGems[gemIndex];
-  return { itemId, level, xp, bar: I.GOLD_BAR, mouldId: type.mouldId,
+  const bar = goldBarFor(player, menu);
+  // From a 'perfect' gold bar the ruby ring and necklace are the 'perfect' pieces (rsprox local recordings 1002252
+  // ticks 1561-1574, 1002185 ticks 9330-9342: no message).
+  if (bar === I.PERFECT_GOLD_BAR && gemId === I.RUBY) {
+    const perfect = data().perfect.find((recipe) => recipe.mouldId === type.mouldId);
+    if (perfect) return { itemId: perfect.itemId, level: perfect.level, xp: perfect.xp, bar,
+      mouldId: perfect.mouldId, extra: [I.RUBY], amount: 1 };
+  }
+  return { itemId, level, xp, bar, mouldId: type.mouldId,
     extra: gemId === null ? [] : [gemId], amount: 1 };
 }
 
@@ -177,7 +199,7 @@ function goldProduct(player, component) {
 const SLAYER_RING_LOCKED = "You need to unlock the ability to craft slayer rings from a Slayer master.";
 
 /** 446:16: the eternal ring when an eternal gem is carried, else the enchanted-gem ring; needs Ring bling. */
-function slayerRingProduct(player, slayerRing) {
+function slayerRingProduct(player, slayerRing, menu) {
   const { ItemIds: I, CacheDefinitions } = Shared.getCore();
   const varbit = CacheDefinitions.getVarbitId(slayerRing.unlockVarbit);
   if (varbit == null || player.getPacketSender().getVarbit(varbit) !== 1) {
@@ -186,7 +208,7 @@ function slayerRingProduct(player, slayerRing) {
   }
   const inventory = player.getInventory();
   const [gemId, itemId] = slayerRing.products.find(([gem]) => inventory.contains(gem)) ?? slayerRing.products.at(-1);
-  return { itemId, level: slayerRing.level, xp: slayerRing.xp, bar: I.GOLD_BAR, mouldId: slayerRing.mouldId,
+  return { itemId, level: slayerRing.level, xp: slayerRing.xp, bar: goldBarFor(player, menu), mouldId: slayerRing.mouldId,
     extra: [gemId], amount: 1 };
 }
 
@@ -217,14 +239,15 @@ function handleJewelleryButton(event) {
     menu.amount = amount;
     player.getPacketSender().sendConfig(MAKE_QUANTITY_VARP, amount === 28 ? 0 : amount);
   } else {
-    const product = group === GOLD_CRAFTING_INTERFACE ? goldProduct(player, component) : silverProduct(component);
+    const product = group === GOLD_CRAFTING_INTERFACE ? goldProduct(player, component, menu) : silverProduct(component);
     if (product) startFurnaceProduct(player, menu, product, buttonId);
   }
 }
 
-function openFurnaceMenu(player, group) {
+/** `bar`: the bar used on the furnace to open it, if any. */
+function openFurnaceMenu(player, group, bar = null) {
   Shared.stopCrafting(player);
-  player.setAttribute(JEWELLERY_MENU_ATTRIBUTE, { amount: 1, location: player.getLocation().clone() });
+  player.setAttribute(JEWELLERY_MENU_ATTRIBUTE, { amount: 1, location: player.getLocation().clone(), bar });
   player.setInterfaceId(group);
   player.getPacketSender().sendConfig(MAKE_QUANTITY_VARP, 1).sendSubInterface(MAIN_MODAL_TARGET_UID, group, 0);
 }
@@ -235,6 +258,12 @@ function furnaceMenuFor(player) {
   const inventory = player.getInventory();
   const { goldTypes, silver } = data();
   if (inventory.contains(I.GOLD_BAR) && goldTypes.some(({ mouldId }) => inventory.contains(mouldId))) {
+    return GOLD_CRAFTING_INTERFACE;
+  }
+  // A 'perfect' gold bar is a gold bar here, once the 'perfect' ore is all smelted: live's Smelt with a bar and an ore
+  // still held smelts the ore (recording 1002252 tick 1531), and opens the menu only after (1573).
+  if (inventory.contains(I.PERFECT_GOLD_BAR) && !inventory.contains(I.PERFECT_GOLD_ORE)
+    && goldTypes.some(({ mouldId }) => inventory.contains(mouldId))) {
     return GOLD_CRAFTING_INTERFACE;
   }
   if (inventory.contains(I.SILVER_BAR) && [...silver.values()].some(({ mouldId }) => inventory.contains(mouldId))) {
@@ -255,58 +284,13 @@ function handleBarOnFurnace(event) {
   const { player, object, itemId } = event;
   const I = Shared.getCore().ItemIds;
   if (!isFurnace(object)) return;
-  if (itemId === I.GOLD_BAR) {
+  if (itemId === I.GOLD_BAR || itemId === I.PERFECT_GOLD_BAR) {
     event.handled = true;
-    openFurnaceMenu(player, GOLD_CRAFTING_INTERFACE);
+    openFurnaceMenu(player, GOLD_CRAFTING_INTERFACE, itemId);
   } else if (itemId === I.SILVER_BAR) {
     event.handled = true;
     openFurnaceMenu(player, SILVER_CRAFTING_INTERFACE);
   }
-}
-
-function craftPerfectJewellery(player, recipe) {
-  const { ItemIds: I, Item } = Shared.getCore();
-  const inventory = player.getInventory();
-  if (Shared.craftingLevel(player) < recipe.level) {
-    player.sendMessage(`You need a Crafting level of at least ${recipe.level} to craft this.`);
-    return;
-  }
-  if (!inventory.contains(I.PERFECT_GOLD_BAR) || !inventory.contains(I.RUBY) || !inventory.contains(recipe.mouldId)) {
-    return;
-  }
-  inventory.deleteNumber(I.PERFECT_GOLD_BAR, 1);
-  inventory.deleteNumber(I.RUBY, 1);
-  inventory.addItem(new Item(recipe.itemId, 1));
-  Shared.addCraftingXp(player, recipe.xp);
-  player.sendMessage(`You craft a ${recipe.name}.`);
-}
-
-/** Using a 'perfect' gold bar on a furnace, with a ruby and a mould, makes the jewellery. */
-function handlePerfectJewellery(event) {
-  const { player, object, itemId } = event;
-  const I = Shared.getCore().ItemIds;
-  if (itemId !== I.PERFECT_GOLD_BAR || !isFurnace(object)) return;
-
-  const inventory = player.getInventory();
-  const recipes = data().perfect.filter(
-    (recipe) => inventory.contains(recipe.mouldId) && inventory.contains(I.RUBY)
-  );
-  if (recipes.length === 0) return;
-
-  event.handled = true;
-  if (recipes.length === 1) {
-    craftPerfectJewellery(player, recipes[0]);
-    return;
-  }
-  // Both moulds carried: let the player choose, as the OSRS jewellery interface does.
-  Shared.getApi().sendMultiChatboxPrompt(
-    player,
-    "What would you like to make?",
-    recipes[0].name,
-    () => craftPerfectJewellery(player, recipes[0]),
-    recipes[1].name,
-    () => craftPerfectJewellery(player, recipes[1])
-  );
 }
 
 /** A selected string material used on unstrung jewellery, in either order. */
@@ -330,15 +314,14 @@ function stringAmulet(event) {
     inventory.deleteNumber(materialId, 1);
     inventory.deleteNumber(unstrungId, 1);
     inventory.addItem(new Item(strung.itemId, 1));
-    Shared.addCraftingXp(player, data().stringXp);
+    Shared.addCraftingXp(player, strung.xp);
     Shared.spam(player, `You put some string on your ${strung.noun}.`);
-    Shared.produced(player, strung.itemId, 1, data().stringXp, "string", [[unstrungId, 1], [materialId, 1]]);
+    Shared.produced(player, strung.itemId, 1, strung.xp, "string", [[unstrungId, 1], [materialId, 1]]);
   });
 }
 
 module.exports = function attach(api) {
   for (const name of FURNACE_NAMES) api.onObjectInteraction(name, { Smelt: smeltAtFurnace });
-  api.onItemOnObject(handlePerfectJewellery, { noted: false });
   api.onItemOnObject(handleBarOnFurnace, { noted: false });
   api.onInterfaceActionClick(handleJewelleryButton);
   api.onItemOnItem(stringAmulet, { noted: false });

@@ -31,7 +31,7 @@ import {
     subscribeTick,
 } from "../../../network/ServerConnection";
 import { sendLogin } from "../../../network/ServerConnection";
-import { sendPlayerOption, sendWorldEntityOption } from "../../../network/serverConnection/outgoing/interact";
+import { sendPlayerOption, sendWorldEntityOption, sendLocInteract } from "../../../network/serverConnection/outgoing/interact";
 import { flushPackets } from "../../../network/packet";
 import { createTextureArray } from "../../../picogl/PicoTexture";
 import { RS_TO_RADIANS } from "../../../rs/MathConstants";
@@ -103,9 +103,9 @@ import { layoutWidgets } from "../../../widgets/layout/WidgetLayout";
 import { collectWidgetsAtPoint } from "../../../widgets/menu/utils";
 import {
     getCanvasCssSize,
+    hasCoarsePointer,
     isIos,
     isMobileMode,
-    isTouchDevice,
     isWebGL2Supported,
 } from "../../../common/utils/DeviceUtil";
 import { clamp } from "../../../common/utils/MathUtil";
@@ -132,6 +132,7 @@ import type { PlayerAnimKey } from "../../../game/ecs/PlayerEcs";
 import { GameState, LoginIndex } from "../../../game/login";
 import { Ray, rayIntersectsBox } from "../../../game/math/Raycast";
 import {
+    buildLocSubEntries,
     getNpcMenuActions,
     isMouseInUIRegion as checkMouseInUIRegion,
 } from "../../../game/menu/WorldMenuBuilder";
@@ -280,7 +281,11 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
         host.lastInteractionMenuOptionCount = 0;
         let raycastHitCount = 0;
 
-        const menuCooldown = isTouchDevice ? 50 : 10;
+        // Touch-menu rules follow the main pointer, not touch hardware: a mouse-driven PC with a
+        // touchscreen, precision touchpad or pen tablet reports maxTouchPoints > 0, and treating it
+        // as a phone dropped right-clicks for 50 frames after each menu and kept stale menus open.
+        const touchMenu = hasCoarsePointer;
+        const menuCooldown = touchMenu ? 50 : 10;
 
         if (
             menuCooldownBlocksPass({
@@ -291,7 +296,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                 cooldownFrames: menuCooldown,
                 leftClicked,
                 picked,
-                touch: isTouchDevice,
+                touch: touchMenu,
             })
         ) {
             if (mouseX === -1 || mouseY === -1) {
@@ -304,7 +309,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
         }
 
         // Don't auto close menu on touch devices
-        if (host.osrsClient.menuOpen && !picked && !isMouseDown && isTouchDevice) {
+        if (host.osrsClient.menuOpen && !picked && !isMouseDown && touchMenu) {
             return;
         }
 
@@ -1012,6 +1017,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
 
                     // LOC actions inserted 4..0, then Examine; op flags from the server hide ops.
                     const opFlags = host.osrsClient.locOpFlagsAt?.(worldTileX, worldTileY, interactId);
+                    const locLevel = hit.locLevel ?? interactionPlane;
                     for (let actionIdx = 4; actionIdx >= 0; actionIdx--) {
                         const customAction = warpActions?.get(actionIdx);
                         const option = customAction ?? (resolvedLocType.entityOps
@@ -1019,7 +1025,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                             : resolvedLocType.actions?.[actionIdx]);
                         if (!option) continue;
                         if (!customAction && opFlags !== undefined && (opFlags & (1 << actionIdx)) === 0) continue;
-                        menuEntries.push({
+                        const entry: OsrsMenuEntry = {
                             option,
                             targetId: interactId,
                             targetType: MenuTargetType.LOC,
@@ -1028,7 +1034,27 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                             mapX: localX,
                             mapY: localY,
                             actionIndex: actionIdx,
-                        });
+                        };
+                        // The option's cache sub-ops (a fairy ring's favourites) open a nested menu;
+                        // picking a row answers the option with that 1-based row.
+                        if (!customAction) {
+                            const subEntries = buildLocSubEntries(
+                                resolvedLocType,
+                                actionIdx,
+                                { id: interactId, name: targetName, mapX: localX, mapY: localY },
+                                host.osrsClient.varManager,
+                                ({ subOp, name }) => sendLocInteract(
+                                    interactId,
+                                    { x: worldTileX, y: worldTileY },
+                                    locLevel,
+                                    name,
+                                    actionIdx + 1,
+                                    subOp,
+                                ),
+                            );
+                            if (subEntries.length > 0) entry.subEntries = subEntries;
+                        }
+                        menuEntries.push(entry);
                         // A loc's first option (the sail cloth's Trim) stays the left-click over
                         // "Set heading" (live: Trim on a left-click while a gust waits).
                         if (actionIdx === 0 && walkHereEntry?.swapPinned) delete walkHereEntry.swapPinned;

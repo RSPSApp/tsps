@@ -249,56 +249,8 @@ async function main() {
         client.varManager.getVarcInt = () => 3;
     }
 
-    // Row 347: the in-game server list asks before switching while the confirmation is on.
-    {
-        let disableConfirmation = 0;
-        const done: string[] = [];
-        const here = { name: "Here", address: "here", secure: true, transport: "websocket" };
-        const there = { name: "There", address: "there", secure: true, transport: "websocket" };
-        let clicked: any;
-        const client: any = Object.create(OsrsClient.prototype);
-        client.loginRenderer = { serverList: [here, there], handleMouseClick: () => clicked };
-        client.inputManager = { clickMode3: 1, saveClickX: 1, saveClickY: 1 };
-        client.loginState = {
-            serverTransport: "websocket", serverAddress: "here", serverSecure: true,
-            serverListOpen: true, serverSwitchConfirm: null,
-        };
-        client.varManager = { getVarbit: (id: number) => (id === 4100 ? disableConfirmation : 0) };
-        client.performLogout = (after: () => void) => { done.push("logout"); after(); };
-        client.processLoginAction = (action: any) => done.push(`${action.type}${action.index ?? ""}`);
-        const click = (action: any) => {
-            clicked = action;
-            Object.assign(client.inputManager, { clickMode3: 1, saveClickX: 1, saveClickY: 1 });
-            client.handleInGameServerListInput();
-        };
-
-        click({ type: "select_server", index: 1 });
-        assert.equal(client.loginState.serverSwitchConfirm, there, "the list asks first");
-        assert.deepEqual(done, []);
-        click({ type: "cancel_server_switch" });
-        assert.equal(client.loginState.serverSwitchConfirm, null, "Cancel goes back to the list");
-        assert.deepEqual(done, []);
-
-        click({ type: "select_server", index: 1 });
-        // A refresh while it asks puts the server elsewhere in a new list.
-        client.loginRenderer.serverList = [{ ...there }, { name: "New", address: "new", secure: true, transport: "websocket" }, { ...here }];
-        click({ type: "confirm_server_switch" });
-        assert.deepEqual(done, ["logout", "select_server0"], "Switch world goes to the server it named");
-        assert.equal(client.loginState.serverListOpen, false);
-
-        done.length = 0;
-        client.loginRenderer.serverList = [here, there];
-        client.loginState.serverListOpen = true;
-        disableConfirmation = 1;
-        click({ type: "select_server", index: 1 });
-        assert.equal(client.loginState.serverSwitchConfirm, null, "with the confirmation off it doesn't ask");
-        assert.deepEqual(done, ["logout", "select_server1"]);
-
-        done.length = 0;
-        disableConfirmation = 0;
-        click({ type: "select_server", index: 0 });
-        assert.deepEqual(done, ["close_server_list"], "the current server just closes the list");
-    }
+    // Row 347 ("World Switcher confirmation", varbit 4100): choosing a world asks first while it
+    // is on. That is the World Switcher's, and is tested with it (tests/world-switcher.test.ts).
 }
 
 main().then(

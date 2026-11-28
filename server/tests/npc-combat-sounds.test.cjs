@@ -66,6 +66,16 @@ test('a dying NPC plays its death sound to everyone who fought it; the definitio
   assert.deepEqual(c.sent, [[512, 0, 0]]);
 });
 
+test('a dark beast is hit, attacks and dies with its recorded sounds (issue 6915)', () => {
+  // rsprox captures local 1000730, local 1001309: 391 with its defend animation, 389 with its attack,
+  // 390 with its death, each a private synth with delay 0.
+  const p = player();
+  NpcCombatSounds.hit(npc(4005), p);
+  NpcCombatSounds.attack(npc(4005), p);
+  NpcCombatSounds.death(npc(4005), [p]);
+  assert.deepEqual(p.sent.map(([id, , delay]) => [id, delay]), [[391, 0], [389, 0], [390, 0]]);
+});
+
 test('an NPC with no captured sounds, and a logged-out listener, stay silent', () => {
   const p = player();
   NpcCombatSounds.hit(npc(999999), p);

@@ -42,7 +42,7 @@ The capture index lists every loc option that moved the player, per loc and clic
 python3 rsprox_index.py loc-teleports --out loc-teleports.json
 ```
 
-Per loc: the destinations (and the tile the player clicked from, for locs used from either side), the tick of the move, the player's animation, sounds (the first one that is not a fight's: `ignoreSounds` in `loc-teleport-sync.json` lists the attack, hit, block and weapon sounds the sync skips, as a monster fighting nearby is the first thing a capture hears), whether the screen faded, the messages of attempts that didn't move anyone, a dialogue choice on the way, and labels for instances, boats, agility shortcuts and Leagues or event worlds. Ticks count from the player arriving at the loc.
+Per loc: the destinations (and the tile the player clicked from, for locs used from either side), the tick of the move, the lines live sent with the crossing (`lines`, in an export that records them: each with its type and its tick from the move, when more than half the crossings got it; without it the sync leaves the entries' `messages` as they are), the player's animation, sounds (the first one that is not a fight's: `ignoreSounds` in `loc-teleport-sync.json` lists the attack, hit, block and weapon sounds the sync skips, as a monster fighting nearby is the first thing a capture hears), whether the screen faded, the messages of attempts that didn't move anyone, a dialogue choice on the way, and labels for instances, boats, agility shortcuts and Leagues or event worlds. Ticks count from the player arriving at the loc.
 
 ## The sync
 
@@ -342,12 +342,16 @@ The object-route hook walks to that threshold before playing the transition.
 The click is handled the tick after the player arrives, so each captured tick comes one tick earlier from the click:
 1. **The animation's tick:** the animation and sound, and the fade out when there is one.
 2. **A tick later:** the minimap goes off.
-3. **The captured tick:** the move, after the entry's `message` when it has one: the game message live OSRS sends on a successful crossing (`messageType: "spam"` for one the chat filter hides). The Cam Torum squeeze doors say "You manage to squeeze through the tiny door." as spam on the teleport's tick (226/1693; 237/1098, 1102, 1105, 1135). The capture export keeps success messages without their type or tick, so the sync doesn't write them; it keeps one on an entry already in the data.
+3. **The captured tick:** the move, after the entry's `message` when it has one: the game message live OSRS sends on a successful crossing (`messageType: "spam"` for one the chat filter hides). The Cam Torum squeeze doors say "You manage to squeeze through the tiny door." as spam on the teleport's tick (226/1693; 237/1098, 1102, 1105, 1135). `message` is set by hand; the sync writes `messages` (below).
 4. **After the move:** the fade back in a tick later, and the overlay closed two ticks after that.
 
 An entry that plays nothing before the move (no animation, sound, fade or message box) has no animation tick to wait for, so the move is on the captured tick itself. Before, it still came a tick after the (empty) animation's tick, one tick later than captured: tick 1 moved two ticks after arriving, tick 2 three. 205 entries are like this, among them the Waterbirth cave with its warning off (in on tick 2, now two ticks after arriving) and the Kalphite Lair tunnels (two ticks after arriving, as described above). A captured tick 0 moves on the click, the earliest the handler can.
 
 `message` may be a list, sent in order on the move's tick: the Sorcerer's Tower Portal sends two lines.
+
+**A crossing's lines (`messages`):** the sync writes the lines the captures show with a crossing, `{ text, type, afterMove }`: `type` "spam" for the filterable channel, `afterMove` the ticks from the move (negative before it, left out on it). Each plays on its tick; one before the move is sent no earlier than the click is handled, and one after the move only once the player has landed, without holding their movement. The H.A.M. Hideout's trapdoor says "You climb down through the trapdoor..." with the move and "... and enter a dimly lit cavern area." a tick later; its ladder "You climb up the ladder." and then "You leave the HAM Fanatics' Camp." (227/1723 ticks 8630-8631 and 8983-8984, 232/3199, 234/3275; the ladder's 227/1723 tick 9203 and 232/3202 ticks 474-475).
+
+The sync takes a line when more than half the loc's crossings got it, and leaves out what is something else going on: lines the game colours (diary and Slayer task completions), level-ups, music unlocks, chat channels, food, potions, poison, desert thirst, League points, and lines with a number (the export blanks them out). A loc with a destination per side gets none, since its sides may say different things, and an entry with a hand-set `message` keeps it. Lines are captured data, so the sync writes them on entries already in the data too: 42 entries have them (2026-11-26).
 
 Two optional fields, set by hand (the capture export has neither): `soundDelay`, the sound's client delay as captured (`synth_sound delay`), and `fadeInTicks`, the ticks from the move to the fade back in when it is not one. The Crypt of Tonali lifts (`vmq4_crypt_lift`, `vmq4_crypt_lift_surface`) play their sound with delay 48 and fade back in two ticks after the move (233/03234.txt ticks 248-254 and 299-305, 232/03128.txt ticks 4024-4028). With `fadeInTicks`, movement is free again a tick after the fade back in, before the overlay closes: the up ride's first run step is on tick 304, between the fade in (303) and the close (305).
 
@@ -500,3 +504,16 @@ added by hand from RSProx 233/739, with a `source` on each entry:
 
 Neither attempt was refused; the captures don't show whether the roof needs My Arm's Big Adventure,
 so neither entry has a gate.
+
+## Fremennik Slayer Dungeon exit
+
+The dungeon's [Tunnel](https://oldschool.runescape.wiki/w/Tunnel_(Fremennik_Slayer_Dungeon))
+(`slayer_dungeon_exit`, 2141, 2x3 tiles at 2809,10001) had no handler, so Enter did nothing and there
+was no way out on foot. The Wiki says it leaves the dungeon at its entrance. The way in, the Cave
+Entrance (`slayer_dungeon_entrance`, 2123, 2x3 tiles at 2797,3614), is captured: the player stands on
+2796,3615 west of it and lands on 2808,10002, west of the Tunnel, one tick after arriving, with no
+animation, sound or fade.
+
+The way out isn't captured: none of the recordings in the dungeon leaves through the Tunnel. The Tunnel lands on
+2796,3615, the tile the agent `transports.json` gives and the one captured players stood on to enter,
+and it takes the entrance's one-tick move with nothing played (ours).

@@ -344,7 +344,7 @@ function answerCondition(event) {
 
 /** Fills the transcripts' blanks ("[amount]", "[task monster]", "[task streak amount]", Mortimer's "[X]"). */
 function fillLine(request) {
-  if (!/\[(amount|number|task monster|monster|task streak amount|X)\]/.test(request.text ?? "")) return;
+  if (!/\[(amount|number|task monster|monster|task streak amount|X|area)\]/.test(request.text ?? "")) return;
   const master = masterFor(request.definition);
   if (!master) return;
   const task = Tasks.current(request.player);
@@ -363,8 +363,15 @@ function fillLine(request) {
     .replace(/Wilderness task streak of \[task streak amount\]/g, `Wilderness task streak of ${wildernessStreak}`)
     .replace(/\[task streak amount\]/g, String(streak))
     .replace(/\[X\]/g, String(mortimerTasks(request.player)))
+    // Konar's contact line carries two [amount] blanks; the second is the tally, which is the
+    // player's points, not the task's count. Filled here, before the generic blank takes it.
+    .replace(/reward point tally is \[amount\]/g, `reward point tally is ${State.varbit(request.player, "slayer_points")}`)
     .replace(/\[(amount|number)\]/g, String(task?.count ?? 0))
-    .replace(/\[(task monster|monster)\]/g, Tasks.taskName(task?.task));
+    .replace(/\[(task monster|monster)\]/g, Tasks.taskName(task?.task))
+    // The item contact's Konar line reads "in [area]" and every area text already carries its own
+    // preposition ("in the Crypt of Tonali"), so the transcript's " in" goes with the blank. A task
+    // with no area (another master's) drops it.
+    .replace(/ in \[area\]/g, task?.area?.text ? ` ${task.area.text}` : "");
 }
 
 /**
@@ -582,14 +589,15 @@ function dialogueVariant({ npcId, definition }) {
   return STEVE_MASTER_VARIANT;
 }
 
-const EQUIPMENT_SHOP = "Slayer Equipment (shop)";
+/** "Slayer Equipment (shop)": matched by id, which the importer preserves across regenerations. */
+const EQUIPMENT_SHOP_ID = 1324;
 
 /** Trade (op4): the equipment shop, for forms the shops.json binding misses (Nieve 1455). */
 function trade(event) {
   if (!masterFor(event.definition)) return false;
-  const shops = core.ShopDefinition.all().filter((shop) => shop.getName() === EQUIPMENT_SHOP);
-  if (shops.length !== 1) return false;
-  core.ShopManager.open(event.player, shops[0].getId(), true);
+  const shop = core.ShopDefinition.all().find((definition) => definition.getId() === EQUIPMENT_SHOP_ID);
+  if (!shop) return false;
+  core.ShopManager.open(event.player, shop.getId(), true);
   return true;
 }
 

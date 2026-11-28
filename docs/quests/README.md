@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-198 quests · ✅ passed: 24 · ⚠️ passed with issues: 21 · 🔄 in progress: 15 · ❌ failed: 0 · 🔁 needs recheck: 49 · untested: 89
+199 quests · ✅ passed: 24 · ⚠️ passed with issues: 23 · 🔄 in progress: 16 · ❌ failed: 0 · 🔁 needs recheck: 50 · untested: 86
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -58,7 +58,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Druidic Ritual](druidic-ritual/README.md) | ✅ passed | 2026-10-22 | agent |  |  |
 | [Dwarf Cannon](dwarf-cannon/README.md) | 🔁 needs recheck | 2026-11-17 | agent | claude-opus-5-5 | 4 |
 | [Eadgar's Ruse](eadgars-ruse/README.md) | untested |  |  |  |  |
-| Eagles' Peak | untested |  |  |  |  |
+| [Eagles' Peak](eagles-peak/README.md) | ⚠️ passed with issues | 2026-11-27 | agent | claude-opus-5-5 | 1 |
 | [Elemental Workshop I](elemental-workshop-i/README.md) | ✅ passed | 2026-11-19 | agent | claude-opus-5-5 |  |
 | [Elemental Workshop II](elemental-workshop-ii/README.md) | 🔄 in progress | 2026-11-19 | agent | claude-opus-5-5 |  |
 | [Enakhra's Lament](enakhras-lament/README.md) | untested |  |  |  |  |
@@ -69,8 +69,8 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Fairytale I - Growing Pains](fairytale-i-growing-pains/README.md) | ⚠️ passed with issues | 2026-11-16 | agent | claude-opus-5-5 |  |
 | [Fairytale II - Cure a Queen](fairytale-ii-cure-a-queen/README.md) | ⚠️ passed with issues | 2026-11-16 | agent | claude-opus-5-5 |  |
 | [Fallen From Grace](fallen-from-grace/README.md) | 🔁 needs recheck | 2026-10-30 | agent | claude-haiku-5-5 | 8 |
-| Family Crest | untested |  |  |  |  |
-| [Family Pest](family-pest/README.md) | 🔄 in progress |  | agent | claude-sonnet-5-5 | 6 |
+| [Family Crest](family-crest/README.md) | 🔄 in progress | 2026-11-26 | agent | claude-opus-5-5 | 1 |
+| [Family Pest](family-pest/README.md) | 🔄 in progress | 2026-11-26 | agent | claude-opus-5-5 |  |
 | [Fight Arena](fight-arena/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
 | [Fishing Contest](fishing-contest/README.md) | ✅ passed |  | agent |  |  |
 | Forgettable Tale... | untested |  |  |  |  |
@@ -102,7 +102,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Making Friends with My Arm | untested |  |  |  |  |
 | [Making History](making-history/README.md) | ⚠️ passed with issues | 2026-11-11 | agent | claude-opus-5-5 |  |
 | [Meat and Greet](meat-and-greet/README.md) | ✅ passed |  | agent |  |  |
-| [Merlin's Crystal](merlins-crystal/README.md) | untested |  |  |  |  |
+| [Merlin's Crystal](merlins-crystal/README.md) | ⚠️ passed with issues | 2026-11-26 | agent | claude-opus-5-5 | 2 |
 | [Misthalin Mystery](misthalin-mystery/README.md) | 🔁 needs recheck | 2026-10-29 | agent | grok-4.7 | 1 |
 | [Monk's Friend](monks-friend/README.md) | ✅ passed |  | agent |  |  |
 | [Monkey Madness I](monkey-madness-i/README.md) | 🔁 needs recheck | 2026-10-31 | agent | claude-opus-5-5 | 5 |
@@ -137,7 +137,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Rune Mysteries](rune-mysteries/README.md) | 🔁 needs recheck | 2026-10-30 | agent | grok-4.7 | 4 |
 | [Scorpion Catcher](scorpion-catcher/README.md) | 🔁 needs recheck | 2026-10-29 | agent | grok-4.7 | 5 |
 | [Scrambled!](scrambled/README.md) | untested |  |  |  |  |
-| [Sea Slug](sea-slug/README.md) | ✅ passed | 2026-11-10 | agent | claude-opus-5-5 | 1 |
+| [Sea Slug](sea-slug/README.md) | ✅ passed | 2026-11-10 | agent | claude-opus-5-5 | 3 |
 | [Secrets of the North](secrets-of-the-north/README.md) | untested |  |  |  |  |
 | Shades of Mort'ton | untested |  |  |  |  |
 | [Shadow of the Storm](shadow-of-the-storm/README.md) | 🔄 in progress | 2026-11-24 | agent | claude-opus-5-5 |  |
@@ -163,6 +163,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | The Curse of Arrav | untested |  |  |  |  |
 | [The Depths of Despair](the-depths-of-despair/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
 | The Dig Site | untested |  |  |  |  |
+| [The Enchanted Key](the-enchanted-key/README.md) | 🔁 needs recheck | 2026-11-28 | agent | claude-opus-5-5 |  |
 | The Eyes of Glouphrie | untested |  |  |  |  |
 | [The Feud](the-feud/README.md) | untested |  |  |  |  |
 | [The Final Dawn](the-final-dawn/README.md) | untested |  |  |  |  |

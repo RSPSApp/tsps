@@ -91,7 +91,7 @@ export class ConfigManager {
         private readonly events?: EventBus,
         private readonly storage: ConfigStorage = defaultConfigStorage(),
     ) {
-        if (typeof window !== "undefined") {
+        if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
             this.storageEventHandler = (event) => {
                 if (!event.key || !event.key.startsWith(CONFIG_PREFIX)) return;
                 const [group, ...rest] = event.key.slice(CONFIG_PREFIX.length).split(".");

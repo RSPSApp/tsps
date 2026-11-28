@@ -130,8 +130,8 @@ function setup(options = {}) {
       return null;
     },
     action(npcId, stepId, extra = {}) {
-      const event = { npcId, stepId, text: '', kind: 'action', handled: false, ...extra };
-      for (const fn of events.get('npc-dialogue:action') ?? []) fn({ player, ...event });
+      const event = { player, npcId, stepId, text: '', kind: 'action', handled: false, ...extra };
+      for (const fn of events.get('npc-dialogue:action') ?? []) fn(event);
       return event;
     },
     itemOnNpc(itemId, npcId) {
@@ -329,10 +329,13 @@ test('post-quest Gertrude standard dialogue routes the kitten purchase action', 
     variant: 'standard-dialogue-on-pay-to-play-worlds',
   });
   h.inventory.adds(I.COINS, 100);
-  h.action(N.GERTRUDE, 'Q44J0B');
-  assert.equal(h.inventory.getAmount(I.COINS), 0);
-  assert.equal(h.inventory.getAmount(I.PET_KITTEN), 1);
-  assert.ok(h.messages.includes('Gertrude gives you another kitten.'));
+  // Her own page's sale is the Gertrude plugin's (gertrudes-cat-capture.test.cjs plays it); the quest
+  // leaves it alone, even with its own page among the NPC's pages (issue 6772).
+  const event = h.action(N.GERTRUDE, 'Q44J0B', { kind: 'message', playing: { page: 'Gertrude', variant: 'standard-dialogue-on-pay-to-play-worlds' },
+    pages: [{ page: "Gertrude's Cat" }, { page: 'Gertrude' }] });
+  assert.equal(event.handled, false);
+  assert.equal(event.box, undefined);
+  assert.equal(h.inventory.getAmount(I.COINS), 100);
 });
 
 test('real NpcDialogues resolves Wilough on the Gertrude page at stage 2 and keeps neighbouring stages distinct', () => {

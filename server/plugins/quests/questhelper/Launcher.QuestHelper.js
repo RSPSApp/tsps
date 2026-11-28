@@ -15,6 +15,8 @@ const {findJavaHome,javaExecutable}=require('./Java.QuestHelper');
 const ROOT=path.resolve(__dirname,'../../../..');
 const INSTALL=path.join('tools','quest-helper-bridge','build','install','offline-quest-helper-bridge');
 const SETUP_HINT='Run `yarn bridge:setup` once (needs JDK 21), then restart the server.';
+// A browser-hosted world runs in a WebContainer, which can't run Java; it needs a shared bridge.
+const BROWSER_HOST_HINT="this browser-hosted world was given no shared Quest Helper bridge (QUEST_HELPER_URL and QUEST_HELPER_TOKEN), and a browser can't run one itself. Only the Tutorial Island and Recipe for Disaster guides work here.";
 
 function freeLoopbackPort(){
   return new Promise((resolve,reject)=>{
@@ -24,11 +26,20 @@ function freeLoopbackPort(){
   });
 }
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+// Settings for a bridge shared by many worlds. The server's own bridge is private to it.
+const SHARED_SETTINGS=['QUEST_HELPER_BIND','QUEST_HELPER_SHARED','QUEST_HELPER_ALLOWED_ORIGINS','QUEST_HELPER_RATE_PER_MIN',
+  'QUEST_HELPER_TRUST_PROXY','QUEST_HELPER_THREADS','QUEST_HELPER_MAX_SESSIONS','QUEST_HELPER_MAX_SESSIONS_PER_CALLER','QUEST_HELPER_SESSION_IDLE_MS'];
+/** The bridge child's environment: the server's, without shared-bridge settings, on loopback. */
+function bridgeEnv(env,javaHome,token,port){
+  const child={...env};
+  for(const key of SHARED_SETTINGS)delete child[key];
+  return {...child,JAVA_HOME:javaHome,QUEST_HELPER_TOKEN:token,QUEST_HELPER_PORT:String(port),QUEST_HELPER_BIND:'127.0.0.1',QUEST_HELPER_EXIT_WITH_PARENT:'1'};
+}
 
 class QuestHelperLauncher {
   constructor({env=process.env,root=ROOT,spawnImpl=spawn,fetchImpl=globalThis.fetch,exists=fs.existsSync,findJava=findJavaHome,freePort=freeLoopbackPort,log=console.log,attempts=120,interval=500}={}) {
     Object.assign(this,{env,root,spawnImpl,fetchImpl,exists,findJava,freePort,log,attempts,interval});
-    /** off → external | not-built | no-java | starting → ready | failed; stopped after shutdown. */
+    /** off → external | browser-host | not-built | no-java | starting → ready | failed; stopped after shutdown. */
     this.state='off';
     this.ready=Promise.resolve(false);
     this.killOnExit=()=>this.child?.kill();
@@ -37,6 +48,7 @@ class QuestHelperLauncher {
   enabled(){return !this.env.QUEST_HELPER_TOKEN&&!this.env.QUEST_HELPER_URL&&this.env.QUEST_HELPER_AUTOSTART!=='0';}
   /** What the server should tell an admin when a player can't use the helper. */
   adminHint(){
+    if(this.state==='browser-host')return BROWSER_HOST_HINT;
     if(this.state==='not-built')return `the bridge is not built. ${SETUP_HINT}`;
     if(this.state==='no-java')return 'no JDK 21 was found. Install one, or set QUEST_HELPER_JAVA_HOME, then restart the server.';
     if(this.state==='failed')return 'the bridge the server started has stopped; see the [quest-helper] lines in the server log, then restart the server.';
@@ -46,6 +58,12 @@ class QuestHelperLauncher {
     // A cancelled server shutdown stops the bridge but keeps serving players: start it again.
     if(this.state==='stopped')this.state='off';
     if(this.state!=='off')return this.ready;
+    // A browser-hosted world can only use a bridge somewhere else, so without a URL it has none.
+    if(this.env.BROWSER_HOST==='1'&&!this.env.QUEST_HELPER_URL){
+      this.state='browser-host';
+      this.log(`[quest-helper] The full in-game Quest Helper is off: ${BROWSER_HOST_HINT}`);
+      return this.ready;
+    }
     if(!this.enabled()){this.state='external';return this.ready;}
     const install=path.join(this.root,INSTALL);
     if(!this.exists(path.join(install,'lib'))){
@@ -72,7 +90,7 @@ class QuestHelperLauncher {
       ['-Djava.awt.headless=true','-XX:+EnableDynamicAgentLoading','-cp',path.join(install,'lib','*'),'local.questbridge.BridgeServer',String(this.port)],
       // stdin stays an open pipe: the bridge exits when it closes, so a killed server leaves no JVM.
       {cwd:install,windowsHide:true,stdio:['pipe','pipe','pipe'],
-       env:{...this.env,JAVA_HOME:javaHome,QUEST_HELPER_TOKEN:this.token,QUEST_HELPER_PORT:String(this.port),QUEST_HELPER_EXIT_WITH_PARENT:'1'}});}
+       env:bridgeEnv(this.env,javaHome,this.token,this.port)});}
     catch(error){return this.fail(`could not start (${error.message})`);}
     this.child=child;
     process.once('exit',this.killOnExit);

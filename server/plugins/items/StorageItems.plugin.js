@@ -30,5 +30,6 @@ module.exports = {
     require("./storage/ReagentPouch.StorageItems")(api);
     require("./storage/FlamtaerBag.StorageItems")(api);
     require("./storage/Coffin.StorageItems")(api);
+    require("./storage/Knapsack.StorageItems")(api);
   },
 };

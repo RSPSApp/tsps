@@ -279,7 +279,9 @@ animation in place too, so every id and name a plugin uses stays the same.
 Restart the server after adding or replacing assets. At startup `plugins/world/CustomAnimations`
 checks every stored folder again, gives each animation's frames a frame group of their own
 (30000, 30001, ... in id order), points each graphic at its model and animation, and sends them all
-to players when they log in, in one packet unless they are too many for one. A broken asset turns
+to players when they log in, in one packet unless they are too many for one. An animation too big
+for one packet (64 KiB compressed) goes in several, and the client plays it once all have arrived;
+the asset cap of 1 MiB still applies. A broken asset turns
 custom animations off with a message saying what is wrong; the server keeps running.
 
 Only the frame list (seq opcode 1) is moved to the animation's own frame group. Chat-head frames
@@ -287,7 +289,12 @@ Only the frame list (seq opcode 1) is moved to the animation's own frame group. 
 those frames in Blender doesn't show in game.
 
 Animations use the cache's skeletons (frame maps). The add-ons never change them, and the editor
-refuses a `framemap-<id>.dat` that differs from the cache's.
+refuses a `framemap-<id>.dat` that differs from the cache's. A model of your own can have a
+skeleton of its own: a frame map whose id the cache doesn't have, from 30000 to 65535, written as
+`framemap-<id>.dat` next to the frames that use it. The editor sends it with the animation.
+The Blender add-on doesn't create or renumber frame maps yet: it writes back the frame map it
+imported, under the same id. For now a custom frame map, and frames whose first two bytes name its
+id, have to come from another tool.
 
 Use them like any other id: `new Animation(50000)`, `new Graphic(50001)`, or in game
 `::anim 50000` and `::gfx 50001`.

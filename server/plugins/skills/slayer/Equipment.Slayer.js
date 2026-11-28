@@ -15,6 +15,9 @@ let core = null;
 let api = null;
 /** The protection every Slayer helmet gives (data/slayer-gear.json). */
 const HELMET = "Slayer helmet";
+/** The goggles' own protection; a helmet carries it once A Porcine of Interest is complete. */
+const GOGGLES = "Reinforced goggles";
+const GOGGLES_QUEST = "a_porcine_of_interest";
 const byName = new Map();
 const immuneNames = new Set(GEAR.immune.names);
 const thrallImmuneNames = new Set(GEAR.thrallImmune);
@@ -43,10 +46,27 @@ function isSlayerHelmet(name) {
   return name.toLowerCase().includes("slayer helmet");
 }
 
+/**
+ * Whether the player is protected from `monster`. A helmet counts for the goggles' protection once
+ * A Porcine of Interest is done: the Wiki has every existing helmet gain the pair at completion
+ * (A Porcine of Interest: "Existing slayer helmets will have reinforced goggles added to them";
+ * Sourhog: "It requires reinforced goggles to kill, or a Slayer helmet after the quest"), and live
+ * objects carry no per-item state to record it — the cache has no goggles varbit — so quest
+ * completion is the only state there is. Before the quest a helmet gives no such protection.
+ */
 function protectedFrom(player, monster) {
   const names = equippedNames(player);
-  if (monster.protection.some((prefix) => names.some((name) => (prefix === HELMET ? isSlayerHelmet(name) : name.startsWith(prefix))))) return true;
-  return monster.protection.includes(HELMET) && helmetGiven(player);
+  const helmetCounts = !monster.protection.includes(GOGGLES) || gogglesGiven(player);
+  const covered = monster.protection.some((prefix) => names.some((name) =>
+    prefix === HELMET ? helmetCounts && isSlayerHelmet(name) : name.startsWith(prefix)));
+  return covered || (helmetCounts && monster.protection.includes(HELMET) && helmetGiven(player));
+}
+
+/** Whether A Porcine of Interest is complete ("quest:is-complete", QuestRuntime). */
+function gogglesGiven(player) {
+  const request = { player, key: GOGGLES_QUEST, complete: false };
+  api?.emitCustomEvent("quest:is-complete", request);
+  return request.complete === true;
 }
 
 /** Whether content gives the player a Slayer helmet's effects without one ("slayer:helmet", a league relic). */
@@ -71,11 +91,15 @@ function hitRoll(event) {
   if (monster.bypassPrayer) event.bypassProtectionPrayer = true;
 }
 
-/** A landed unprotected hit is the monster's unprotected max (run after prayers). */
+/**
+ * A landed unprotected hit is the monster's unprotected max (run after prayers). It never lowers a
+ * hit already above it: the Leagues VI Echo Thermonuclear smoke devil's shots (48-62, rsprox.net
+ * 1161) would otherwise do less to a bare face than to a masked one.
+ */
 function incomingDamage(victim, hitDamage, context = {}) {
   const monster = unprotectedRule(context.attacker, victim);
   const damage = monster ? unprotectedHit(monster, victim) : 0;
-  if (damage) hitDamage.setDamage(damage);
+  if (damage && damage > (hitDamage.getDamage?.() ?? 0)) hitDamage.setDamage(damage);
 }
 
 /** The damage an unprotected player takes from this monster's hit, 0 when the rule sets none. */

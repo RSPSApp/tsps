@@ -18,7 +18,7 @@ const { Sailing } = require("../../../src/main/typescript/elvarg/game/content/sa
 const { content, dockNear, dockById, boatName } = require("./SailingContent.Sailing");
 const { teleportFocusOf } = require("./BoatFacilities.Sailing");
 const { openBoatSelection, MODE } = require("./BoatSelection.Sailing");
-const { dropLostOnRecovery } = require("./Cargo.Sailing");
+const Cargo = require("./Cargo.Sailing");
 const { spellFor, pandemoniumDone, isSpell } = require("./SummonBoat.Sailing");
 const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
 
@@ -226,7 +226,7 @@ function moveBoatToPandemonium(player, boat) {
     return;
   }
   boat.location = { kind: "docked", dock: PANDEMONIUM_DOCK };
-  dropLostOnRecovery(boat);
+  Cargo.loseCargo(player, boat);
   sendBoatVarbits(player);
   player.sendMessage(`Your boat has been teleported to ${dock.theName}.`);
 }
@@ -316,6 +316,7 @@ module.exports = {
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;
+    Cargo.init(api);
     content();
     api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
     api.onCustomEvent("skillcapes:travel-destinations", describeCapeTeleports);

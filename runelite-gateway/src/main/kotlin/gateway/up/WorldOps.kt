@@ -11,6 +11,7 @@ object WorldOps {
     private val OBJ_OPCODES = intArrayOf(102, 43, 103, 56, 82)
     private const val EXAMINE_LOC = 85
     private const val EXAMINE_OBJ = 104
+    private const val LOC_INTERACT = 231
     private const val OPLOC_T = 2
     private const val OPLOC_U = 86
     private const val OPOBJ_T = 94
@@ -37,6 +38,13 @@ object WorldOps {
     }
 
     fun examineLoc(id: Int): ByteArray = TspsWriter().u16AddLE(id).fixed(EXAMINE_LOC)
+
+    /**
+     * A loc option's sub-menu row: tsps has no row byte on the five op loc packets, so a row
+     * (1-based) goes as LOC_INTERACT with the option it sits under.
+     */
+    fun locSub(op: Int, id: Int, x: Int, z: Int, subOp: Int): ByteArray =
+        TspsWriter().u16(id).u16(x).u16(z).u8(0).string("").u8(op).u8(subOp).varByte(LOC_INTERACT)
 
     fun obj(op: Int, id: Int, x: Int, z: Int, controlKey: Boolean = false): ByteArray {
         val w = TspsWriter()

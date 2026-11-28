@@ -23,6 +23,9 @@ export interface ConfigItemDef<T = unknown> {
     warning?: string;
     /** Mark value as a colour; serialised as #RRGGBB / #AARRGGBB. */
     color?: boolean;
+    /** Hide/disable an item based on runtime state (e.g. a renderer without support). */
+    disabled?: () => boolean;
+    disabledReason?: string;
     /** Accept an alpha channel in the generated colour picker. */
     alpha?: boolean;
     units?: string;

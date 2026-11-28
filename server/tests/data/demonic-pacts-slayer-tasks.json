@@ -1,0 +1,4608 @@
+{
+ "source": "https://oldschool.runescape.wiki/w/Demonic_Pacts_League/Guide/Slayer",
+ "fetched": "2026-11-26",
+ "note": "All tasks assignable in the Demonic Pacts League (wiki Guide/Slayer table; the wiki excludes monsters found only in Misthalin or ocean areas).",
+ "taskCount": 234,
+ "tasks": [
+  {
+   "master": "Chaeldar",
+   "monster": "Aberrant spectre",
+   "qty": "70-130",
+   "min": 65,
+   "max": 110,
+   "requires": {
+    "raw": "{{SCP|Slayer|60}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 60
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin",
+    "Morytania",
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Abyssal Demon",
+   "qty": "70-130",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|85}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 85
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "General"
+   ],
+   "weight": 12
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Aviansies",
+   "qty": "70-130",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Wilderness"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Basilisk",
+   "qty": "70-130",
+   "min": 25,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|40}}, {{SCP|Defence|20}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 40
+     },
+     {
+      "skill": "Defence",
+      "level": 20
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Black Demon",
+   "qty": "70-130",
+   "min": 80,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 10
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Bloodveld",
+   "qty": "70-130",
+   "min": 50,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|50}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 50
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Morytania",
+    "Tirannwn",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Blue Dragon",
+   "qty": "70-130",
+   "min": 65,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Brine Rat",
+   "qty": "70-130",
+   "min": 45,
+   "max": 100,
+   "requires": {
+    "raw": "{{SCP|Slayer|47}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 47
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Cave Horror",
+   "qty": "70-130",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|58}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 58
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Morytania"
+   ],
+   "weight": 10
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Cave Kraken",
+   "qty": "30-50",
+   "min": 80,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|87}}, {{SCP|Magic|50}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 87
+     },
+     {
+      "skill": "Magic",
+      "level": 50
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin"
+   ],
+   "weight": 12
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Crabs",
+   "qty": "70-130",
+   "min": null,
+   "max": 50,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Fremennik",
+    "Morytania",
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Custodian Stalkers",
+   "qty": "70-130",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|54}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 54
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore"
+   ],
+   "weight": 11
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Dagannoth",
+   "qty": "70-130",
+   "min": 75,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik",
+    "Kourend"
+   ],
+   "weight": 11
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Dust Devil",
+   "qty": "70-130",
+   "min": 70,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|65}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 65
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Desert",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Elves",
+   "qty": "70-130",
+   "min": 70,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Tirannwn"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Fever Spider",
+   "qty": "70-130",
+   "min": 40,
+   "max": 85,
+   "requires": {
+    "raw": "{{SCP|Slayer|42}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 42
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Morytania"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Fire Giant",
+   "qty": "70-130",
+   "min": 65,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Asgarnia",
+    "Desert",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 12
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Gargoyles",
+   "qty": "70-130",
+   "min": 80,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|75}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 75
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Morytania"
+   ],
+   "weight": 11
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Greater Demon",
+   "qty": "70-130",
+   "min": 70,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Morytania",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Hellhound",
+   "qty": "70-130",
+   "min": 75,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Jellies",
+   "qty": "70-130",
+   "min": 57,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|52}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 52
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Fremennik",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 10
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Jungle Horror",
+   "qty": "70-130",
+   "min": 65,
+   "max": 95,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Morytania"
+   ],
+   "weight": 10
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Kalphites",
+   "qty": "70-130",
+   "min": 15,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Desert"
+   ],
+   "weight": 11
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Kurask",
+   "qty": "70-130",
+   "min": 65,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|70}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 70
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik",
+    "Tirannwn"
+   ],
+   "weight": 12
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Lesser Demon",
+   "qty": "70-130",
+   "min": 60,
+   "max": 110,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Asgarnia",
+    "Kandarin",
+    "Morytania",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Lesser Nagua",
+   "qty": "50-100",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|48}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 48
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore"
+   ],
+   "weight": 4
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Lizardmen",
+   "qty": "50-90",
+   "min": 55,
+   "max": null,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Reptile Got<br>Ripped]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Nechryael",
+   "qty": "70-130",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|80}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 80
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Morytania",
+    "Tirannwn",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 12
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Shadow warrior",
+   "qty": "70-130",
+   "min": 60,
+   "max": 100,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Skeletal Wyvern",
+   "qty": "10-20",
+   "min": 70,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|72}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 72
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Spiritual creatures",
+   "qty": "70-130",
+   "min": 60,
+   "max": 100,
+   "requires": {
+    "raw": "{{SCP|Slayer|63}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 63
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Wilderness"
+   ],
+   "weight": 12
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Trolls",
+   "qty": "70-130",
+   "min": 60,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Fremennik",
+    "Kourend"
+   ],
+   "weight": 11
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Turoth",
+   "qty": "70-130",
+   "min": 60,
+   "max": 100,
+   "requires": {
+    "raw": "{{SCP|Slayer|55}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 55
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik"
+   ],
+   "weight": 10
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Tzhaar",
+   "qty": "90-150",
+   "min": 60,
+   "max": null,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Hot Stuff]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Vampyres",
+   "qty": "80-100",
+   "min": 35,
+   "max": 100,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Actual Vampyre<br>Slayer]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Morytania"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Warped creatures",
+   "qty": "70-130",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Warped Reality]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Chaeldar",
+   "monster": "Wyrms",
+   "qty": "60-100",
+   "min": 60,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|62}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 62
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Kourend"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Duradel",
+   "monster": "Aberrant spectres",
+   "qty": "130-200",
+   "min": 65,
+   "max": 110,
+   "requires": {
+    "raw": "{{SCP|Slayer|60}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 60
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin",
+    "Morytania",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Duradel",
+   "monster": "Abyssal demons",
+   "qty": "130-200",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|85}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 85
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "General"
+   ],
+   "weight": 12
+  },
+  {
+   "master": "Duradel",
+   "monster": "Ankou",
+   "qty": "50-80",
+   "min": 60,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Duradel",
+   "monster": "Araxytes",
+   "qty": "60-80",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|92}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 92
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Morytania"
+   ],
+   "weight": 10
+  },
+  {
+   "master": "Duradel",
+   "monster": "Aviansies",
+   "qty": "120-200",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Wilderness"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Duradel",
+   "monster": "Basilisks",
+   "qty": "130-200",
+   "min": 25,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|40}}, {{SCP|Defence|20}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 40
+     },
+     {
+      "skill": "Defence",
+      "level": 20
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Duradel",
+   "monster": "Black demons",
+   "qty": "130-200",
+   "min": 80,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Duradel",
+   "monster": "Black dragons",
+   "qty": "10-20",
+   "min": 80,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Duradel",
+   "monster": "Bloodveld",
+   "qty": "130-200",
+   "min": 50,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|50}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 50
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Morytania",
+    "Tirannwn",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Duradel",
+   "monster": "Blue dragons",
+   "qty": "110-170",
+   "min": 65,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 4
+  },
+  {
+   "master": "Duradel",
+   "monster": "Boss",
+   "qty": "Varies",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Like a Boss]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "General"
+   ],
+   "weight": 12
+  },
+  {
+   "master": "Duradel",
+   "monster": "Cave horrors",
+   "qty": "130-200",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|58}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 58
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Morytania"
+   ],
+   "weight": 4
+  },
+  {
+   "master": "Duradel",
+   "monster": "Cave Kraken",
+   "qty": "100-120",
+   "min": 80,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|87}}, {{SCP|Magic|50}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 87
+     },
+     {
+      "skill": "Magic",
+      "level": 50
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Duradel",
+   "monster": "Dagannoth",
+   "qty": "130-200",
+   "min": 75,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik",
+    "Kourend"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Duradel",
+   "monster": "Dark beasts",
+   "qty": "10-20",
+   "min": 90,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|90}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 90
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Tirannwn"
+   ],
+   "weight": 11
+  },
+  {
+   "master": "Duradel",
+   "monster": "Drakes",
+   "qty": "50-110",
+   "min": 75,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|84}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 84
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Duradel",
+   "monster": "Dust Devils",
+   "qty": "130-200",
+   "min": 70,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|65}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 65
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Desert",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Duradel",
+   "monster": "Elves",
+   "qty": "110-170",
+   "min": 70,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Tirannwn"
+   ],
+   "weight": 4
+  },
+  {
+   "master": "Duradel",
+   "monster": "Fire Giants",
+   "qty": "130-200",
+   "min": 65,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Asgarnia",
+    "Desert",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Duradel",
+   "monster": "Gargoyles",
+   "qty": "130-200",
+   "min": 80,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|75}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 75
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Morytania"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Duradel",
+   "monster": "Greater Demons",
+   "qty": "130-200",
+   "min": 70,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Morytania",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Duradel",
+   "monster": "Hellhounds",
+   "qty": "130-200",
+   "min": 75,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 10
+  },
+  {
+   "master": "Duradel",
+   "monster": "Kalphites",
+   "qty": "130-200",
+   "min": 15,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Desert"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Duradel",
+   "monster": "Kurask",
+   "qty": "130-200",
+   "min": 65,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|70}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 70
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik",
+    "Tirannwn"
+   ],
+   "weight": 4
+  },
+  {
+   "master": "Duradel",
+   "monster": "Lizardmen",
+   "qty": "130-210",
+   "min": 55,
+   "max": null,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Reptile Got<br>Ripped]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Kourend"
+   ],
+   "weight": 10
+  },
+  {
+   "master": "Duradel",
+   "monster": "Metal Dragons",
+   "qty": "35-45",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Kandarin",
+    "Kourend"
+   ],
+   "weight": 14
+  },
+  {
+   "master": "Duradel",
+   "monster": "Nechryael",
+   "qty": "130-200",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|80}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 80
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Morytania",
+    "Tirannwn",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Duradel",
+   "monster": "Red dragons",
+   "qty": "30-65",
+   "min": 68,
+   "max": null,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Seeing Red]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Kandarin",
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Duradel",
+   "monster": "Skeletal wyverns",
+   "qty": "20-40",
+   "min": 70,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|72}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 72
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Duradel",
+   "monster": "Smoke devils",
+   "qty": "130-200",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|93}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 93
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Duradel",
+   "monster": "Spiritual creatures",
+   "qty": "130-200",
+   "min": 60,
+   "max": 100,
+   "requires": {
+    "raw": "{{SCP|Slayer|63}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 63
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Wilderness"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Duradel",
+   "monster": "Suqahs",
+   "qty": "60-90",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Duradel",
+   "monster": "Trolls",
+   "qty": "130-200",
+   "min": 60,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Fremennik",
+    "Kourend"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Duradel",
+   "monster": "Tzhaar",
+   "qty": "130-199",
+   "min": 60,
+   "max": null,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Hot Stuff]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja"
+   ],
+   "weight": 10
+  },
+  {
+   "master": "Duradel",
+   "monster": "Vampyres",
+   "qty": "100-210",
+   "min": 35,
+   "max": 100,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Actual Vampyre<br>Slayer]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Morytania"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Duradel",
+   "monster": "Warped creatures",
+   "qty": "130-200",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Warped Reality]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Duradel",
+   "monster": "Waterfiends",
+   "qty": "130-200",
+   "min": 75,
+   "max": 110,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin",
+    "Tirannwn"
+   ],
+   "weight": 2
+  },
+  {
+   "master": "Duradel",
+   "monster": "Wyrms",
+   "qty": "100-160",
+   "min": 60,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|62}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 62
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Aberrant spectres",
+   "qty": "120-170",
+   "min": 65,
+   "max": 110,
+   "requires": {
+    "raw": "{{SCP|Slayer|60}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 60
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin",
+    "Morytania",
+    "Kourend"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Abyssal demons",
+   "qty": "120-170",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|85}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 85
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "General"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Ankou",
+   "qty": "50-50",
+   "min": 60,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Aviansies",
+   "qty": "120-170",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Wilderness"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Basilisks",
+   "qty": "110-170",
+   "min": 25,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|40}}, {{SCP|Defence|20}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 40
+     },
+     {
+      "skill": "Defence",
+      "level": 20
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Black demons",
+   "qty": "120-170",
+   "min": 80,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Black dragons",
+   "qty": "10-15",
+   "min": 80,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Bloodveld",
+   "qty": "120-170",
+   "min": 50,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|50}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 50
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Morytania",
+    "Tirannwn",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Blue dragons",
+   "qty": "120-170",
+   "min": 65,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 4
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Boss",
+   "qty": "Varies",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Like a Boss]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "General"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Brine rats",
+   "qty": "120-170",
+   "min": 45,
+   "max": 100,
+   "requires": {
+    "raw": "{{SCP|Slayer|47}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 47
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik"
+   ],
+   "weight": 2
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Cave Kraken",
+   "qty": "80-100",
+   "min": 80,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|87}}, {{SCP|Magic|50}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 87
+     },
+     {
+      "skill": "Magic",
+      "level": 50
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Dagannoth",
+   "qty": "120-170",
+   "min": 75,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik",
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Dark beasts",
+   "qty": "10-15",
+   "min": 90,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|90}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 90
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Tirannwn"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Drakes",
+   "qty": "75-140",
+   "min": 75,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|84}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 84
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Kourend"
+   ],
+   "weight": 10
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Dust Devils",
+   "qty": "120-170",
+   "min": 70,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|65}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 65
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Desert",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Fire Giants",
+   "qty": "120-170",
+   "min": 65,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Asgarnia",
+    "Desert",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Gargoyles",
+   "qty": "120-170",
+   "min": 80,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|75}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 75
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Morytania"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Greater Demons",
+   "qty": "120-170",
+   "min": 70,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Morytania",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Hellhounds",
+   "qty": "120-170",
+   "min": 75,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Hydras",
+   "qty": "125-190",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|95}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 95
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Kourend"
+   ],
+   "weight": 10
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Jellies",
+   "qty": "120-170",
+   "min": 57,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|52}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 52
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Fremennik",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Kalphites",
+   "qty": "120-170",
+   "min": 15,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Desert"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Kurask",
+   "qty": "120-170",
+   "min": 65,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|70}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 70
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik",
+    "Tirannwn"
+   ],
+   "weight": 3
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Lesser Nagua",
+   "qty": "55-120",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|48}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 48
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore"
+   ],
+   "weight": 2
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Lizardmen",
+   "qty": "90-110",
+   "min": 55,
+   "max": null,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Reptile Got<br>Ripped]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Metal Dragons",
+   "qty": "30-40",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Kandarin",
+    "Kourend"
+   ],
+   "weight": 15
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Nechryael",
+   "qty": "110-110",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|80}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 80
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Morytania",
+    "Tirannwn",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Red dragons",
+   "qty": "30-50",
+   "min": 68,
+   "max": null,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Seeing Red]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Kandarin",
+    "Kourend"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Skeletal wyverns",
+   "qty": "5-12",
+   "min": 70,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|72}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 72
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Smoke devils",
+   "qty": "120-170",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|93}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 93
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Trolls",
+   "qty": "120-170",
+   "min": 60,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Fremennik",
+    "Kourend"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Turoth",
+   "qty": "120-170",
+   "min": 60,
+   "max": 100,
+   "requires": {
+    "raw": "{{SCP|Slayer|55}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 55
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik"
+   ],
+   "weight": 3
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Vampyres",
+   "qty": "100-160",
+   "min": 35,
+   "max": 100,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Actual Vampyre<br>Slayer]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Morytania"
+   ],
+   "weight": 4
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Warped creatures",
+   "qty": "110-170",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Warped Reality]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin"
+   ],
+   "weight": 4
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Waterfiends",
+   "qty": "120-170",
+   "min": 75,
+   "max": 110,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin",
+    "Tirannwn"
+   ],
+   "weight": 2
+  },
+  {
+   "master": "Konar quo Maten",
+   "monster": "Wyrms",
+   "qty": "125-190",
+   "min": 60,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|62}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 62
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Kourend"
+   ],
+   "weight": 10
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Abyssal demons",
+   "qty": "75-125",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|85}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 85
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "General"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Ankou",
+   "qty": "75-125",
+   "min": 60,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Aviansies",
+   "qty": "75-125",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Wilderness"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Bandits",
+   "qty": "75-125",
+   "min": 15,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Desert",
+    "Wilderness"
+   ],
+   "weight": 4
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Bears",
+   "qty": "65-100",
+   "min": 13,
+   "max": 50,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Black demons",
+   "qty": "100-150",
+   "min": 80,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Black dragons",
+   "qty": "8-16",
+   "min": 80,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 4
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Black Knights",
+   "qty": "75-125",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Wilderness"
+   ],
+   "weight": 3
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Bloodveld",
+   "qty": "70-110",
+   "min": 50,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|50}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 50
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Morytania",
+    "Tirannwn",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 4
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Boss",
+   "qty": "Varies",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Like a Boss]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "General"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Chaos druids",
+   "qty": "50-90",
+   "min": 10,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Wilderness"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Dark warriors",
+   "qty": "75-125",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 4
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Dust Devils",
+   "qty": "75-125",
+   "min": 70,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|65}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 65
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Desert",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Ents",
+   "qty": "35-60",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Fire Giants",
+   "qty": "75-125",
+   "min": 65,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Asgarnia",
+    "Desert",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Greater Demons",
+   "qty": "100-150",
+   "min": 70,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Morytania",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Green dragons",
+   "qty": "65-100",
+   "min": 52,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin",
+    "Wilderness"
+   ],
+   "weight": 4
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Hellhounds",
+   "qty": "75-125",
+   "min": 75,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Hill Giants",
+   "qty": "75-125",
+   "min": 25,
+   "max": 100,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Asgarnia",
+    "Desert",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 3
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Ice giants",
+   "qty": "100-150",
+   "min": 50,
+   "max": 100,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Asgarnia",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Ice Warriors",
+   "qty": "100-150",
+   "min": 45,
+   "max": 90,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Asgarnia",
+    "Wilderness"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Jellies",
+   "qty": "100-150",
+   "min": 57,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|52}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 52
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Fremennik",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Lava dragons",
+   "qty": "35-60",
+   "min": 50,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Wilderness"
+   ],
+   "weight": 3
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Lesser Demons",
+   "qty": "80-120",
+   "min": 60,
+   "max": 110,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Asgarnia",
+    "Kandarin",
+    "Morytania",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Magic axes",
+   "qty": "75-125",
+   "min": 40,
+   "max": 70,
+   "requires": {
+    "raw": "{{SCP|Thieving|23}}",
+    "skills": [
+     {
+      "skill": "Thieving",
+      "level": 23
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Mammoths",
+   "qty": "75-125",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Wilderness"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Moss giants",
+   "qty": "100-150",
+   "min": 40,
+   "max": 100,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Karamja",
+    "Kandarin",
+    "Tirannwn",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 4
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Nechryael",
+   "qty": "75-125",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|80}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 80
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Morytania",
+    "Tirannwn",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Pirates",
+   "qty": "62-75",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Thieving|39}}",
+    "skills": [
+     {
+      "skill": "Thieving",
+      "level": 39
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Asgarnia",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 3
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Revenants",
+   "qty": "40-100",
+   "min": 30,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Wilderness"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Rogues",
+   "qty": "75-125",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Wilderness"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Scorpions",
+   "qty": "65-100",
+   "min": 7,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Karamja",
+    "Desert",
+    "Wilderness"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Skeletons",
+   "qty": "65-100",
+   "min": 15,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Morytania",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Spiders",
+   "qty": "65-100",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Morytania",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Spiritual creatures",
+   "qty": "100-150",
+   "min": 60,
+   "max": 100,
+   "requires": {
+    "raw": "{{SCP|Slayer|63}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 63
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Wilderness"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Krystilia",
+   "monster": "Zombies",
+   "qty": "75-125",
+   "min": 10,
+   "max": 50,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Asgarnia",
+    "Kandarin",
+    "Morytania",
+    "Kourend"
+   ],
+   "weight": 3
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Banshees",
+   "qty": "30-50",
+   "min": 20,
+   "max": 50,
+   "requires": {
+    "raw": "{{SCP|Slayer|15}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 15
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Morytania",
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Bats",
+   "qty": "30-50",
+   "min": 5,
+   "max": 50,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Kandarin"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Bears",
+   "qty": "30-50",
+   "min": 13,
+   "max": 50,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Cave Crawlers",
+   "qty": "30-50",
+   "min": 10,
+   "max": 50,
+   "requires": {
+    "raw": "{{SCP|Slayer|10}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 10
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Cockatrice",
+   "qty": "30-50",
+   "min": 25,
+   "max": 80,
+   "requires": {
+    "raw": "{{SCP|Slayer|25}}, {{SCP|Defence|20}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 25
+     },
+     {
+      "skill": "Defence",
+      "level": 20
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Fremennik"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Crabs",
+   "qty": "30-50",
+   "min": null,
+   "max": 50,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Fremennik",
+    "Morytania",
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Crawling hands",
+   "qty": "30-50",
+   "min": null,
+   "max": 50,
+   "requires": {
+    "raw": "{{SCP|Slayer|5}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 5
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Morytania"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Dogs",
+   "qty": "30-50",
+   "min": 15,
+   "max": 70,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Desert",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Ghosts",
+   "qty": "30-50",
+   "min": 13,
+   "max": 50,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin",
+    "Morytania",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Ghouls",
+   "qty": "10-20",
+   "min": 25,
+   "max": 70,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Morytania"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Hill Giants",
+   "qty": "30-50",
+   "min": 25,
+   "max": 100,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Asgarnia",
+    "Desert",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Hobgoblins",
+   "qty": "30-50",
+   "min": 20,
+   "max": 70,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Asgarnia"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Ice Warriors",
+   "qty": "40-50",
+   "min": 45,
+   "max": 90,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Asgarnia",
+    "Wilderness"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Kalphites",
+   "qty": "30-50",
+   "min": 15,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Desert"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Lizards",
+   "qty": "30-50",
+   "min": null,
+   "max": 70,
+   "requires": {
+    "raw": "{{SCP|Slayer|22}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 22
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Desert"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Mogres",
+   "qty": "30-50",
+   "min": 30,
+   "max": 80,
+   "requires": {
+    "raw": "{{SCP|Slayer|32}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 32
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Tirannwn"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Pyrefiends",
+   "qty": "30-50",
+   "min": 25,
+   "max": 70,
+   "requires": {
+    "raw": "{{SCP|Slayer|30}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 30
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Desert",
+    "Fremennik",
+    "Morytania",
+    "Wilderness"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Rockslugs",
+   "qty": "30-50",
+   "min": 20,
+   "max": 70,
+   "requires": {
+    "raw": "{{SCP|Slayer|20}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 20
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Scorpions",
+   "qty": "30-50",
+   "min": 7,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Karamja",
+    "Desert",
+    "Wilderness"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Shades",
+   "qty": "30-70",
+   "min": 30,
+   "max": 70,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Morytania",
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Skeletons",
+   "qty": "30-50",
+   "min": 15,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Morytania",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Vampyres",
+   "qty": "10-20",
+   "min": 35,
+   "max": 100,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Actual Vampyre<br>Slayer]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Morytania"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Wolves",
+   "qty": "30-50",
+   "min": 20,
+   "max": 50,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Karamja",
+    "Asgarnia",
+    "Desert",
+    "Fremennik",
+    "Kandarin",
+    "Tirannwn",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Mazchna",
+   "monster": "Zombies",
+   "qty": "30-50",
+   "min": 10,
+   "max": 50,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Asgarnia",
+    "Kandarin",
+    "Morytania",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Steve",
+   "monster": "Aberrant spectres",
+   "qty": "120-185",
+   "min": 65,
+   "max": 110,
+   "requires": {
+    "raw": "{{SCP|Slayer|60}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 60
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin",
+    "Morytania",
+    "Kourend"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Steve",
+   "monster": "Abyssal demons",
+   "qty": "120-185",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|85}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 85
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "General"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Steve",
+   "monster": "Ankou",
+   "qty": "50-90",
+   "min": 60,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Steve",
+   "monster": "Araxytes",
+   "qty": "40-60",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|92}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 92
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Morytania"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Steve",
+   "monster": "Aviansies",
+   "qty": "120-185",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Wilderness"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Steve",
+   "monster": "Basilisks",
+   "qty": "120-185",
+   "min": 25,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|40}}, {{SCP|Defence|20}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 40
+     },
+     {
+      "skill": "Defence",
+      "level": 20
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Steve",
+   "monster": "Black demons",
+   "qty": "120-185",
+   "min": 80,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Steve",
+   "monster": "Black dragons",
+   "qty": "10-20",
+   "min": 80,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Steve",
+   "monster": "Bloodveld",
+   "qty": "120-185",
+   "min": 50,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|50}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 50
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Morytania",
+    "Tirannwn",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Steve",
+   "monster": "Blue dragons",
+   "qty": "120-185",
+   "min": 65,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 4
+  },
+  {
+   "master": "Steve",
+   "monster": "Boss",
+   "qty": "Varies",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Like a Boss]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "General"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Steve",
+   "monster": "Brine rats",
+   "qty": "120-185",
+   "min": 45,
+   "max": 100,
+   "requires": {
+    "raw": "{{SCP|Slayer|47}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 47
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik"
+   ],
+   "weight": 3
+  },
+  {
+   "master": "Steve",
+   "monster": "Cave horrors",
+   "qty": "120-180",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|58}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 58
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Morytania"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Steve",
+   "monster": "Cave Kraken",
+   "qty": "100-120",
+   "min": 80,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|87}}, {{SCP|Magic|50}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 87
+     },
+     {
+      "skill": "Magic",
+      "level": 50
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Steve",
+   "monster": "Custodian Stalkers",
+   "qty": "110-170",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|54}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 54
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Steve",
+   "monster": "Dagannoth",
+   "qty": "120-185",
+   "min": 75,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik",
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Steve",
+   "monster": "Dark beasts",
+   "qty": "10-20",
+   "min": 90,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|90}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 90
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Tirannwn"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Steve",
+   "monster": "Drakes",
+   "qty": "30-95",
+   "min": 75,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|84}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 84
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Steve",
+   "monster": "Dust Devils",
+   "qty": "120-185",
+   "min": 70,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|65}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 65
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Desert",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Steve",
+   "monster": "Elves",
+   "qty": "60-90",
+   "min": 70,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Tirannwn"
+   ],
+   "weight": 4
+  },
+  {
+   "master": "Steve",
+   "monster": "Fire Giants",
+   "qty": "120-185",
+   "min": 65,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Asgarnia",
+    "Desert",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Steve",
+   "monster": "Gargoyles",
+   "qty": "120-185",
+   "min": 80,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|75}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 75
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Morytania"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Steve",
+   "monster": "Greater Demons",
+   "qty": "120-185",
+   "min": 70,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Morytania",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Steve",
+   "monster": "Hellhounds",
+   "qty": "120-185",
+   "min": 75,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Steve",
+   "monster": "Kalphites",
+   "qty": "120-185",
+   "min": 15,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Desert"
+   ],
+   "weight": 9
+  },
+  {
+   "master": "Steve",
+   "monster": "Kurask",
+   "qty": "120-185",
+   "min": 65,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|70}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 70
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik",
+    "Tirannwn"
+   ],
+   "weight": 3
+  },
+  {
+   "master": "Steve",
+   "monster": "Lizardmen",
+   "qty": "90-120",
+   "min": 55,
+   "max": null,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Reptile Got<br>Ripped]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Steve",
+   "monster": "Metal Dragons",
+   "qty": "30-40",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Kandarin",
+    "Kourend"
+   ],
+   "weight": 12
+  },
+  {
+   "master": "Steve",
+   "monster": "Nechryael",
+   "qty": "110-170",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|80}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 80
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Morytania",
+    "Tirannwn",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Steve",
+   "monster": "Red dragons",
+   "qty": "30-80",
+   "min": 68,
+   "max": null,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Seeing Red]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Kandarin",
+    "Kourend"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Steve",
+   "monster": "Scabarites",
+   "qty": "30-60",
+   "min": 85,
+   "max": 110,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Desert"
+   ],
+   "weight": 4
+  },
+  {
+   "master": "Steve",
+   "monster": "Skeletal wyverns",
+   "qty": "5-15",
+   "min": 70,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|72}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 72
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia"
+   ],
+   "weight": 5
+  },
+  {
+   "master": "Steve",
+   "monster": "Smoke devils",
+   "qty": "120-185",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|93}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 93
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Steve",
+   "monster": "Spiritual creatures",
+   "qty": "120-185",
+   "min": 60,
+   "max": 100,
+   "requires": {
+    "raw": "{{SCP|Slayer|63}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 63
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Wilderness"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Steve",
+   "monster": "Suqahs",
+   "qty": "120-185",
+   "min": 85,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Steve",
+   "monster": "Trolls",
+   "qty": "120-185",
+   "min": 60,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Fremennik",
+    "Kourend"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Steve",
+   "monster": "Turoth",
+   "qty": "120-185",
+   "min": 60,
+   "max": 100,
+   "requires": {
+    "raw": "{{SCP|Slayer|55}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 55
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik"
+   ],
+   "weight": 3
+  },
+  {
+   "master": "Steve",
+   "monster": "Tzhaar",
+   "qty": "110-180",
+   "min": 60,
+   "max": null,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Hot Stuff]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja"
+   ],
+   "weight": 10
+  },
+  {
+   "master": "Steve",
+   "monster": "Vampyres",
+   "qty": "110-170",
+   "min": 35,
+   "max": 100,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Actual Vampyre<br>Slayer]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Morytania"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Steve",
+   "monster": "Warped creatures",
+   "qty": "120-185",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "''[[Slayer_Rewards#Unlock|Warped Reality]]''",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Steve",
+   "monster": "Wyrms",
+   "qty": "80-145",
+   "min": 60,
+   "max": null,
+   "requires": {
+    "raw": "{{SCP|Slayer|62}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 62
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Turael",
+   "monster": "Banshees",
+   "qty": "15-30",
+   "min": 20,
+   "max": 50,
+   "requires": {
+    "raw": "{{SCP|Slayer|15}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 15
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Morytania",
+    "Kourend"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Turael",
+   "monster": "Bats",
+   "qty": "15-30",
+   "min": 5,
+   "max": 50,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Kandarin"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Turael",
+   "monster": "Bears",
+   "qty": "10-20",
+   "min": 13,
+   "max": 50,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik",
+    "Kandarin",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Turael",
+   "monster": "Birds",
+   "qty": "15-30",
+   "min": null,
+   "max": 25,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Turael",
+   "monster": "Cave Crawlers",
+   "qty": "15-30",
+   "min": 10,
+   "max": 50,
+   "requires": {
+    "raw": "{{SCP|Slayer|10}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 10
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Turael",
+   "monster": "Cows",
+   "qty": "15-30",
+   "min": null,
+   "max": 50,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Morytania"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Turael",
+   "monster": "Crawling hands",
+   "qty": "15-30",
+   "min": null,
+   "max": 50,
+   "requires": {
+    "raw": "{{SCP|Slayer|5}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 5
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Morytania"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Turael",
+   "monster": "Dogs",
+   "qty": "15-30",
+   "min": 15,
+   "max": 70,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Desert",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Turael",
+   "monster": "Dwarves",
+   "qty": "10-25",
+   "min": 6,
+   "max": 45,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Fremennik",
+    "Wilderness"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Turael",
+   "monster": "Ghosts",
+   "qty": "15-30",
+   "min": 13,
+   "max": 50,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Kandarin",
+    "Morytania",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Turael",
+   "monster": "Goblins",
+   "qty": "15-30",
+   "min": null,
+   "max": 50,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Turael",
+   "monster": "Icefiends",
+   "qty": "15-20",
+   "min": 20,
+   "max": 60,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Asgarnia",
+    "Wilderness"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Turael",
+   "monster": "Kalphites",
+   "qty": "15-30",
+   "min": 15,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Desert"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Turael",
+   "monster": "Lizards",
+   "qty": "15-30",
+   "min": null,
+   "max": 70,
+   "requires": {
+    "raw": "{{SCP|Slayer|22}}",
+    "skills": [
+     {
+      "skill": "Slayer",
+      "level": 22
+     }
+    ],
+    "quest": []
+   },
+   "areas": [
+    "Desert"
+   ],
+   "weight": 8
+  },
+  {
+   "master": "Turael",
+   "monster": "Monkeys",
+   "qty": "15-30",
+   "min": null,
+   "max": 50,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Kandarin",
+    "Morytania"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Turael",
+   "monster": "Rats",
+   "qty": "15-30",
+   "min": null,
+   "max": 50,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Fremennik",
+    "Morytania"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Turael",
+   "monster": "Scorpions",
+   "qty": "15-30",
+   "min": 7,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Karamja",
+    "Desert",
+    "Wilderness"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Turael",
+   "monster": "Skeletons",
+   "qty": "15-30",
+   "min": 15,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Asgarnia",
+    "Kandarin",
+    "Morytania",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Turael",
+   "monster": "Spiders",
+   "qty": "15-30",
+   "min": null,
+   "max": null,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Morytania",
+    "Wilderness",
+    "Kourend"
+   ],
+   "weight": 6
+  },
+  {
+   "master": "Turael",
+   "monster": "Wolves",
+   "qty": "15-30",
+   "min": 20,
+   "max": 50,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Varlamore",
+    "Karamja",
+    "Asgarnia",
+    "Desert",
+    "Fremennik",
+    "Kandarin",
+    "Tirannwn",
+    "Kourend"
+   ],
+   "weight": 7
+  },
+  {
+   "master": "Turael",
+   "monster": "Zombies",
+   "qty": "15-30",
+   "min": 10,
+   "max": 50,
+   "requires": {
+    "raw": "{{NA|None}}",
+    "skills": [],
+    "quest": []
+   },
+   "areas": [
+    "Karamja",
+    "Asgarnia",
+    "Kandarin",
+    "Morytania",
+    "Kourend"
+   ],
+   "weight": 7
+  }
+ ]
+}

@@ -313,7 +313,7 @@ class Room {
       }
       if (this.stage === STAGE.IDLE) {
         if (!raid.party.isLeader(player)) {
-          Shared.statement(player, `Your leader, ${Shared.displayName(raid.party.leader)}, must go first.`);
+          Shared.statement(player, `Your leader, ${Shared.partyDisplayName(raid.party.leader)}, must go first.`);
           return;
         }
         const ask = () => Shared.options(player, "Is your party ready to fight?",
@@ -984,7 +984,7 @@ function begin(leader) {
   for (const member of raid.players) {
     if (member === leader) continue;
     member.getPacketSender().sendVarbit(VARBIT.PARTY_STATE, 2);
-    member.sendMessage(`${Shared.displayName(leader)} has entered the Theatre of Blood ${Shared.MODES[raid.mode].tag}. Step inside to join ${Shared.objectPronoun(leader)}...`);
+    member.sendMessage(`${Shared.partyDisplayName(leader)} has entered the Theatre of Blood ${Shared.MODES[raid.mode].tag}. Step inside to join ${Shared.objectPronoun(leader)}...`);
   }
   return raid;
 }

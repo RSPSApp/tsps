@@ -44,9 +44,17 @@ function grindOne(player, grind, requested = 1, toolId = null, withFeedback = tr
   if (grind.amount[0] === grind.amount[1]) made = used * amount(player, grind);
   else for (let n = 0; n < used; n++) made += amount(player, grind);
   const product = new Common.core.Item(grind.productId, made);
-  const freesSlot = !stack || used === held;
-  if (inventory.getAddableAmount(product) < made
-      && !(freesSlot && inventory.getAmount(grind.productId) === 0 && made <= MAX_ITEM_AMOUNT)) {
+  // A grind trades what it consumes for its product, so the slot the take frees is room for it: one
+  // per copy of a non-stackable item, or one when a whole stack goes. A stackable product occupies a
+  // single slot, so a freed slot is worth at most one stack and only when none is held: with one
+  // held the stack caps the surplus, and with a free slot getAddableAmount has already counted it.
+  const freedSlots = stack ? (used === held ? 1 : 0) : used;
+  const productStacks = Common.core.ItemDefinition.forId(grind.productId).isStackable();
+  const productHeld = inventory.getAmount(grind.productId) > 0;
+  const room = productStacks
+    ? (productHeld || freedSlots === 0 ? inventory.getAddableAmount(product) : MAX_ITEM_AMOUNT)
+    : inventory.getAddableAmount(product) + freedSlots;
+  if (room < made) {
     inventory.full();
     return false;
   }

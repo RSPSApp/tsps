@@ -10,7 +10,15 @@
  * at random and may be the same one.
  *
  * Near-Reality: the tiles each cloud barrage and snakeling orb lands on. A barrage throws two
- * clouds; each tile is a cloud's centre.
+ * clouds; each tile is a cloud's centre, the first one listed thrown first.
+ *
+ * rsprox 3276 (a whole rotation 4, its closing phase and rotation 2's phases 2-8), 1157
+ * (rotation 1's phases 2-7) and 1161/820 (every rotation's first phases). Phases are numbered
+ * as the Wiki does, the opening or closing phase being phase 1. They checked every place,
+ * form, count and tile here. Fixed from them: the opening barrages' (2272, 3069), the orb at
+ * (2273, 3078) in rotation 1 phase 4 and rotation 2 phase 5, rotation 4 phase 9's five attacks,
+ * and the order of the opening's clouds. The rest matched. Rotation 1 phase 7's (2273, 3077) and
+ * the phases past those recorded are still Near-Reality's.
  *
  * Steps:
  * - ["ranged", n] / ["magic", n]: n attacks, three ticks apart. Green form's are ranged;
@@ -19,18 +27,26 @@
  * - ["jad", style, n]: n attacks alternating ranged and magic, starting with `style`.
  * - ["clouds", [x, y, x, y]]: one barrage of two clouds.
  * - ["snakeling", [x, y]]: one orb that becomes a snakeling.
+ * - ["wait", n]: n more ticks before the next step.
+ *
+ * rsprox: steps are 3 ticks apart, but a run of barrages or orbs takes a tick longer before an
+ * attack or the dive (Fight.Zulrah.js adds that). Where a run of orbs turns into barrages, or
+ * the other way, live also waits a tick in some phases (rotation 4 phase 7, rotation 2 phase 4,
+ * the closing phase's attacks into its barrages) and not in others (rotation 1 phase 4, rotation
+ * 2 phase 5): those are the WAITs below.
  */
 
 const C = (x1, y1, x2, y2) => ["clouds", [x1, y1, x2, y2]];
 const S = (x, y) => ["snakeling", [x, y]];
 const MELEE = ["melee"];
+const WAIT = ["wait", 1];
 
-/** The four barrages that open the fight and close every rotation. */
-const FILL = [C(2269, 3069, 2272, 3070), C(2266, 3069, 2263, 3070), C(2273, 3072, 2273, 3075), C(2263, 3073, 2263, 3076)];
+/** The four barrages that open the fight and close every rotation (rsprox: 77 openings, 1 closing). */
+const FILL = [C(2269, 3069, 2272, 3069), C(2263, 3070, 2266, 3069), C(2273, 3072, 2273, 3075), C(2263, 3076, 2263, 3073)];
 
 const OPENING = { at: "middle", form: "green", steps: FILL };
 /** The last phase of every rotation, and the first of the next. */
-const CLOSING = { at: "middle", form: "green", steps: [["ranged", 5], ...FILL] };
+const CLOSING = { at: "middle", form: "green", steps: [["ranged", 5], WAIT, ...FILL] };
 
 const phase = (at, form, ...steps) => ({ at, form, steps });
 
@@ -40,7 +56,7 @@ const ROTATIONS = [
   [
     phase("middle", "red", MELEE),
     phase("middle", "blue", ["magic", 4]),
-    phase("south", "green", ["ranged", 5], S(2263, 3076), S(2263, 3073), C(2263, 3070, 2266, 3069), C(2272, 3069, 2273, 3072), S(2273, 3075), S(2273, 3077)),
+    phase("south", "green", ["ranged", 5], S(2263, 3076), S(2263, 3073), C(2263, 3070, 2266, 3069), C(2272, 3069, 2273, 3072), S(2273, 3075), S(2273, 3078)),
     phase("middle", "red", MELEE),
     phase("west", "blue", ["magic", 5]),
     phase("south", "green", C(2269, 3069, 2272, 3069), C(2263, 3070, 2266, 3069), C(2263, 3073, 2263, 3076), S(2272, 3071), S(2273, 3075), S(2273, 3077), S(2273, 3072)),
@@ -52,8 +68,8 @@ const ROTATIONS = [
   [
     phase("middle", "red", MELEE),
     phase("middle", "blue", ["magic", 4]),
-    phase("west", "green", C(2273, 3072, 2272, 3069), C(2273, 3075, 2273, 3078), C(2269, 3069, 2266, 3069), S(2266, 3069), S(2263, 3070), S(2263, 3073), S(2263, 3076)),
-    phase("south", "blue", ["magic", 5], S(2263, 3076), S(2263, 3073), C(2263, 3070, 2266, 3069), C(2272, 3069, 2273, 3072), S(2273, 3075), S(2273, 3077)),
+    phase("west", "green", C(2273, 3072, 2272, 3069), C(2273, 3075, 2273, 3078), C(2269, 3069, 2266, 3069), WAIT, S(2266, 3069), S(2263, 3070), S(2263, 3073), S(2263, 3076)),
+    phase("south", "blue", ["magic", 5], S(2263, 3076), S(2263, 3073), C(2263, 3070, 2266, 3069), C(2272, 3069, 2273, 3072), S(2273, 3075), S(2273, 3078)),
     phase("middle", "red", MELEE),
     phase("east", "green", ["ranged", 5]),
     phase("south", "blue", ["magic", 5], S(2263, 3070), C(2266, 3069, 2269, 3069), S(2263, 3076), C(2272, 3069, 2273, 3072), S(2263, 3073)),
@@ -80,9 +96,9 @@ const ROTATIONS = [
     phase("west", "blue", S(2263, 3076), S(2263, 3073), S(2266, 3069), S(2269, 3069), ["magic", 4]),
     phase("middle", "red", MELEE, C(2263, 3070, 2269, 3069), C(2266, 3069, 2272, 3069)),
     phase("east", "green", ["ranged", 4]),
-    phase("south", "green", S(2263, 3076), S(2263, 3073), S(2263, 3070), S(2273, 3072), S(2273, 3075), S(2273, 3078), C(2273, 3075, 2273, 3078), C(2272, 3069, 2273, 3072), C(2269, 3069, 2266, 3069)),
+    phase("south", "green", S(2263, 3076), S(2263, 3073), S(2263, 3070), S(2273, 3072), S(2273, 3075), S(2273, 3078), WAIT, C(2273, 3075, 2273, 3078), C(2272, 3069, 2273, 3072), C(2269, 3069, 2266, 3069)),
     phase("west", "blue", ["magic", 5], S(2263, 3076), S(2263, 3073), S(2263, 3070), S(2266, 3069)),
-    phase("middle", "green", ["ranged", 4]),
+    phase("middle", "green", ["ranged", 5]),
     phase("middle", "blue", ["magic", 4], C(2263, 3073, 2266, 3069), C(2263, 3070, 2263, 3076), C(2269, 3069, 2272, 3069)),
     phase("east", "green", ["jad", "magic", 8]),
     phase("middle", "blue", S(2263, 3076), S(2263, 3073), S(2273, 3075), S(2273, 3078)),

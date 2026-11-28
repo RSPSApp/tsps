@@ -1,6 +1,7 @@
 /**
  * The darting spikes (rsprox 3285): in place of an attack Vardorvis darts round the player, one
- * dart a tick - one above 500 hitpoints, two above 130, three below (Wiki) - landing beside them,
+ * dart a tick - one above 500 hitpoints, two above 130, three below (Wiki; awakened 1,000 and 260, as
+ * rsprox 1156's awakened kill darts) - landing beside them,
  * on the opposite side each time, gliding there with his dash. Each dart cracks the ground round
  * the player (warning graphics on 3 to 5 tiles in a 5x5 round them, the player's own tile among
  * them on the first), and three ticks later spikes erupt from those cracks: up to 25 (40 awakened,
@@ -14,7 +15,7 @@ const OPPOSITE = [1, 0, 3, 2];
 
 function dartCount(fight) {
   const hp = fight.boss.getHitpoints();
-  const rules = Common.data.dash.darts;
+  const rules = Common.data.dash.darts[fight.awakened ? "awakened" : "normal"];
   return (rules.find(([above]) => hp > above) ?? rules[rules.length - 1])[1];
 }
 

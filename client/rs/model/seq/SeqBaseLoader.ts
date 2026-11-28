@@ -1,3 +1,4 @@
+import { CustomAnimationRegistry } from "../../../custom/animations/CustomAnimationRegistry";
 import { CacheIndex } from "../../cache/CacheIndex";
 import { CacheInfo } from "../../cache/CacheInfo";
 import { Dat2SeqBase, SeqBase } from "./SeqBase";
@@ -22,11 +23,12 @@ export class IndexSeqBaseLoader implements SeqBaseLoader {
             return cached;
         }
 
-        const file = this.index.getFile(id, 0);
-        if (!file) {
+        // A custom animation's own frame map: the server only sends ids the cache doesn't have.
+        const data = CustomAnimationRegistry.frameMap(id) ?? this.index.getFile(id, 0)?.data;
+        if (!data) {
             return undefined;
         }
-        const base = Dat2SeqBase.load(this.cacheInfo, id, file.data);
+        const base = Dat2SeqBase.load(this.cacheInfo, id, data);
         this.bases.set(id, base);
         return base;
     }

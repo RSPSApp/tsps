@@ -22,7 +22,7 @@ const { PlayerSession } = require("../dist/net/PlayerSession");
 const { encodeSound } = require("../dist/net/protocol/ClientProtocol");
 const npcSpawns = require("../data/definitions/npc-spawns.json");
 
-const { choose, isNetwork, refusals, toEntry, requirementFor } = require("../scripts/loc-teleport-matching.cjs");
+const { choose, isNetwork, refusals, toEntry, requirementFor, linesForExisting } = require("../scripts/loc-teleport-matching.cjs");
 const LocTeleports = require("../plugins/world/LocTeleports.plugin");
 const data = require("../plugins/world/data/loc-teleports.json");
 const decisions = require("../plugins/world/data/loc-teleport-sync.json");
@@ -106,6 +106,53 @@ test("an entry keeps the captured move, with whole ticks and a destination per s
   assert.deepEqual([entry.to, entry.anim, entry.animTick, entry.tick, entry.sound, entry.fade], [[50, 9000, 0], 11580, 2, 3, 2454, true]);
   const stairs = toEntry(captured({ destinations: [{ x: 1, y: 2, z: 1, from: [[3, 3, 0]] }, { x: 5, y: 6, z: 1, from: [[9, 9, 0]] }] }), { display: "Stairs", option: "Climb" });
   assert.deepEqual(stairs.sides, [{ from: [3, 3, 0], to: [1, 2, 1] }, { from: [9, 9, 0], to: [5, 6, 1] }]);
+});
+
+test("an entry takes the crossing's captured lines, each on its tick from the move, but no notifications", () => {
+  const lines = [
+    ["You climb down through the trapdoor...", "spam", 0, 4],
+    ["... and enter a dimly lit cavern area.", "spam", 1, 3],
+    ["<col=dc#c>Well done! You have completed an easy task in the Lumbridge & Draynor area.</col>", "gamemessage", 1, 3],
+    ["You have unlocked a new music track: <col=ff#>Monster Melee", "gamemessage", 1, 3],
+    ["You board the boat and wave to Mac.", "gamemessage", -2, 3],
+    ["You have # doses of potion left.", "gamemessage", 0, 3],
+  ];
+  const entry = toEntry(captured({ teleport_tick: 0, lines }), { display: "Trapdoor", option: "Climb-down" });
+  assert.deepEqual(entry.messages, [
+    { text: "You climb down through the trapdoor...", type: "spam" },
+    { text: "... and enter a dimly lit cavern area.", type: "spam", afterMove: 1 },
+    { text: "You board the boat and wave to Mac.", afterMove: -2 },
+  ]);
+  // A staircase's two sides may say different things: no lines.
+  const stairs = toEntry(captured({ lines, destinations: [{ x: 1, y: 2, z: 1, from: [[3, 3, 0]] }, { x: 5, y: 6, z: 1, from: [[9, 9, 0]] }] }), { display: "Stairs", option: "Climb" });
+  assert.equal(stairs.messages, undefined);
+  assert.equal(toEntry(captured({}), { display: "Cave", option: "Enter" }).messages, undefined);
+});
+
+test("the sync keeps an entry's lines when the export has none to give, and never over a hand-set message", () => {
+  const kept = [{ text: "You climb up the ladder.", type: "spam" }];
+  const entry = { name: "osf_ham_ladder", messages: kept };
+  // An export from before the `lines` field: nothing to say either way, so the lines stay.
+  assert.deepEqual(linesForExisting(entry, captured({})), kept);
+  assert.deepEqual(linesForExisting(entry, undefined), kept);
+  // A current export rewrites them, to none if none qualify.
+  assert.deepEqual(linesForExisting(entry, captured({ lines: [["You climb up the ladder.", "spam", 0, 2], ["You leave the HAM Fanatics' Camp.", "spam", 1, 2]] })),
+    [...kept, { text: "You leave the HAM Fanatics' Camp.", type: "spam", afterMove: 1 }]);
+  assert.deepEqual(linesForExisting(entry, captured({ lines: [] })), []);
+  // A hand-set `message` or a staircase's sides: untouched.
+  assert.deepEqual(linesForExisting({ message: "x" }, captured({ lines: [["y", "spam", 0, 2]] })), []);
+  assert.deepEqual(linesForExisting({ sides: [], messages: kept }, captured({ lines: [["y", "spam", 0, 2]] })), kept);
+});
+
+test("a crossing's line captured before the move is sent that many ticks before it, as early as the click's tick", () => {
+  // lost_tribe_cellar_wall: the squeeze animation two ticks after arriving, the move on tick 3, and "You squeeze
+  // through the hole." two ticks before the move (the click's own tick).
+  const entry = data.locs.find((loc) => loc.name === "lost_tribe_cellar_wall");
+  assert.deepEqual(entry.messages, [{ text: "You squeeze through the hole.", afterMove: -2 }]);
+  const ticks = climbWithMessages(locAt(entry.id, entry.x, entry.y, entry.z), [entry.x - 1, entry.y, entry.z], 3);
+  const moved = ticks.findIndex((tick) => tick.some((line) => line.startsWith("move ")));
+  const said = ticks.findIndex((tick) => tick.includes("message game You squeeze through the hole."));
+  assert.equal(moved - said, 2);
 });
 
 // The sync records the first sound a capture heard around the climb, and with a fight nearby that is the fight's
@@ -234,6 +281,27 @@ test("Ynysdail's cave entrance and the cavern's exit lead to each other, onto wa
   assert.deepEqual(enter.to, [2292, 9914, 0], "west of the 1x3 exit");
   assert.deepEqual(exit.to, [2219, 3477, 0], "south of the 2x2 entrance");
   for (const [x, y, z] of [enter.to, exit.to]) assert.equal(core.RegionManager.getClipping(x, y, z, null) & 0x1200100, 0, `${x},${y} is walkable`);
+});
+
+test("the Fremennik Slayer Dungeon's Tunnel leads back out to its Cave Entrance, and the entrance back in", () => {
+  const ways = [
+    { name: "slayer_dungeon_entrance", at: [2797, 3614, 0], from: [2796, 3615, 0], to: [2808, 10002, 0] },
+    { name: "slayer_dungeon_exit", at: [2809, 10001, 0], from: [2808, 10002, 0], to: [2796, 3615, 0] },
+  ];
+  for (const way of ways) {
+    const id = CacheDefinitions.getLocId(way.name);
+    assert.equal(CacheDefinitions.getObject(id).actions[0], "Enter");
+    const object = locAt(id, ...way.at);
+    assert.ok(object, `${way.name} is placed at ${way.at}`);
+    const visit = explorer(way.from);
+    const request = { player: visit.player, object, objectId: id, clickType: 1, handled: false };
+    hooks.object(request);
+    assert.equal(request.handled, true, `${way.name} is handled`);
+    runTicks(visit, 1);
+    const at = visit.player.getLocation();
+    assert.deepEqual([at.getX(), at.getY(), at.getZ()], way.to, `${way.name} lands on ${way.to}`);
+    assert.equal(core.RegionManager.getClipping(...way.to, null) & 0x1200100, 0, `${way.to} is walkable`);
+  }
 });
 
 test("Scrubfoot's cave (Goblin Village) is entered and left as captured, though it came with the 2020 Christmas event", () => {
@@ -1204,6 +1272,48 @@ test("the Troll Stronghold's roof ladder says where you clamber, both ways, as c
     ["message game You clamber back inside the Troll Stronghold.", "move 2831,10076,2"],
     [],
   ]);
+});
+
+test("the H.A.M. Hideout's trapdoor and ladder say their captured lines, the second a tick after the move", () => {
+  // Captured (227/1723 ticks 8630-8631, 232/3199): "You climb down through the trapdoor..." with the move,
+  // "... and enter a dimly lit cavern area." a tick later; the ladder's "You climb up the ladder." with the
+  // move and "You leave the HAM Fanatics' Camp." a tick later, all spam.
+  const down = data.locs.find((entry) => entry.name === "ham_multi_trapdoor");
+  const up = data.locs.find((entry) => entry.name === "osf_ham_ladder");
+  assert.deepEqual(down.messages, [
+    { text: "You climb down through the trapdoor...", type: "spam" },
+    { text: "... and enter a dimly lit cavern area.", type: "spam", afterMove: 1 },
+  ]);
+  assert.deepEqual(up.messages, [
+    { text: "You climb up the ladder.", type: "spam" },
+    { text: "You leave the HAM Fanatics' Camp.", type: "spam", afterMove: 1 },
+  ]);
+  const spam = (text) => `message ${core.ChatType.SPAM} ${text}`;
+  const climbed = climbWithMessages(locAt(5493, 3149, 9653, 0), [3149, 9652, 0], 3);
+  const moved = climbed.findIndex((tick) => tick.includes("move 3165,3251,0"));
+  assert.ok(moved >= 0, "climbs up");
+  const linesAndMoves = (tick) => tick.filter((line) => line.startsWith("message") || line.startsWith("move"));
+  assert.deepEqual(linesAndMoves(climbed[moved]), [spam("You climb up the ladder."), "move 3165,3251,0"]);
+  assert.deepEqual(linesAndMoves(climbed[moved + 1]), [spam("You leave the HAM Fanatics' Camp.")]);
+  const descended = climbWithMessages(locAt(5492, 3166, 3252, 0), [3166, 3251, 0], 4);
+  const landed = descended.findIndex((tick) => tick.includes("move 3149,9652,0"));
+  assert.ok(landed >= 0, "climbs down");
+  const spamOn = (tick) => descended[tick].filter((line) => line.startsWith(`message ${core.ChatType.SPAM}`));
+  assert.deepEqual(spamOn(landed), [spam("You climb down through the trapdoor...")]);
+  assert.deepEqual(spamOn(landed + 1), [spam("... and enter a dimly lit cavern area.")]);
+});
+
+test("a crossing's lines after the move are not sent when the move didn't land", () => {
+  const visit = explorer([3149, 9652, 0]);
+  const said = [];
+  visit.player.getPacketSender().sendTypedMessage = () => {};
+  const sender = visit.player.getPacketSender();
+  visit.player.getPacketSender = () => new Proxy(sender, { get: (target, key) => (key === "sendTypedMessage" ? (type, text) => (said.push(text), target) : target[key]) });
+  visit.player.moveTo = () => visit.player; // something keeps the player where they are
+  const event = { player: visit.player, object: locAt(5493, 3149, 9653, 0), objectId: 5493, clickType: 1, handled: false };
+  hooks.object(event);
+  runTicks(visit, 3);
+  assert.deepEqual(said, ["You climb up the ladder."]);
 });
 
 test("the Troll Stronghold's roof ladder can't be climbed before My Arm's Big Adventure is started (Wiki)", () => {

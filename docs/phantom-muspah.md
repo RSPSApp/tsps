@@ -85,14 +85,15 @@ freeze resistance); the teleporting form can't be attacked.
 | Attack | What happens | Source |
 | --- | --- | --- |
 | Ranged | Seq 9922; projectile 2329 (start 26, end 60, angle 5, progress 244, heights 32 to 25); sounds 6705 (delay 2), 6787 (21), 6692 (22); the hit lands 2 ticks later, with spot 2293 (delay 60) and sound 6774 when it hits. | capture (608 hits) |
-| Magic | Seq 9918 with spot 2319 and sounds 6731 (2), 6680 (3), 6813 (11), 6662 (22); two ticks later projectile 2327 (start 24, end 54, angle 5, heights 100 to 24); the hit lands 4 ticks after the attack, spot 2328 (height 124). Protect from Magic blocks it; otherwise it corrupts. | capture (132 hits); Wiki |
+| Magic | Seq 9918 with spot 2319 and sounds 6731 (2), 6680 (3), 6813 (11), 6662 (22), 6846 (80), 6843 (81), 6802 (83), 6753 (87), 6685 (88); two ticks later projectile 2327 (start 24, end 54, angle 5, heights 100 to 24) with sound 6730 (24); the hit lands 4 ticks after the attack, spot 2328 (height 124). Protect from Magic blocks it; otherwise it corrupts. | capture (132 hits); Wiki |
 | Melee | Seq 9920 with spot 2320 and sound 6674 (delay 30); the hit lands a tick later. Stab. It hits harder, even through Protect from Melee, the longer the Muspah has stood still: **estimate**, +1 max hit and 5% through prayer per still tick, up to +20 and 50%. | capture; Wiki (qualitative) |
 
 ## Form switches
 
 The Muspah swaps between ranged and melee after at least 100 damage in ranged form or 80 in melee
-form, and at least four separate damaging hits since the last switch (Wiki; captures agree: the
-fewest seen were 100 and 80). The switch is seq 9936; a tick later the new form with seq 9937 and
+form. After the first switch it also needs at least four separate damaging hits since the last
+one (Wiki, since 22 July 2026; the first switch needs only the damage). Captures agree on the
+damage: the fewest seen were 100 and 80. The switch is seq 9936; a tick later the new form with seq 9937 and
 spot 2334, and a wave of spikes.
 
 ## Spikes
@@ -117,18 +118,23 @@ Knock-back damage: the captures cluster at 9-15. **estimate**: 9-15.
 
 At 75% (637) and 50% (425) hitpoints. A Muspah that spawned in ranged form uses Lightning clouds
 first, one that spawned in melee form Homing spikes first; the other comes at 50% (Wiki; the
-captures agree in every kill).
+captures agree in every kill). Both always come before the shockwave, even when its hitpoints
+are far below 127 or at 0 (captured: 160 of 160 kills). A special waits 2 ticks after an attack
+and 3 after seq 9936, 6 after the other special, and 6 after Lightning clouds lands; the
+shockwave waits as long after the landing (captured: 5-9, mostly 6).
 
 ### Homing spikes
 
 "The Phantom Muspah floods the room with darkness..." (purple), seq 9923 with spot 2321, the
 overlay darkened (`muspah_set_overlay_fade` 130). Two to four existing spikes, never one next to
-the player or under the Muspah, sink (despawn) and come back as `muspah_spike_follow` (46697). Each
-moves one tile every 2 ticks towards the player, never diagonally and never through a standing
-spike, with spot 2326 and area sounds 6686 and 6764 (delay 30) each step; the tile it left clears
-a tick later. Reaching the player knocks them back like a rising spike. After 34 ticks, or when
-the shield goes up, they harden where they stand into ordinary spikes. capture; Wiki
-(34 ticks, the shield ending them). Damage: **estimate** 9-15, as the other spikes.
+the player or under the Muspah, sink (despawn) one a tick from the tick after the seq, and each
+comes back 2 ticks after its own sink as `muspah_spike_follow` (46697) (captured: sinks at +1 to
++4, the first follower at +3). Each moves one tile every 2 ticks towards the player, never
+diagonally and never through a standing spike, with spot 2326 and area sounds 6686 and 6764
+(delay 30) each step; the tile it left clears on the same tick. Reaching the player knocks them
+back like a rising spike. After 34 ticks, or when the shield goes up, they harden where they stand
+into ordinary spikes. capture; Wiki (34 ticks, the shield ending them: the 22 July 2026 update.
+Every capture predates it and shows the old 50 ticks, with the spikes moving through the shield). Damage: **estimate** 9-15, as the other spikes.
 
 ### Lightning clouds
 
@@ -154,7 +160,8 @@ seq 9932 and spot 2334; two ticks later seq 9925 with spot 2322 and sounds 6744,
 6796, 6843, 6753, 6685, 6807; five ticks after that spot 2323, sound 6817 and the shockwave:
 map animations on every tile, 3 cycles further per tile (`projectile_muspah_attack_explode_03`
 2330 and the darker 2331). Tiles behind a spike, as seen from the centre, get none and are safe.
-Elsewhere up to 80 typeless damage and corruption. Three ticks later the shielded form. capture;
+Elsewhere up to 80 typeless damage and corruption, on the release tick itself (captured: 90 of
+95 hits). Three ticks later the shielded form. capture;
 Wiki (80).
 
 Shield skip: damage that would kill it during the shockwave's wind-up is undone, and it stays on
@@ -167,7 +174,7 @@ wind-up, the shield is skipped and it is left on 1 hitpoint (Wiki).
 | Draining it | 2 points after each of its attacks; a player hit with Smite on drains a quarter of the hit (the prayer-drain hitsplat, 60). | Wiki; capture (the hitsplat) |
 | Clear Mind | A landed enchanted sapphire bolt or enchanted sapphire dragon bolt proc drains one tenth of the shielded form's current Ranged level, rounded down (33 at 336 Ranged). This uses the existing 25% PvM proc chance after accuracy (27.5% with the Kandarin Hard Diary). | [Sapphire bolts (e)](https://oldschool.runescape.wiki/w/Special:PermanentLink/15374764), [Muspah strategies](https://oldschool.runescape.wiki/w/Special:PermanentLink/15403077) |
 | Soul Split | It heals half of the damage it deals, rounded down. | Wiki |
-| Breaking it | The post-shield form (12080), the HUD back to hitpoints, and a wave of spikes. Homing spikes still moving harden. | capture; Wiki |
+| Breaking it | The post-shield form (12080) with sound 6805, the HUD back to hitpoints, and a wave of spikes. Homing spikes still moving harden. | capture; Wiki |
 
 ## Corruption
 
@@ -184,13 +191,16 @@ A new corruption while one runs starts it again.
 
 At 0 hitpoints, seq 9941. Five ticks later "Your Phantom Muspah kill count is: N." (varp
 `total_muspah_kills` 3752), the fight's length against the personal best ("Fight duration: m:ss.SS
-(new personal best)" or "... Personal best: ..."), and the loot on its centre tile. capture.
-The next Muspah spawns 30 seconds later (Wiki; the Leagues captures show 25 ticks).
+(new personal best)" or "... Personal best: ..."; m:ss to the nearest second with precise timing
+off, as Grid Master's "0:35"), and the loot on its centre tile. capture. The HUD fades 4 ticks
+after the kill count and clears 4 ticks after that (capture).
+The next Muspah spawns 30 seconds later (Wiki; the Leagues and Grid Master captures show the next
+one 20 ticks after the kill count, 25 after seq 9941).
 
 Loot is the Wiki table in `npc-drops.json`, plus:
 
 - Charged ice: guaranteed for a kill under 3:00 when the player doesn't have one or a Muphin that
-  has used one (Wiki). "Untradeable drop: Charged ice" (capture).
+  has used one (Wiki). "Untradeable drop: Charged ice" (capture) comes from the loot drop notification, after the other drop lines.
 - A Venator shard comes with no other main-table loot (Wiki).
 - The frozen cache opens into the Wiki's table (pre-roll 1/50: another cache, Ancient icon,
   Venator shard), with "You open the frozen cache and find... another frozen cache inside! How

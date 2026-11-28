@@ -64,6 +64,42 @@ wording the Wiki leaves out.
   "A Kitten", "A Chocolate Cake", "Some Stew").
 - **After the quest (ticks 878-893):** asking Gertrude for another kitten while the first is
   following gets "Aren't you still raising that other kitten?...".
+- **The kitten's Interact menu (ticks 918-964, rsprox.net 3219 and 3216):** see
+  [Cat Interact](#the-kittens-interact-menu) below.
+
+## Gertrude's kittens after the quest
+
+The Gertrude plugin (`server/plugins/npcs/Gertrude.plugin.js`) sells them, after the Wiki's Gertrude
+page: 100 coins, a random colour unless the Ring of Charos(a) is worn (then the colour choice, and
+her "[Charm]" option is offered only then). "Yes please." and her right-click "Kitten" (quick buy)
+take the coins and hand the kitten over as the reward does: it follows (Transcript:Kitten's
+"Meeooow!", "Miaow!"), or goes into the backpack with a follower out, or under the player when that
+is full; "Gertrude gives you another kitten." is a message box. She refuses ("Aren't you still
+raising...") while a kitten or normal cat (or hell-kitten, hellcat) follows or is in the backpack or
+a bank; a bank placeholder is no cat, and an overgrown cat doesn't count. The quick buy without
+coins: "I'll want 100 coins for a kitten.".
+
+## The kitten's Interact menu
+
+`server/plugins/npcs/pets/CatInteract.Pets.js`, from the capture (no catspeak amulet) and 3219/3216:
+
+- "Interact with kitten": Stroke, Chase Vermin, Guess age, Shoo away; an adult cat's "Interact
+  with cat" has no Guess age (3216 tick 5486).
+- **Stroke (918-924):** "You softly stroke your cat.", the player's `human_pickupfloor` and the
+  kitten's `cat_rollingover` at once; 3 ticks later "Purr...purr..." overhead with the `purr` sound
+  (340) and the player's "That cat sure loves to be stroked." (chathap1). BUSY until it is continued.
+  An adult cat: "Who's a good cat then?" and the cat's "Me! Me! Scratch me behind the ears."
+  (Transcript:Cat; 3216 tick 5489-5494).
+- **Guess age (943-946):** the player's "I wonder how old you are..." (chatneu1), then the message
+  box "After taking a good look at your kitten you guess that its age is: 0 minutes. And approximate
+  time until fully adult: 3 hours  00 minutes, assuming you look after it." (the double space is
+  live's). Both from the growth count (90 seconds each, 120 to adult), rounded down: 3219's "1
+  minute"/"2 hours 58 minutes", "28 minutes"/"2 hours 31 minutes", "1 hour 13 minutes"/"1 hour 46
+  minutes".
+- **Shoo away (952-956; 3219 tick 23993-24012):** "Are you sure you want to shoo away the cat?"
+  (Yes I am.|No I'm not.). No: "You choose not to shoo away the cat." (spam). Yes: the player's
+  "Shoo cat!" overhead; a tick later "The cat has run away.", the kitten's "Meeeooow!" with sound 339,
+  and the follower varps clear.
 - **Journal (ticks 73, 278, 601, 703):** the recorded lines for stages 1, 2, 4 and 5.
 
 ## Current server implementation
@@ -90,11 +126,13 @@ At the final hand-in an equipped Ring of Charos(a) still offers the server's kit
 - Gertrude's chatheads name 7284 (`gertrude_quest`); live names the base 3500, whose varp-180
   transform that is (7284 and 7723 share its head models).
 - Fluffs wanders a few tiles in the loft (her spawn has no wander radius set); live she stood still.
-- After the quest the kitten's own care (Interact: Stroke, Guess age; feeding) is the Pets plugin's,
-  shared by every kitten, and words it differently: live sends "You softly stroke your cat." with
-  `cat_rollingover`, "Purr...purr..." and the player's "That cat sure loves to be stroked.", the age
-  as a message box after "I wonder how old you are...", and "The kitten gobbles up the fish." with
-  "Purr!" (capture ticks 905-1189). Left for a follow-up.
+- The kitten's feeding still words it differently: live sends "The kitten gobbles up the fish." with
+  "Purr!" (capture tick 1189). Left for a follow-up.
+- After "Yes I am." live's kitten walks off for 4 ticks and is removed at +5 (3219 tick 24012); ours
+  is removed with its "Meeeooow!" at +1.
+- The broken fence's north crossing lands on 3308,3493, one tile short of live's 3308,3494: live
+  starts on the fence tile, which this cache blocks, so ours starts one tile south and keeps live's
+  two-tile move with the climb over the fence (issue 6772).
 - No quest rating box (983) follows the scroll, as for every quest on this server.
 - The player's "Hello again." keeps the chathead animation another quest's capture recorded (chatneu1);
   this capture has chathap1.

@@ -8,7 +8,7 @@ const SIT_SLOT = 54;
 const SIT_LOOP = 10061; // emote_sit_loop, interface 216 child 54 (cache enum 1001 -> 5248)
 
 function setup() {
-  const hooks = { custom: new Map(), objects: [], login: [], logout: [], npcs: [], ground: [] };
+  const hooks = { custom: new Map(), objects: [], login: [], logout: [], npcs: [], ground: [], conditions: [] };
   const attrs = new Map();
   const inventory = new Map();
   const messages = [];
@@ -26,6 +26,10 @@ function setup() {
   let area = null;
   let currentDialogue = null;
   let location = { x: 3041, y: 2638, z: 0 };
+  const blocked = new Set(); // "x,y" tiles the player cannot step onto
+  const sounds = [];
+  const graphics = [];
+  const projectiles = [];
   const core = {
     ...PluginManager.getCoreApi(),
     ObjectManager: {
@@ -42,7 +46,7 @@ function setup() {
     persistAttribute(key, defaultValue) { persistentKeys.set(key, defaultValue); },
     onCustomEvent(name, fn) { const list = hooks.custom.get(name) ?? []; list.push(fn); hooks.custom.set(name, list); },
     emitCustomEvent(name, event) { event.player ??= player; for (const fn of hooks.custom.get(name) ?? []) fn(event); },
-    onNpcDialogueCondition() {},
+    onNpcDialogueCondition(fn) { hooks.conditions.push(fn); },
     onNpcInteraction(fn) { hooks.npcs.push(fn); },
     onObjectInteraction(fn) { hooks.objects.push(fn); },
     onItemOnItem() {},
@@ -92,6 +96,9 @@ function setup() {
     sendInterface() { return sender; },
     sendInterfaceScript() { return sender; },
     sendInterfaceRemoval() { return sender; },
+    sendSound(id, volume, delay) { sounds.push([id, delay]); return sender; },
+    sendGraphic(graphic, at) { graphics.push([graphic.id, graphic.delay, at.getX(), at.getY()]); return sender; },
+    sendProjectile(from, to, offset, speed, id) { projectiles.push([id, from.getX(), from.getY(), to.getX(), to.getY(), speed]); return sender; },
   }, { get(target, key) { return target[key] ?? (() => sender); } });
   const player = {
     getAttribute: (key) => attrs.get(key),
@@ -117,7 +124,13 @@ function setup() {
     getArea: () => area,
     setArea: (value) => { area = value; },
     getPrivateArea: () => area instanceof core.PrivateArea ? area : null,
-    getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() { return this; }, addFirstStep() { return true; } }),
+    getMovementQueue: () => ({
+      reset() { return this; },
+      setBlockMovement() { return this; },
+      addFirstStep() { return true; },
+      canWalk(dx, dy) { const at = player.getLocation(); return !blocked.has(`${at.getX() + dx},${at.getY() + dy}`); },
+      walkStep(dx, dy) { const at = player.getLocation(); location = { x: at.getX() + dx, y: at.getY() + dy, z: at.getZ() }; },
+    }),
     setUntargetable() {},
     performGraphic(graphic) { player.graphics = [...(player.graphics ?? []), graphic.getId?.() ?? graphic.id]; },
     performAnimation(animation) { player.animations = [...(player.animations ?? []), animation.getId?.() ?? animation.id]; },
@@ -152,7 +165,23 @@ function setup() {
     player.moveTo({ x, y, z: 0 });
     emit('player:emote', { slot, sequence: SIT_LOOP });
   };
-  return { cameras, mounts, core, hooks, attrs, inventory, messages, persistentKeys, placed, spawned, removed, tasks, xp, varbits, varValues, groundItems, player, loadQuest, emit, investigate, pickup, sit, tick, setLocation(x, y) { location = { x, y, z: 0 }; }, get area() { return area; }, get currentDialogue() { return currentDialogue; } };
+  return { blocked, sounds, graphics, projectiles, cameras, mounts, core, hooks, attrs, inventory, messages, persistentKeys, placed, spawned, removed, tasks, xp, varbits, varValues, groundItems, player, loadQuest, emit, investigate, pickup, sit, tick, setLocation(x, y) { location = { x, y, z: 0 }; }, get area() { return area; }, get currentDialogue() { return currentDialogue; } };
 }
 
-module.exports = { setup, SIT_SLOT, SIT_LOOP };
+/**
+ * Sets the stage and blacks out into the dream (the first sip's black-out step), then returns
+ * the quest and `at(x, y)`, which turns a source tile into the dream's instance tile.
+ */
+function enterDream(h, stage) {
+  const quest = h.loadQuest();
+  quest.setStage(h.player, stage);
+  h.emit('npc-dialogue:action', { npcId: 16471, stepId: 'Cc5OQV', kind: 'message' });
+  h.tick(20);
+  const crab = h.spawned.find((npc) => npc.definition.id === 16469 || npc.definition.id === 16470);
+  const [sourceX, sourceY] = crab.definition.id === 16469 ? [3054, 2637] : [3056, 2637];
+  const dx = crab.definition.x - sourceX;
+  const dy = crab.definition.y - sourceY;
+  return { quest, dx, dy, at: (x, y) => [x + dx, y + dy] };
+}
+
+module.exports = { setup, enterDream, SIT_SLOT, SIT_LOOP };

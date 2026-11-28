@@ -130,8 +130,9 @@ function completeAllQuests(api, player) {
       }
     }
     // `quest:complete-all-miniquests` { player, completed }: miniquests outside the quest registry
-    // finish themselves (rewards still routed) and push their names. After the quests, so a
-    // miniquest needing its parent quest (The Enchanted Key: Making History) sees it complete.
+    // finish themselves (rewards still routed) and push their names (Barbarian Training). After the
+    // quests, so a miniquest needing another quest sees it complete. The Enchanted Key is registered
+    // after Making History, so the loop above completes it in that order.
     const miniquests = { player, completed: [] };
     try {
       api.emitCustomEvent("quest:complete-all-miniquests", miniquests);
@@ -144,13 +145,34 @@ function completeAllQuests(api, player) {
     routing.restore();
   }
   player.getInventory().refreshItems();
+  if (api.core.Bank.isOpen(player)) player.getBank(0).refreshItems();
 
-  player.sendMessage(`Quest completion: ${completed} completed, ${alreadyComplete} already complete, ${errors.length} errors.`);
-  player.sendMessage(`Rewards: ${routing.tally.banked} items sent to your bank, ${routing.tally.skipped} experience items not given.`);
+  const messages = [
+    `Quest completion: ${completed} completed, ${alreadyComplete} already complete, ${errors.length} errors.`,
+    `Rewards: ${routing.tally.banked} items sent to your bank, ${routing.tally.skipped} experience items not given.`,
+  ];
   if (errors.length) {
     const names = errors.slice(0, 5).join(", ");
-    player.sendMessage(`Completion errors: ${names}${errors.length > 5 ? `, and ${errors.length - 5} more` : ""}.`);
+    messages.push(`Completion errors: ${names}${errors.length > 5 ? `, and ${errors.length - 5} more` : ""}.`);
   }
+  return messages;
+}
+
+function resetAllQuests(player, quests) {
+  let reset = 0;
+  let errors = 0;
+  for (const quest of quests) {
+    if (quest.getStage(player) === 0) continue;
+    try {
+      quest.onReset?.(player);
+      setStage(player, quest, 0);
+      reset++;
+    } catch (error) {
+      errors++;
+      console.error(`[quest command] resetting ${quest.name} (${quest.key}) failed:`, error);
+    }
+  }
+  return `Quest reset: ${reset} reset, ${errors} errors. Rewards are kept.`;
 }
 
 let api;
@@ -165,7 +187,7 @@ function questCommand({ player, parts }) {
     return true;
   }
   if (normalise(name) === "all" && (action === null || action === "complete")) {
-    completeAllQuests(api, player);
+    for (const message of completeAllQuests(api, player)) player.sendMessage(message);
     return true;
   }
   const matches = findQuests(name);
@@ -177,8 +199,18 @@ function questCommand({ player, parts }) {
   }
   const [quest] = matches;
   if (action === "complete") {
-    if (!quest.complete(player)) player.sendMessage(`${quest.name} is already complete.`);
+    if (!quest.complete(player)) {
+      // A quest that can't be completed yet (a miniquest whose parent quest isn't done) says so.
+      player.sendMessage(quest.isComplete(player) ? `${quest.name} is already complete.` : `${quest.name} can't be completed yet.`);
+    }
   } else if (action === "reset") {
+    // A quest that hands something out (a port task's crate) clears it here, so the reset leaves
+    // nothing behind that its own flow can no longer reach.
+    try {
+      quest.onReset?.(player);
+    } catch (error) {
+      console.error(`[quest command] resetting ${quest.name} (${quest.key}) failed:`, error);
+    }
     setStage(player, quest, 0);
   } else if (action !== null) {
     setStage(player, quest, Number(action));
@@ -187,13 +219,17 @@ function questCommand({ player, parts }) {
   return true;
 }
 
-// Trusted plugin-to-plugin requests. WorldAdmin authorizes its HTTP caller before emitting.
+// Trusted plugin-to-plugin requests. PlayerTools runs after the caller's authorization checks.
 function adminQuestRequest(event) {
   const { player, key, action } = event;
   if (!player) return;
   const quests = QuestRuntime.getRegisteredQuests();
   event.handled = true;
-  if (action !== undefined) {
+  if (action === "complete-all") {
+    event.message = completeAllQuests(api, player)[0];
+  } else if (action === "reset-all") {
+    event.message = resetAllQuests(player, quests);
+  } else if (action !== undefined) {
     const quest = quests.find(quest => quest.key === key);
     if (!quest || !["complete", "reset"].includes(action)) {
       event.error = "Choose a registered quest and Complete or Reset.";

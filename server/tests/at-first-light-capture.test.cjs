@@ -586,3 +586,27 @@ test("Verity: the quest's first talk is her rumours introduction; a player she a
   assert.equal(again[0], "PLAYER: Hi Verity. I heard there might be something I could help you with?");
   assert.equal(stage(known), 2);
 });
+
+test("a double click on the leafy bush with a full inventory drops one leaf, with one animation, sound and box", async (t) => {
+  const f = actor(t, { tile: [1618, 2980, 0], stage: 5 });
+  const inventory = f.player.getInventory();
+  while (inventory.getFreeSlots() > 0) inventory.add(new h.core.Item(I.BRONZE_AXE, 1), false);
+  clear(f);
+  await click(f, LOC.LEAFY);
+  await f.connection.dispatch([{ type: "object_option", id: LOC.LEAFY[0], x: 1618, y: 2979, clickType: 1 }]);
+  f.connection.processTurnPackets();
+  h.ticks(f, 5);
+  await play(f);
+  const boxes = f.said.filter((line) => line.text === "You pull a smooth leaf off the bush.");
+  h.ticks(f, 3);
+  const dropped = h.core.ItemOnGroundManager.ownedBy(f.player.getUsername()).filter((g) => g.getItem().getId() === I.SMOOTH_LEAF);
+  assert.equal(dropped.length, 1);
+  assert.equal(f.animations.filter((a) => a.id === 10094).length, 1);
+  assert.equal(sounds(f).filter((s) => s.id === 2581).length, 1);
+  assert.equal(boxes.length, 1);
+  // A later pick still works: the leaf on the ground isn't held.
+  await click(f, LOC.LEAFY);
+  h.ticks(f, 5);
+  await play(f);
+  assert.equal(h.core.ItemOnGroundManager.ownedBy(f.player.getUsername()).filter((g) => g.getItem().getId() === I.SMOOTH_LEAF).length, 2);
+});

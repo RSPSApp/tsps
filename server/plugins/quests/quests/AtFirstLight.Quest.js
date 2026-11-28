@@ -170,6 +170,8 @@ module.exports = function registerAtFirstLightQuest(api) {
   const APATURA_DONE_LINE = "Actually... I think I'll just read the report.";
 
   const playerTasks = new WeakMap();
+  /** Players with a pick under way: a second click can't start another (a dropped leaf isn't held). */
+  const picking = new WeakSet();
   let quest;
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
@@ -657,9 +659,12 @@ module.exports = function registerAtFirstLightQuest(api) {
         (steps) => steps.filter((step) => step.type === "condition"));
       return;
     }
+    if (picking.has(player)) return;
+    picking.add(player);
     player.performAnimation(new Animation(PICK_ANIMATION));
     later(player, 1, () => player.getPacketSender().sendSound(PICK_SOUND, 1, PICK_SOUND_DELAY));
     later(player, PICK_TICKS, () => {
+      picking.delete(player);
       if (held(player, itemId)) return;
       // Transcript:At First Light, both bush conditions' note "Goes to the ground with full inventory." (giveReward drops what won't fit).
       giveReward(player, itemId);

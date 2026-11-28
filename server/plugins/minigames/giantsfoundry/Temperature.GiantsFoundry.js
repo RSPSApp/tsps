@@ -6,20 +6,19 @@
  *
  * rsprox captures (all four recordings):
  * - Dunk-preform / Quench-preform change the temperature every tick by a step that grows the
- *   longer the player holds it there: 27, 30, 33, 37, 41, 45, 49, 53, 57, 62, 67, 72, 77, 83, 89.
- *   Each tick the player dips the preform (human_pickupfloor at the lava with synth 1019,
- *   human_pickuptable at the waterfall with synth 1006).
+ *   longer the player holds it there. Both sixteenth dips are at the lava pool (227/96 and 227/101).
+ * - Heat-preform / Cool-preform first dip with no temperature change (227/96).
+ * - Each dip plays human_pickupfloor at the lava with synth 1019, or human_pickuptable at the
+ *   waterfall with synth 1006.
  * - A worn preform loses a degree every second tick, also while it is being heated or worked.
- *
- * Heat-preform / Cool-preform start slower and speed up too (Wiki); every capture went straight
- * to the fast option, so their steps are a third of the fast ones (an approximation). Clicking
- * either option again starts over at its first step (Wiki: it resets the speed).
  */
 
 const Shared = require("./Shared.GiantsFoundry");
 
-const FAST_STEPS = [27, 30, 33, 37, 41, 45, 49, 53, 57, 62, 67, 72, 77, 83, 89];
-const SLOW_STEPS = FAST_STEPS.map((step) => Math.max(1, Math.round(step / 3)));
+// The 16th dip is 95 (227/96 and 227/101). Repeating it on later dips is an estimate.
+const FAST_STEPS = [27, 30, 33, 37, 41, 45, 49, 53, 57, 62, 67, 72, 77, 83, 89, 95];
+// 227/96 records five Heat-preform steps and two Cool-preform steps. Later steps are estimates.
+const SLOW_STEPS = [0, 7, 8, 9, 11, 12, 13, 15, 16, 17, 18, 20, 21, 23, 25, 26, 28];
 const MAX_TEMPERATURE = 1000;
 const PASSIVE_PERIOD = 2;
 
@@ -30,8 +29,13 @@ const SOURCE = {
 
 function start(player, source, steps) {
   if (!Shared.questComplete(player) || !Shared.wornPreform(player)) return false;
+  const state = Shared.workOf(player);
+  const location = player.getLocation();
+  // A second click on the same option continues the active run (227/101, ticks 239 and 4543).
+  if (state?.kind === "temperature" && state.source === source &&
+      state.steps === steps && location.equals(state.origin)) return true;
   Shared.stopWork(player);
-  Shared.setWork(player, { kind: "temperature", source, steps, step: 0, origin: player.getLocation().clone() });
+  Shared.setWork(player, { kind: "temperature", source, steps, step: 0, origin: location.clone() });
   return true;
 }
 
@@ -65,15 +69,18 @@ function change(player, delta) {
 
 function tick(player, now) {
   if (!Shared.wornPreform(player)) return;
-  if (now % PASSIVE_PERIOD === 0) change(player, -1);
   const state = Shared.workOf(player);
+  // A finished lava run stays finished when the next tick passively cools its preform.
+  const reachedMax = state?.source === SOURCE.LAVA && state.step > 0 &&
+    Shared.get(player, Shared.VARBIT.TEMPERATURE) >= MAX_TEMPERATURE;
+  if (now % PASSIVE_PERIOD === 0) change(player, -1);
   if (state?.kind !== "temperature") return;
   if (!player.getLocation().equals(state.origin)) {
     stop(player);
     return;
   }
   const temperature = Shared.get(player, Shared.VARBIT.TEMPERATURE);
-  const done = state.source.direction > 0 ? temperature >= MAX_TEMPERATURE : temperature <= 0;
+  const done = state.source.direction > 0 ? reachedMax || temperature >= MAX_TEMPERATURE : temperature <= 0;
   if (done) {
     stop(player);
     return;

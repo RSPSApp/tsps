@@ -197,10 +197,12 @@ The client draws everything from varbits; the server keeps them right.
 - At 1000 the player says "Looks like the sword is finished. I should take it to Kovac.".
 
 **Temperature**
-- Dunk-preform and Quench-preform step every tick. The step grows: 27, 30, 33, 37, 41, 45, 49, 53, 57, 62, 67, 72, 77, 83, 89.
-  - Lava: `human_pickupfloor` with synth 1019.
-  - Waterfall: `human_pickuptable` with synth 1006.
-- A worn preform loses a degree every second tick, also while it is heated or worked.
+- Dunk-preform and Quench-preform dip every tick. The steps grow through 27, 30, 33, 37, 41, 45, 49, 53, 57, 62, 67, 72, 77, 83, 89 and 95. Both recorded sixteenth dips are at the lava pool. [227/96, ticks 12028–12049](https://rsprox.net/download/96) · [227/101, ticks 5045–5066](https://rsprox.net/download/101)
+  - Lava plays `human_pickupfloor` with synth 1019.
+  - Waterfall plays `human_pickuptable` with synth 1006.
+- Heat-preform and Cool-preform play the sequence and synth on the first dip with a step of zero. Heat-preform then adds 7, 8, 9 and 11. Cool-preform's second dip subtracts 7. [227/96, ticks 15333–15339, 15802–15813, 16629–16633 and 20449–20457](https://rsprox.net/download/96)
+- Clicking the same option again during a run keeps the next step in sequence. Clicking after the run stops starts at the first step. [227/101, ticks 232–240 and 4537–4544](https://rsprox.net/download/101) · [227/96, ticks 11686–11699](https://rsprox.net/download/96)
+- A worn preform loses a degree every second tick, also while it is heated or worked. A lava dip can raise the temperature to 1000, where the run ends.
 
 **Hand-in** (recording 101)
 - Kovac: "Hmm... sword look good. Hand over.". On continuing:
@@ -261,7 +263,9 @@ The client draws everything from varbits; the server keeps them right.
 - Pouring while a preform is still to be handed in (the Wiki says it can't be done): a placeholder message.
 - The level check for adding a metal (the Wiki says it needs the smelting level, boostable): a placeholder message.
 - Picking the preform up with a bucket of water, and pouring the bucket over the poured mould (every capture used ice gloves): the bucket is emptied, with a placeholder message. Pouring cools the jig first; Pick-up then takes the preform without another bucket.
-- Heat-preform and Cool-preform (every capture went straight to the fast options): steps a third of the fast ones.
+- Estimate for Heat-preform after the fifth dip. The later increases are 12, 13, 15, 16, 17, 18, 20, 21, 23, 25, 26 and 28, then 28 repeats.
+- Estimate for Cool-preform after the second dip. The steps use the Heat-preform magnitudes with the opposite sign.
+- Estimate for Dunk-preform and Quench-preform after the sixteenth dip. The step repeats at 95 until the run ends.
 - The temperature at pickup is 1000 minus a degree per tick since the pour (captured: 980-998).
 
 - "Check" on a set-up jig: it reopens the setup.

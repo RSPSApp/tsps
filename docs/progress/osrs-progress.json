@@ -24092,6 +24092,7 @@
             "server/plugins/minigames/giantsfoundry/Temperature.GiantsFoundry.js",
             "server/plugins/minigames/giantsfoundry/Tools.GiantsFoundry.js",
             "docs/giants-foundry.md",
+            "server/tests/giants-foundry.test.cjs",
             "server/tests/smithing.test.cjs",
             "server/tests/colossal-blade.test.cjs"
           ],
@@ -24101,7 +24102,8 @@
             "Reward credit remains partial because the catalyst's Blast Furnace behavior is still a documented follow-up. Achievement/diary/league hooks also remain; this update does not mark the whole activity complete.",
             "Main 3b61a15a8 (6 November 2026): #2534 Implement Ardougne Hard and Elite diary gameplay tasks. Existing completion credit and documented limitations are retained unless explicitly updated below.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4284 Giants' Foundry: hammer progress rides the room's hammer; Kovac leaves with the quest. #4281 Giants' Foundry: cool the poured mould with a bucket of water. #3768 Sleeping Giants: walk the cutscene, hover the mould jig, two-handed preform. 6 merged PRs changed recorded implementation files for this entry.",
-            "2026-11-24, main 74609edfe: Smiths gloves (i) Dismantle gives the separated message and a worn pair gets no prompt (https://github.com/RSPSApp/tsps/pull/5130). Objectives and rewards remains in-progress: the catalyst's Blast Furnace behaviour is still a documented follow-up. Existing task statuses are unchanged."
+            "2026-11-24, main 74609edfe: Smiths gloves (i) Dismantle gives the separated message and a worn pair gets no prompt (https://github.com/RSPSApp/tsps/pull/5130). Objectives and rewards remains in-progress: the catalyst's Blast Furnace behaviour is still a documented follow-up. Existing task statuses are unchanged.",
+            "2026-11-26, the Giants' Foundry lava pool and waterfall follow the recorded steps. Heat-preform and Cool-preform open with a zero-change dip. Dunk-preform and Quench-preform reach a sixteenth step of 95, and clicking the same option during a run keeps the pace. RSProx 227/96, 227/101 and 227/565 supply the game evidence. See docs/giants-foundry.md for the limits on later steps. Verified in server/tests/giants-foundry.test.cjs (14 passed and 8 intended failures before, 22 passed after) and server/tests/giants-foundry-preset-metal.test.cjs (4 passed before and after), plus an in-game check. Objectives and rewards remains in-progress."
           ],
           "taskDetails": [
             {

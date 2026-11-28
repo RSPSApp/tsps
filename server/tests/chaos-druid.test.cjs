@@ -93,9 +93,9 @@ test('a landed cast lowers Attack 81 -> 76 on its tick, holds the player as it l
   assert.equal(frozen(p), false, 'not held on the cast tick');
 
   tick();
-  assert.equal(frozen(p), true, 'held the tick the projectile lands (endtime 56)');
+  assert.equal(frozen(p), true, 'held the tick the projectile lands (endtime 56; ours: one tick)');
   tick();
-  assert.equal(frozen(p), false, 'and free the tick after, as recorded');
+  assert.equal(frozen(p), false, 'and free the tick after');
   for (let i = 0; i < 3; i++) tick();
   assert.deepEqual(p.messages, ['You feel weakened.']);
   tick();
@@ -106,15 +106,15 @@ test('from three tiles the hold lands two ticks after the cast', (t) => {
   const { p, npc } = fight(t, { dy: 3 });
   const { tick } = attack(t, npc, p);
   tick();
-  assert.equal(frozen(p), false, 'still free the tick after the cast (recorded: walking)');
+  assert.equal(frozen(p), false, 'still free the tick after the cast');
   tick();
   assert.equal(frozen(p), true, 'held as the projectile lands (endtime 76)');
 });
 
 test('a landed cast on a lowered Attack drains nothing and says nothing, but still holds', (t) => {
-  const { p, npc } = fight(t, { attack: 77 });
+  const { p, npc } = fight(t, { attack: 76 });
   const { tick } = attack(t, npc, p);
-  assert.equal(attackLevel(p), 77, 'recorded: the second landed cast with Attack at 77');
+  assert.equal(attackLevel(p), 76, 'recorded: the second landed cast with Attack still at 76');
   assert.deepEqual(p.messages, []);
   tick();
   assert.ok(frozen(p), 'the hold still lands');
@@ -173,4 +173,21 @@ test('the picked attack holds between lookups and is picked again after the atta
   assert.equal(CombatFactory.getMethod(npc).type(npc), core.CombatType.MAGIC);
   first.finished(npc, p);
   assert.equal(first.bind, null);
+});
+
+// Review of #6940: the engine asks the method's type() with no argument; a cast must still be magic, so the
+// player doesn't block it (live: no player animation on a cast) and it rolls magic accuracy.
+test('through the real attack, a cast is magic: no block animation from the player', (t) => {
+  t.mock.method(core.TaskManager, 'submit', () => {});
+  const { p, npc } = fight(t);
+  t.mock.method(p, 'isRegistered', () => true);
+  const method = CombatFactory.getMethod(npc);
+  method.bind = true;
+  assert.equal(method.type(), core.CombatType.MAGIC, 'type() with no argument');
+  assert.equal(new PendingHit(npc, p, method, 0).getCombatType(), core.CombatType.MAGIC);
+  const mock = t.mock.method(PendingHit.prototype, 'isAccurate', () => false);
+  npc.getCombat().executeAttack(method, p, true, npc.getCombat().generation ?? 0, false);
+  mock.mock.restore();
+  assert.equal(npc.getAnimation().getId(), 710);
+  assert.notEqual(p.getAnimation()?.getId(), 424, 'the player does not block a cast');
 });

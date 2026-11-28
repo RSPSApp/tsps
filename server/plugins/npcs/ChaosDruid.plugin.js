@@ -11,13 +11,12 @@
  *   failedspell_impact (85) in slot 2 at height 124, with sound_area bind_impact (99) or spellfail (227),
  *   both delayed to the endtime. It never shows a hitsplat.
  * - A landed cast lowers Attack on the cast's tick, 81 -> 76 with "You feel weakened."; a later landed cast with
- *   Attack still lowered (77) drained nothing and said nothing. "The holding effect is beginning to fade." comes
- *   6 ticks after each landed cast.
- * - The hold is "very brief" (Wiki): from the next tile (endtime 56) the player was held the tick after the cast
- *   and running the tick after that; from 3 tiles (endtime 76) they still walked the tick after the cast. So it
- *   lands with the projectile, floor(endtime / 30) ticks after the cast, and holds for that one tick.
+ *   Attack still lowered (76) drained nothing and said nothing. "The holding effect is beginning to fade." comes
+ *   6 ticks after each landed cast. The player plays no animation on a cast.
  * - 29 of the 35 casts were from the next tile and the rest from 2-3 tiles, where a punch can't reach.
  *
+ * Ours: the hold. The Wiki says the spell binds "very briefly" and neither landed cast shows the player held, so it
+ * is one tick, landing with the projectile (floor(endtime / 30) ticks after the cast).
  * Ours: a druid casts or punches at even odds (the recorded split) wherever it stands: a cast reaches up to
  * the generic NPC cast range (10), a punch walks it in first. Out of a fight it reports melee reach, so its
  * hunt and aggression ranges stay those of a melee monster. The fade line is sent only when the hold took.
@@ -139,6 +138,8 @@ function methodClass() {
       // The provider builds one per lookup; returning the druid's own keeps its picked attack.
       if (existing) return existing;
       if (npc) methods.set(npc, this);
+      // The engine calls type() (and some reach checks) with no argument, so the method keeps its druid.
+      this.npc = npc ?? null;
       this.bind = null;
       this.landing = 0;
     }
@@ -150,22 +151,25 @@ function methodClass() {
     }
 
     melee(npc) {
-      return npc.getCombatMethod();
+      return (npc ?? this.npc).getCombatMethod();
     }
 
     type(npc) {
-      const target = npc?.getCombat?.().getTarget?.();
-      return target && this.pick(npc, target) ? CombatType.MAGIC : CombatType.MELEE;
+      const druid = npc ?? this.npc;
+      const target = druid?.getCombat?.().getTarget?.();
+      return target && this.pick(druid, target) ? CombatType.MAGIC : CombatType.MELEE;
     }
 
     attackDistance(npc) {
-      const target = npc?.getCombat?.().getTarget?.();
-      if (!target) return this.melee(npc).attackDistance(npc);
-      return this.pick(npc, target) ? BIND_DISTANCE : this.melee(npc).attackDistance(npc);
+      const druid = npc ?? this.npc;
+      const target = druid?.getCombat?.().getTarget?.();
+      if (!target) return this.melee(druid).attackDistance(druid);
+      return this.pick(druid, target) ? BIND_DISTANCE : this.melee(druid).attackDistance(druid);
     }
 
     attackSpeed(npc) {
-      return this.melee(npc).attackSpeed(npc);
+      const druid = npc ?? this.npc;
+      return this.melee(druid).attackSpeed(druid);
     }
 
     canAttack(npc, target) {

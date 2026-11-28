@@ -45,14 +45,16 @@ The dragons' plugin plays its own animations, so their change does not show in g
 | Damage | None: no hitsplat |
 
 A landed cast:
-- on the cast's tick, lowers Attack by floor(5%) + 1 (81 to 76) with "You feel weakened.". A landed cast with
-  Attack still lowered (77) drained nothing and said nothing, as Confuse;
-- holds the player for one tick when the projectile lands, floor(endtime / 30) ticks after the cast. Bind's own
-  8 ticks don't apply: from the next tile the player was held the tick after the cast and running the tick
-  after that; from 3 tiles they were still walking the tick after the cast. The Wiki says "binding their
-  target very briefly";
+- on the cast's tick, lowers Attack by floor(5%) + 1 (81 to 76) with "You feel weakened.". The second landed
+  cast, with Attack still at 76, drained nothing and said nothing, as Confuse;
 - says "The holding effect is beginning to fade." 6 ticks after the cast (both recorded casts), here only if
   the hold took.
+
+The player plays no animation on a cast: it is a magic attack, not a blocked swing.
+
+Ours: the hold. The Wiki says the spell binds "very briefly", and neither landed cast shows the player held
+(they moved again as soon as they clicked), so it is one tick, landing with the projectile, floor(endtime / 30)
+ticks after the cast. Bind's own 8 ticks don't apply.
 
 The drain is StandardCurses' Confuse; the druid sets its amount and line (`magic:curse-rule`). The hold is a
 `bind` freeze (`CombatFactory.freezeTicks`), so the freeze immunity that follows it applies.

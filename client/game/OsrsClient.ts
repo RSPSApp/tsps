@@ -15,6 +15,7 @@ import { vec3 } from "gl-matrix";
 import { closeOpenModal, hasOpenModal } from "./widgets/input/widgetKeyboardInput";
 import { getNpcMenuActions } from "./menu/WorldMenuBuilder";
 import { handleCommandShortcut } from "./chat/commandShortcuts";
+import { handleChatIconsPluginMessage, redrawChatInputLine } from "./chat/liveChatIcons";
 
 import { directionToDelta } from "../common/Direction";
 import { ChatMessageType } from "../common/chat/ChatMessageType";
@@ -3472,6 +3473,20 @@ export class OsrsClient {
         // Subscribe to server-side GFX (spot) messages and forward to renderer
         try {
             const unsubVisual=subscribePluginMessages(message => {
+                if (
+                    handleChatIconsPluginMessage(message, {
+                        getLocalChatIcons: () => this.localChatNameIcons,
+                        setLocalChatIcons: (icons) => {
+                            this.localChatNameIcons = icons;
+                        },
+                        markChatTransmit,
+                        widgetManager: this.widgetManager,
+                        executeScriptListener: (widget, listener) =>
+                            this.executeScriptListener(widget as any, listener),
+                    })
+                ) {
+                    return;
+                }
                 const renderer=this.renderer as any;
                 receiveActorVisual(message,renderer?.gfxManager??renderer?.actors?.getActorGfxManager?.());
             });
@@ -3998,6 +4013,7 @@ export class OsrsClient {
                         this.localChatNamePrefix = nextChatPrefix;
                         if (chatIdentityChanged) {
                             markChatTransmit();
+                            redrawChatInputLine(this);
                         }
                         this.localPlayerIsAdmin =
                             typeof isAdmin === "boolean"

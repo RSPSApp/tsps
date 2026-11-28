@@ -15,15 +15,30 @@ function crownsFor(player) {
   return crownsByRightsId.get(player.getRights?.().getId?.()) ?? [];
 }
 
-function applyChatIcons({ player }) {
+function pushIcons(player) {
+  if (typeof core?.encodePluginMessage !== "function") return;
+  try {
+    player.getSession?.()?.sendClientPacket?.(
+      core.encodePluginMessage("account:chat-icons", {
+        chatIcons: [...(player.getChatIcons?.() ?? [])],
+      }),
+    );
+  } catch {
+    // ignore disconnected/bot sessions
+  }
+}
+
+function applyChatIcons({ player }, { pushLive = false } = {}) {
   const crowns = crownsFor(player);
   if (crowns.length) {
     player.setChatIcons(crowns);
+    if (pushLive) pushIcons(player);
     return;
   }
   const request = { player, icon: null };
   pluginApi.emitCustomEvent("account:chat-icon", request);
   player.setChatIcons(Number.isInteger(request.icon) ? [request.icon] : []);
+  if (pushLive) pushIcons(player);
 }
 
 module.exports = {
@@ -39,7 +54,7 @@ module.exports = {
       [PlayerRights.OWNER.getId(), [JAGEX_MODERATOR_CROWN]],
       [PlayerRights.DEVELOPER.getId(), [JAGEX_MODERATOR_CROWN]],
     ]);
-    api.onPlayerLogin(applyChatIcons);
-    api.onCustomEvent("account:refresh-chat-icons", applyChatIcons);
+    api.onPlayerLogin((evt) => applyChatIcons(evt, { pushLive: false }));
+    api.onCustomEvent("account:refresh-chat-icons", (evt) => applyChatIcons(evt, { pushLive: true }));
   },
 };

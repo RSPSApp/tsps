@@ -4,7 +4,7 @@ import { alignPosition, alignSize, type WidgetLike } from "../../widgets/layout/
 import type { OsrsClient } from "../OsrsClient";
 import { RENDER_CONSTANTS } from "../../render/render/constants";
 import { TimersPlugin } from "../plugins/statustimer/TimersPlugin";
-import { adjustMobilePortraitWidget } from "../plugins/portraitmode/PortraitLayout";
+import { adjustMobilePortraitWidget, isMobilePortraitLayoutActive } from "../plugins/portraitmode/PortraitLayout";
 import { TimersPosition } from "../plugins/statustimer/TimersConfig";
 import { packTimers, timersScale } from "../plugins/statustimer/TimersLayout";
 import { loadGameframePaneRedirect, STANDARD_GAMEFRAME_ROOT, SIDE_MODAL_CHILD } from "./gameframePanes";
@@ -14,10 +14,8 @@ const PVP_GROUP = 90;
 /** The mobile main modal (601:27) hosts All Settings (134) and other main modals. */
 const MOBILE_MAIN_MODAL = (MOBILE_ROOT << 16) | 27;
 const ALL_SETTINGS_GROUP = 134;
-/** Right-hand side-panel containers: the mobile side modal (601:114) and the fourteen tab panes. */
-const MOBILE_SIDE_PANES = [114, ...Array.from({ length: 14 }, (_, index) => 116 + index)];
-/** Space kept between the All Settings window and an open right-hand panel. */
-const SIDE_PANEL_GAP = 8;
+/** Cache proc mobile_mainmodal_open: closes the side panel when a main window cannot fit beside it. */
+const MOBILE_MAINMODAL_OPEN_SCRIPT = 2527;
 const PVP_WIDTH = 64;
 const PVP_HEIGHT = 54;
 export const COMBAT_INFOBOX_SIZE = 28;
@@ -181,72 +179,8 @@ type MobileHudManager = {
     getWidgetByUid(uid: number): WidgetLike | undefined;
     canvasHeight?: number;
     isMobileChatDisabled?: (() => boolean) | null;
-    isEffectivelyHidden?(uid: number): boolean;
     getSubInterface?(uid: number): { group: number } | undefined;
-    renderScaleX?: number;
 };
-
-type PositionedWidget = WidgetLike & { uid?: number; _absX?: number; _absWidth?: number };
-
-/** Layout-space left edge of an open right-hand side panel, or undefined when none is open. */
-export function openRightSidePanelLeft(
-    manager: MobileHudManager,
-    layoutW: number,
-): number | undefined {
-    const scale = manager.renderScaleX && manager.renderScaleX > 0 ? manager.renderScaleX : 1;
-    let left: number | undefined;
-    for (const child of MOBILE_SIDE_PANES) {
-        const uid = (MOBILE_ROOT << 16) | child;
-        const widget = manager.getWidgetByUid(uid) as PositionedWidget | undefined;
-        if (!widget || !(widget._absWidth ?? 0)) continue;
-        if (manager.isEffectivelyHidden?.(uid)) continue;
-        if (!manager.getSubInterface?.(uid)?.group) continue;
-        const x = (widget._absX ?? 0) / scale;
-        // A portrait side panel sits along the bottom; only a right-hand panel constrains x.
-        if (x < layoutW * 0.5) continue;
-        left = left === undefined ? x : Math.min(left, x);
-    }
-    return left;
-}
-
-/** The main modal's own x before this adjuster shifted it, while All Settings is open. */
-const shiftedMainModals = new WeakMap<WidgetLike, number>();
-
-/**
- * Keep the mobile All Settings window clear of an open right-hand side panel. The cache
- * centres the main modal without reserving the side panel, so on a tablet at high interface
- * scaling the window covers the inventory/other side panel. Shift it left just enough to
- * clear the panel, never past the left edge, and restore it when either closes.
- */
-function shiftMainModalFromSidePanel(
-    node: WidgetLike,
-    layoutW: number,
-    manager: MobileHudManager,
-): void {
-    const allSettingsOpen = manager.getSubInterface?.(MOBILE_MAIN_MODAL)?.group === ALL_SETTINGS_GROUP;
-    const panelLeft = allSettingsOpen ? openRightSidePanelLeft(manager, layoutW) : undefined;
-    const shiftedFrom = shiftedMainModals.get(node);
-    if (panelLeft === undefined) {
-        if (shiftedFrom !== undefined) {
-            node.rawX = shiftedFrom;
-            node.x = shiftedFrom;
-            shiftedMainModals.delete(node);
-        }
-        return;
-    }
-    const base = shiftedFrom ?? (node.rawX ?? node.x ?? 0);
-    const width = node.width ?? 0;
-    const desired = Math.max(SIDE_PANEL_GAP, panelLeft - SIDE_PANEL_GAP - width);
-    if (desired < base) {
-        if (shiftedFrom === undefined) shiftedMainModals.set(node, base);
-        node.rawX = desired;
-        node.x = desired;
-    } else if (shiftedFrom !== undefined) {
-        node.rawX = base;
-        node.x = base;
-        shiftedMainModals.delete(node);
-    }
-}
 
 /** The raw values a window had before it was stretched, and the ones the stretch wrote. */
 type StretchedWindow = {
@@ -358,6 +292,39 @@ export function restoreWindowFromHiddenChat(node: WidgetLike, parentW: number, p
     alignPosition(node, parentW, parentH);
 }
 
+/** The layout size the fit check last ran at, while All Settings stays open. */
+const fitCheckedSizes = new WeakMap<object, string>();
+
+/**
+ * The cache runs mobile_mainmodal_open as a main window opens, but nothing runs it for All
+ * Settings, so on an iPad the open side panel covered the window and its close button. Run it as
+ * All Settings opens, and again when the layout changes size under it (interface scaling,
+ * rotation). A panel the player reopens afterwards stays open.
+ */
+export function fitAllSettingsBesideSidePanel(
+    manager: {
+        rootInterface: number;
+        canvasWidth: number;
+        canvasHeight: number;
+        getSubInterface(uid: number): { group: number } | undefined;
+    },
+    runScript: (scriptId: number) => void,
+): void {
+    const open =
+        manager.rootInterface === MOBILE_ROOT &&
+        // Portrait Mode stacks the panel under the window, which the cache's width test knows nothing of.
+        !isMobilePortraitLayoutActive() &&
+        manager.getSubInterface(MOBILE_MAIN_MODAL)?.group === ALL_SETTINGS_GROUP;
+    if (!open) {
+        fitCheckedSizes.delete(manager);
+        return;
+    }
+    const size = `${manager.canvasWidth}x${manager.canvasHeight}`;
+    if (fitCheckedSizes.get(manager) === size) return;
+    fitCheckedSizes.set(manager, size);
+    runScript(MOBILE_MAINMODAL_OPEN_SCRIPT);
+}
+
 /** Post-cache alignment: keep the native skull, multi-combat icon, level and combat range. */
 export function adjustMobileHudWidget(
     node: WidgetLike,
@@ -368,7 +335,6 @@ export function adjustMobileHudWidget(
     adjustMobilePortraitWidget(node, parentW, parentH);
     const uid = (node as WidgetLike & { uid?: number }).uid;
     if (uid === MOBILE_MAIN_MODAL) {
-        shiftMainModalFromSidePanel(node, parentW, manager);
         const allSettingsOpen = manager.getSubInterface?.(MOBILE_MAIN_MODAL)?.group === ALL_SETTINGS_GROUP;
         if (allSettingsOpen && manager.isMobileChatDisabled?.()) {
             fillParentForStretchedWindow(node, parentW, parentH);

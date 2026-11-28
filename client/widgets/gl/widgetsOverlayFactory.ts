@@ -125,7 +125,7 @@ export function createWidgetsOverlay(host: WidgetsOverlayHost): WidgetsOverlay {
 
                             // Keep CS2 IF_GETCANVASSIZE / widget manager dimensions aligned with the active
                             // widget layout space.
-                            manager?.resize(layoutW, layoutH, widgetRenderScaleX);
+                            manager?.resize(layoutW, layoutH);
                             host.osrsClient.clientPlugins.updateWidgetLayout();
 
                             // Get the current root interface (set by server via IF_OPENTOPLEVEL)

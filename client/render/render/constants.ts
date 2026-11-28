@@ -398,8 +398,9 @@ export const RENDER_CONSTANTS = {
     MOBILE_PORTRAIT_MIN_LAYOUT_HEIGHT: 800,
     /**
      * Widest useful landscape mobile gameframe: the stock 765px frame plus the right-hand
-     * side-panel and tab-stone column (~51px). Below this the All Settings window (512px)
-     * no longer fits beside the open side panel and overlaps it (iPad at 400%).
+     * side-panel and tab-stone column (~51px). The All Settings window (512px) does not fit
+     * beside an open side panel at this width (iPad at 400%), so fitAllSettingsBesideSidePanel
+     * closes the panel there.
      */
     MOBILE_LANDSCAPE_MIN_LAYOUT_WIDTH: 816,
     PLAYER_FOOTPRINT_RADIUS: (0.4 * 128) | 0,

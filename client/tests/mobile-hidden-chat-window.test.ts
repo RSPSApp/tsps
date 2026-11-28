@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { adjustMobileHudWidget } from "../game/widgets/MobileHudLayout";
+import { adjustMobileHudWidget, fitAllSettingsBesideSidePanel } from "../game/widgets/MobileHudLayout";
+import { setMobilePortraitLayoutActive } from "../game/plugins/portraitmode/PortraitLayout";
 import { alignPosition, type WidgetLike } from "../widgets/layout/WidgetLayout";
 
 const uid = (group: number, child: number) => ((group << 16) | child) >>> 0;
@@ -166,65 +167,71 @@ test("other windows are untouched when the chat is hidden", () => {
     assert.deepEqual([node.y, node.height], [100, 334]);
 });
 
-type PositionedNode = Node & { _absX?: number; _absWidth?: number };
-
-/** A manager with All Settings in the main modal and one open right-hand side panel. */
-function sidePanelManager(panelLeft: number, settingsOpen: boolean, renderScaleX = 2, paneChild = 114) {
-    const pane: PositionedNode = {
-        uid: uid(601, paneChild), x: 0, y: 0, width: 190, height: 261,
-        _absX: panelLeft * renderScaleX, _absWidth: 190 * renderScaleX,
-    };
+/** All Settings in the main modal, with the inventory pane (601:119) open at x 745. */
+function sidePanelManager() {
+    const pane = { uid: uid(601, 119), width: 190, height: 261, _absX: 745, _absWidth: 190 };
     return {
-        canvasHeight: 548,
-        renderScaleX,
         getWidgetByUid: (id: number) => (id === pane.uid ? pane : undefined),
-        getSubInterface: (id: number) => {
-            if (id === uid(601, 27)) return settingsOpen ? { group: 134 } : { group: 149 };
-            if (id === pane.uid) return { group: 149 };
-            return undefined;
-        },
+        getSubInterface: (id: number) => ({ group: id === uid(601, 27) ? 134 : 149 }),
         isEffectivelyHidden: () => false,
         isMobileChatDisabled: () => false,
     };
 }
 
-test("All Settings shifts left to clear an open right-hand side panel", () => {
-    const modal: Node = { uid: uid(601, 27), x: 300, y: 140, width: 512, height: 334, rawX: 300 };
-    adjustMobileHudWidget(modal, 816, 548, sidePanelManager(700, true));
-    assert.equal(modal.x, 180, "ends 8px before the panel");
-    assert.equal(modal.rawX, 180, "the shift survives a position-only layout pass");
+test("the main modal stays where the cache puts it when the interface scale goes back up", () => {
+    // At 175% the cache has the modal far to the right in the wide layout.
+    const modal: Node = { uid: uid(601, 27), x: 770, rawX: 770, y: 0, width: 512, height: 487 };
+    // Back at 400%, a layout pass reaches the modal before the cache resize script does.
+    adjustMobileHudWidget(modal, 896, 487, sidePanelManager());
+    assert.deepEqual([modal.x, modal.rawX], [770, 770]);
 
-    // The panel closes: the cache's own position comes back.
-    adjustMobileHudWidget(modal, 816, 548, sidePanelManager(700, false));
-    assert.equal(modal.x, 300);
-    assert.equal(modal.rawX, 300);
+    // The script then places it for the narrow layout, and later passes leave it there.
+    Object.assign(modal, { x: 121, rawX: 121 });
+    adjustMobileHudWidget(modal, 896, 487, sidePanelManager());
+    assert.deepEqual([modal.x, modal.rawX], [121, 121]);
 });
 
-test("the side modal and every right-hand tab pane constrain All Settings", () => {
-    for (const child of [114, 116, 119, 129]) {
-        const modal: Node = { uid: uid(601, 27), x: 300, y: 140, width: 512, height: 334, rawX: 300 };
-        adjustMobileHudWidget(modal, 816, 548, sidePanelManager(700, true, 2, child));
-        assert.equal(modal.x, 180, `601:${child} clears the window`);
+/** A gameframe with `group` in the main modal, and the scripts the fit check ran on it. */
+function fitHarness(rootInterface = 601) {
+    const state = { rootInterface, canvasWidth: 816, canvasHeight: 585, group: 134 };
+    const runs: number[] = [];
+    const manager = Object.assign(state, {
+        getSubInterface: (id: number) => (id === uid(601, 27) && state.group ? { group: state.group } : undefined),
+    });
+    return { state, runs, check: () => fitAllSettingsBesideSidePanel(manager, (id) => runs.push(id)) };
+}
+
+test("All Settings runs the cache's side panel fit check as it opens and as the layout resizes", () => {
+    const { state, runs, check } = fitHarness();
+    check();
+    check();
+    assert.deepEqual(runs, [2527], "mobile_mainmodal_open once, so a reopened panel stays open");
+
+    state.canvasWidth = 1865;
+    check();
+    assert.equal(runs.length, 2, "the interface scale changed under the window");
+
+    state.group = 12;
+    check();
+    assert.equal(runs.length, 2, "the bank is not All Settings");
+    state.group = 134;
+    check();
+    assert.equal(runs.length, 3, "reopened");
+});
+
+test("the fit check leaves desktop gameframes and Portrait Mode alone", () => {
+    const desktop = fitHarness(161);
+    desktop.check();
+    assert.deepEqual(desktop.runs, []);
+
+    const portrait = fitHarness();
+    setMobilePortraitLayoutActive(true);
+    try {
+        portrait.check();
+    } finally {
+        setMobilePortraitLayoutActive(false);
     }
-});
-
-test("a tab-stone graphic is not treated as an open side panel", () => {
-    const modal: Node = { uid: uid(601, 27), x: 300, y: 140, width: 512, height: 334, rawX: 300 };
-    adjustMobileHudWidget(modal, 816, 548, sidePanelManager(700, true, 2, 74));
-    assert.equal(modal.x, 300, "601:74 is stone7, not a panel");
-});
-
-test("the All Settings shift never pushes the modal off the left edge", () => {
-    const modal: Node = { uid: uid(601, 27), x: 81, y: 140, width: 512, height: 334, rawX: 81 };
-    adjustMobileHudWidget(modal, 816, 548, sidePanelManager(472, true));
-    assert.equal(modal.x, 8, "clamped to the left gap when there is no room to clear");
-    assert.equal(modal.rawX, 8);
-});
-
-test("the shift only applies while All Settings is in the main modal", () => {
-    const modal: Node = { uid: uid(601, 27), x: 300, y: 140, width: 512, height: 334, rawX: 300 };
-    adjustMobileHudWidget(modal, 816, 548, sidePanelManager(700, false));
-    assert.equal(modal.x, 300, "a bank or shop is not moved");
+    assert.deepEqual(portrait.runs, [], "portrait stacks the panel under the window");
 });
 
 test("a position-only layout pass keeps the stretched window in place", () => {

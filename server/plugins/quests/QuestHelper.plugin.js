@@ -19,6 +19,16 @@ function stopBridge(){launcher.stop();}
 function shutdown(){return runtime.shutdown().finally(stopBridge);}
 // The agent MCP drives this runtime headless; null until the plugin has registered.
 function getRuntime(){return runtime??null;}
+/**
+ * The state a headless snapshot adds to the quests' registered vars: Recipe for Disaster's completion
+ * bits, and what quests answer on "quest-helper:project-state" { player, varps, varbits } (their own
+ * live varps and varbits that the guide reads).
+ */
+function projectState(player){
+ const request={player,varps:{},varbits:{...completionProjection(player)}};
+ pluginApi.emitCustomEvent('quest-helper:project-state',request);
+ return {varps:request.varps,varbits:request.varbits};
+}
 function register(api){
  pluginApi=api;
  const rfd=createRfdRenderer({core:api.core,getQuests:getRegisteredQuests});
@@ -31,7 +41,7 @@ function register(api){
    definition:id=>api.core.CacheDefinitions.getVarbit(id),
   }),
   nativeResult:(request,player)=>request.questKey==='recipe_for_disaster'?rfd(request,player):null,
-  projectState:player=>({varbits:completionProjection(player)}),
+  projectState:projectState,
   varbitDefinition:id=>api.core.CacheDefinitions.getVarbit(id),
   send:(player,data)=>player.getSession().sendClientPacket(api.core.encodePluginMessage('quest-helper',data))});
  api.onCustomEvent('network:plugin-message',receive);

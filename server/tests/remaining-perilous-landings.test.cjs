@@ -69,12 +69,38 @@ test('every captured mandatory entrance lands on its real destination', () => {
   gate(h, p, O.ENTRANCE_16, 1458, 9650, 1); assert.deepEqual(pos(p), [1481, 9669, 0]);
   gate(h, p, O.ENTRANCE_17, 1439, 9612, 1); assert.deepEqual(pos(p), [1439, 9599, 1]);
   gate(h, p, O.ENTRANCE_18, 1389, 9674); assert.deepEqual(pos(p), [1522, 9719, 0]);
-  gate(h, p, O.ENTRANCE_18, 1521, 9720); assert.deepEqual(pos(p), [1522, 9719, 0]);
+  gate(h, p, O.ENTRANCE_18, 1521, 9720); assert.deepEqual(pos(p), [1390, 9676, 0]);
   gate(h, p, O.ENTRANCE_17, 1527, 9670); assert.deepEqual(pos(p), [1513, 9596, 0]);
   gate(h, p, O.ENTRANCE_17, 1512, 9560); assert.deepEqual(pos(p), [1355, 9538, 0]);
-  gate(h, p, O.ENTRANCE_17, 1404, 9703); assert.deepEqual(pos(p), [1441, 9676, 0]);
+  gate(h, p, O.ENTRANCE_17, 1512, 9597); assert.deepEqual(pos(p), [1526, 9671, 0]);
+  gate(h, p, O.ENTRANCE_15, 1345, 9590); assert.deepEqual(pos(p), [1374, 9667, 0]);
+  gate(h, p, O.ENTRANCE_17, 1373, 9664); assert.deepEqual(pos(p), [1347, 9590, 0]);
+  gate(h, p, O.ENTRANCE_17, 1404, 9703); assert.deepEqual(pos(p), [1440, 9653, 0]);
+  // The Blood Moon's doorway is two stacked locs.
   gate(h, p, O.ENTRANCE_15, 1388, 9589); assert.deepEqual(pos(p), [1418, 9632, 0]);
+  p.moveTo(new core.Location(1387, 9591, 0));
+  gate(h, p, O.ENTRANCE_15, 1388, 9591); assert.deepEqual(pos(p), [1418, 9632, 0]);
   gate(h, p, O.ENTRANCE_15, 1509, 9673); assert.deepEqual(pos(p), [1461, 9632, 0]);
+});
+
+test('cavern exits and the ways out of the Moon rooms land on their own side', () => {
+  const h = harness(), p = player();
+  h.quest.setStage(p, 27);
+  gate(h, p, O.ENTRANCE_15, 1388, 9576); assert.deepEqual(pos(p), [1423, 9615, 1]);
+  gate(h, p, O.ENTRANCE_15, 1404, 9716); assert.deepEqual(pos(p), [1423, 9649, 1]);
+  gate(h, p, O.ENTRANCE_15, 1480, 9667); assert.deepEqual(pos(p), [1457, 9649, 1]);
+  gate(h, p, O.ENTRANCE_17, 1419, 9631); assert.deepEqual(pos(p), [1387, 9591, 0]);
+  gate(h, p, O.ENTRANCE_17, 1439, 9650); assert.deepEqual(pos(p), [1403, 9704, 0]);
+  gate(h, p, O.ENTRANCE_17, 1458, 9631); assert.deepEqual(pos(p), [1510, 9675, 0]);
+});
+
+test('every new landing is a walkable cache tile', () => {
+  const landings = [[1390, 9676, 0], [1440, 9653, 0], [1423, 9615, 1], [1423, 9649, 1], [1457, 9649, 1],
+    [1526, 9671, 0], [1374, 9667, 0], [1347, 9590, 0], [1387, 9591, 0], [1403, 9704, 0], [1510, 9675, 0]];
+  for (const [x, y, z] of landings) {
+    RegionManager.loadMapFiles(x, y);
+    assert.equal(RegionManager.blocked(new core.Location(x, y, z), null), false, `${x},${y},${z} walkable`);
+  }
 });
 
 test('wrong-stage entrances do not move the player and 1493,9579 remains walk-through', () => {
@@ -85,7 +111,7 @@ test('wrong-stage entrances do not move the player and 1493,9579 remains walk-th
 
 test('cache placements, boss visibility areas and PathFinder show every arena is reachable and returnable', () => {
   const moons = require('../plugins/bosses/data/moons-of-peril.json').moons;
-  const landings = { blue: [1441, 9676], blood: [1418, 9632], eclipse: [1461, 9632] };
+  const landings = { blue: [1440, 9653], blood: [1418, 9632], eclipse: [1461, 9632] };
   // Quest Helper's arena zones (PerilousMoon.java:266-268): landings are inside them.
   const qhZones = { blue: [1417, 1463, 9647, 9699], blood: [1373, 1421, 9614, 9650], eclipse: [1457, 1506, 9614, 9650] };
   const shipped = require('../data/definitions/npc-dialogues.json');
@@ -106,7 +132,7 @@ test('cache placements, boss visibility areas and PathFinder show every arena is
     assert.equal(object.getDefinition().getInteractions()[0], 'Pass-through');
     assert.equal(RegionManager.blocked(new core.Location(lx, ly, 0), null), false, `${moon} landing walkable`);
     assert.equal(RegionManager.blocked(new core.Location(bx, by, 0), null), false, `${moon} boss tile walkable`);
-    const approach = moon === 'blue' ? [bx, by] : moon === 'blood' ? [1412, 9632] : [1468, 9632];
+    const approach = moon === 'blue' ? [1440, 9658] : moon === 'blood' ? [1412, 9632] : [1468, 9632];
     assert.ok(PathFinder.calculateWalkRoute(walker(lx, ly), approach[0], approach[1]) > 0, `${moon} arena approach`);
     const statue = moon === 'blue' ? [51373, 1439, 9659] : moon === 'blood' ? [51372, 1410, 9631] : [51374, 1467, 9631];
     const statueObject = MapObjects.get(statue[0], new core.Location(statue[1], statue[2], 0), null);

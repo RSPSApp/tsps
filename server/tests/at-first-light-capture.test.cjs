@@ -455,8 +455,24 @@ test("post-quest: Apatura's rumour milestones answer from the rumours done (none
     "MENU[Select an option]: What do you do here?|I'd better be off.",
   ]);
   const veteran = actor(t, { stage: 12, attributes: { "at-first-light:stage-version": 1, "hunter.rumours": { assignments: {}, active: null, completed: 60, outfit: 0 } } });
+  // Her milestone notes and key aren't implemented, so she skips the milestones for now.
   const asked = await play(veteran, () => h.talk(veteran, apatura), []);
-  assert.match(asked[2], /^Guildmaster Apatura: I see you've been doing a lot of work for the guild of late\./);
+  assert.equal(asked[2], "MENU[Select an option]: What do you do here?|I'd better be off.");
+});
+
+test("stage 0 with a Hunter cape: Apatura's cape enhancement (Teleports.SkillCapes.js) still comes first", async (t) => {
+  const f = actor(t, { items: [[I.HUNTER_CAPE, 1]] });
+  f.player.getSkillManager().setMaxLevels(h.core.Skill.HUNTER, 99);
+  f.player.getSkillManager().setCurrentLevel(h.core.Skill.HUNTER, 99, false);
+  const said = await play(f, () => h.talk(f, npcAt(f, NPC.APATURA, [1554, 3033, 0])), ["Yes please."]);
+  assert.ok(said.some((line) => line.startsWith("Guildmaster Apatura: Is that a skillcape you have with you?")), JSON.stringify(said));
+  assert.equal(stage(f), 0);
+});
+
+test("a save past Verity's first talk counts as introduced to the rumours at login", async (t) => {
+  const f = actor(t, { stage: 12, attributes: { "at-first-light:stage-version": 1 } });
+  h.PM.emitCustomEvent("player:bootstrap-complete", { player: f.player });
+  assert.equal(f.player.getAttribute("hunter.rumours").unlocked, true);
 });
 
 test("Destroy on each quest item opens the confirmation with its Wiki note (no capture destroys them)", async (t) => {

@@ -266,13 +266,14 @@ function open({player,itemId}) {
 function completedCount(request){if(request?.player)request.completed=state(request.player).completed|0;}
 /**
  * Guildmaster Apatura's page asks "If the player has completed 50/100/150 Hunters' Rumours:" before her
- * menu; unanswered, the first of them played for everyone. Answered from the rumours finished.
+ * menu; unanswered, the first of them played for everyone. Her notes and key for those milestones aren't
+ * implemented (nor the once-each record), so until they are she skips them: her plain menu, as live gives a
+ * player below 50 (the user's rev 243 At First Light capture, tick 1329).
  */
 const MILESTONE_CONDITION=/^If the player has completed (\d+) Hunters' Rumours:$/;
-function milestoneCondition({player,npcId,text}){
+function milestoneCondition({npcId,text}){
   if(npcId!==H.core.NpcIdentifiers.GUILDMASTER_APATURA)return null;
-  const match=MILESTONE_CONDITION.exec(String(text??"").trim());
-  return match?(state(player).completed|0)>=Number(match[1]):null;
+  return MILESTONE_CONDITION.test(String(text??"").trim())?false:null;
 }
 /**
  * `hunter:verity-introduction` { player, done?, introduced }: whether Verity has explained the rumours to the player,

@@ -30,7 +30,7 @@
  */
 module.exports = function registerAtFirstLightQuest(api) {
   const {
-    Animation, CountdownTask, DialogueChainBuilder, Equipment, ItemStatementDialogue, ObjectDefinition,
+    Animation, CountdownTask, DialogueChainBuilder, Equipment, ItemStatementDialogue, NpcDefinition, ObjectDefinition,
     Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, TaskManager,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, loadTranscripts, questStartMessage, giveReward } = require("../QuestRuntime");
@@ -160,10 +160,8 @@ module.exports = function registerAtFirstLightQuest(api) {
   // The player's lines during the pile: once each is continued, the build animation and
   // sound play and Atza answers two ticks later (capture ticks 1017-1028).
   const ASSEMBLE_LINES = new Set(["Well, he actually got attacked on his way over here.", "Oh he'll be alright. He was on the mend when I left him."]);
-  const PLAYER_EXPRESSIONS = {
-    [WOLF_NPC_ID]: { "...": 610, "Why not?": 554 }, // chatsad1, chatquiz1
-    [FOX_NPC_ID]: { "...": 13967 }, // chatneu_idle
-  };
+  // The player's captured chathead animations by conversation NPC (per NPC: the shared table keys by text alone).
+  const PLAYER_EXPRESSIONS = require("../data/at-first-light-player-expressions.json").npcs;
   const APATURA_MET_LINE ="Well, I'm Apatura. Let me welcome you to our small corner of Varlamore.";
   const WOLF_FOX_FOUND_LINES = new Set([
     "I've found Fox. He's been injured by something out in the savannah.",
@@ -439,8 +437,7 @@ module.exports = function registerAtFirstLightQuest(api) {
     if (typeof text !== "string") return;
     const at = (expected, action) => { if (text === expected) event.before = action; };
     const stage = stageOf(player);
-    // The player's lines the shared chathead table holds for another quest's words (capture ticks 292, 414, 698).
-    const own = PLAYER_EXPRESSIONS[npcId]?.[event.step?.player];
+    const own = PLAYER_EXPRESSIONS[npcId]?.[String(event.step?.player ?? "").replace(/\s+/g, " ").trim()];
     if (own !== undefined) event.expression = own;
     // Met Apatura: set as her second line appears, at the first meeting (capture tick 123).
     if (npcId === APATURA_NPC_ID && stage === 0) at(APATURA_MET_LINE, () => setSub(player, "masterMet", 1));
@@ -594,8 +591,13 @@ module.exports = function registerAtFirstLightQuest(api) {
   function handleApaturaTalk(event) {
     const { player } = event;
     if (event.npcId !== APATURA_NPC_ID || stageOf(player) !== 0) return false;
+    // Another plugin's variant comes first (the Hunter cape's enhancement, Teleports.SkillCapes.js): leave it the talk.
+    const ours = selectApaturaVariant(player);
+    const definition = event.definition ?? NpcDefinition.forId(APATURA_NPC_ID);
+    const first = api.core.PluginManager.emitNpcDialogueVariant({ player, npc: event.npc ?? null, npcId: APATURA_NPC_ID, definition });
+    if (first && first !== ours) return false;
     const met = sub(player, "masterMet") === 1;
-    startTranscript(api, player, APATURA_NPC_ID, PAGE, selectApaturaVariant(player), (steps) => beforeQuestTalk(steps, met));
+    startTranscript(api, player, APATURA_NPC_ID, PAGE, ours, (steps) => beforeQuestTalk(steps, met));
     return true;
   }
 
@@ -656,7 +658,7 @@ module.exports = function registerAtFirstLightQuest(api) {
     later(player, 1, () => player.getPacketSender().sendSound(PICK_SOUND, 1, PICK_SOUND_DELAY));
     later(player, PICK_TICKS, () => {
       if (held(player, itemId)) return;
-      // The Wiki: with a full inventory the leaf goes to the ground (giveReward drops what won't fit).
+      // Transcript:At First Light, both bush conditions' note "Goes to the ground with full inventory." (giveReward drops what won't fit).
       giveReward(player, itemId);
       player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, message)));
     });
@@ -851,6 +853,8 @@ module.exports = function registerAtFirstLightQuest(api) {
   function syncVars({ player }) {
     if (!player || player.isPlayerBot?.() === true) return;
     migrate(player);
+    // Past Verity's first talk she has given the rumours introduction (saves from before it was recorded).
+    if (stageOf(player) >= STAGE_VERITY) verityIntroduced(player, true);
     for (const name of Object.keys(VARS)) player.getPacketSender().sendVarbit(VARS[name][0], sub(player, name));
   }
 

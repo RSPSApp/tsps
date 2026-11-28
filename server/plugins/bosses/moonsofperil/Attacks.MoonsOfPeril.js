@@ -8,7 +8,8 @@
  * - The Blood Moon heals 1x the first hit, 2x the second and 30-50 from the third (Wiki).
  * - Standing off the glyph while the hits land burns 1, doubling (Wiki: up to 16), and adds a
  *   stack. The doubling starts again with each attack (estimate: the Wiki doesn't say).
- * - After the hits, the Moon loses a little health of its own, more when it has more (capture).
+ * - On the attack's tick and each of the two after it, the Moon loses a hundredth of its health
+ *   (at least 1) of its own, with no hitsplat (captured on all three Moons).
  */
 const Common = require("./Common.MoonsOfPeril");
 const Curses = require("./Curses.MoonsOfPeril");
@@ -67,13 +68,18 @@ function series(fight, focus) {
   const { maxHits } = Common.data.attack;
   const state = { landing: true, first: true };
   fight.offGlyphDamage = 0;
+  chip(fight);
   maxHits.forEach((maxHit, index) => {
+    // One chip for each hit, a tick before it lands (the first went with the attack itself).
+    if (index > 0) Common.later(index, () => chip(fight));
     Common.later(index + 1, () => landHit(fight, focus, index, maxHit, state));
   });
-  Common.later(maxHits.length, () => {
-    if (fight.ended || fight.killed) return;
-    fight.selfDamage(Math.max(1, Math.round(fight.hp / Common.data.selfDamage.divisor)));
-  });
+}
+
+/** The Moon's own loss of health, no hitsplat. */
+function chip(fight) {
+  if (fight.ended || fight.killed) return;
+  fight.selfDamage(Math.max(1, Math.floor(fight.hp / Common.data.selfDamage.divisor)));
 }
 
 function landHit(fight, focus, index, maxHit, state) {

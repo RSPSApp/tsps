@@ -905,15 +905,13 @@ test('Perilous Moons completes naturally from Attala to the Moons on the real st
 
   // The crates, saplings and river spots are the MoonsOfPeril plugin's from the camps on (its own
   // tests: perilous-moons-camp-instance, moons-of-peril-river); the quest's harness holds what they give.
-  for (const [x, y, id, option] of [[1511, 9695, O.SUPPLY_CRATES, 'Take-from'], [1517, 9690, O.GRUBBY_SAPLING, 'Collect-from'], [1521, 9689, 62193, 'Fish']]) {
+  // The lizard traps are the Hunter plugin's too (tests/moss-lizard-traps.test.cjs).
+  for (const [x, y, id, option] of [[1511, 9695, O.SUPPLY_CRATES, 'Take-from'], [1517, 9690, O.GRUBBY_SAPLING, 'Collect-from'], [1521, 9689, 62193, 'Fish'],
+    [1377, 9682, O.ROCK_167, 'Trap'], [1380, 9684, O.BUSH_63, 'Rustle']]) {
     assert.ok(!h.object(p, id, { x, y, z: 0 }, 1, [option]).handled, `${option} at ${x},${y} is left to the plugin`);
   }
-  p.items.set(I.ROPE, 1);
   p.items.set(I.RAW_BREAM, 1);
   h.itemOnItem(p, I.KNIFE, I.RAW_BREAM);
-  h.object(p, O.ROCK_167, { x: 1377, y: 9682, z: 0 }, 1, ['Trap']);
-  h.object(p, O.ROCK_167, { x: 1379, y: 9682, z: 0 }, 1, ['Trap']);
-  h.object(p, O.BUSH_63, { x: 1380, y: 9684, z: 0 }, 1, ['Rustle']);
   p.items.set(I.RAW_MOSS_LIZARD, 1);
   h.itemOnItem(p, I.KNIFE, I.RAW_MOSS_LIZARD);
   p.items.set(I.MOONLIGHT_GRUB_PASTE, 1);

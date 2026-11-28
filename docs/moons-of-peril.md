@@ -158,8 +158,9 @@ message on the first landing hit, and a melee-sound pair (518-521) per hit.
 | Blue | 11014 `npc_djinn_03_combo` | 8922 (50), 8923 (85), 8927 (115) | "The Blue Moon pierces your defence and chills your joints!" |
 | Eclipse | 11023 `npc_djinn_02_combo` | 8655 (48), 8667 (80), 8624 (103) | "The Eclipse Moon's light pierces your defence and blinds you!" |
 
-Hits on a Moon play sound 565 (Blood), 8917 (Blue) or 8681 (Eclipse). The Moon also loses about
-1 hitpoint every few ticks with no hitsplat (the Wiki's self-damage). It shows only in
+Hits on a Moon play sound 565 (Blood), 8917 (Blue) or 8681 (Eclipse). The Moon also loses health
+of its own with no hitsplat (the Wiki's self-damage): `max(1, floor(hp / 100))` on the attack's
+tick and on each of the two after it (capture 1693, all three Moons). It shows only in
 `pmoon_boss_hp`.
 
 Blood Moon heals 1x the first hit, 2x the second, and 30-50 from the third (Wiki). The heal shows
@@ -233,7 +234,8 @@ Stacks fall by 2 every 5 ticks (Wiki), and relighting both braziers clears them.
 | 2 | `hide_npc` 1. Three ice blocks spawn at the same tiles every time: `pmoon_boss_icicle_1` (13022) at (-4,0), `_2` (13023) at (+5,-2) and `_3` (13024) at (+3,+7). Each has a blocking floor loc (`overlay_new_blocking`, `quarter_waxing_blocking`, `half_waxing_blocking`), and each plays area sound 8914. A stand-in tracking NPC shows spotanim 2785 (`pmoon_boss_fake_blue_magic`). | capture |
 | 4 | The weapon leaves the hands: `combat_weapon_category` becomes 0, then "Category: Unarmed". Spam "<col=00e6e6>Your weapon freezes over. You're forced to let go!</col>". Player animation 3170, spotanim 2754. Projectile 2756 (0-90, angle 150) from the player to the target block, and the block plays 11031 after 90 cycles. Sound 8918. Until the weapon is retrieved every block shows as "Frozen weapons" (13025). | capture |
 | 5-8 | The stand-in fades (2787). The Moon disappears (11012) and is removed. | capture |
-| 8, then every 8 | Ice floor waves: map animations `vfx_djinn_ice_floor_spawn_01`, then `_idle_01` (delay 30) and `_attack_01` (delay 90), on 27-132 tiles in crosses around the blocks. Area sounds 8925 and 8909 (delay 70) at each block. A shard hit does light damage. | capture; Wiki |
+| 8, then every 8 | Ice floor waves: map animations `vfx_djinn_ice_floor_spawn_01`, then `_idle_01` (delay 30) and `_attack_01` (delay 90), on 27-132 tiles in crosses around the blocks. Area sounds 8925 and 8909 (delay 70) at each block. A shard hit does light damage, on wave+3, judged after wave+2's movement: captured players step off on wave+2 unharmed, and the one captured hit lands on wave+3. | capture; Wiki |
+| - | The block's bar is headbar 22, 160 wide, empty after the last punch; the cracked block stays. | capture |
 | - | Punching the target block (unarmed, animation 422) does 8 per hit (9 at rev 226, hitsplat 43) off `ad_hp` (sound 8919). At 0: `icicle_state` set to that block, `wearprevent` 0, "You retrieve your weapon from within the cracked ice.", the weapon category comes back, the block cracks (11032), sounds 8921 and 3284. Clicking again: "You've already retrieved your weapon!" | capture |
 | 9-51 | The Moon loses about 7-8 hitpoints every 8 ticks while away. | capture |
 | 51 | All blocks explode (11035, sound 8924) and are removed a tick later. The circle returns at glyph 5. | capture |
@@ -246,9 +248,9 @@ damage and still has to break the block. Logging out leaves the weapon with Eyat
 
 | Tick | What happens | Source |
 | ---: | --- | --- |
-| 0 | Focus 0. Moon not attackable. Area sound 8926 (radius 10, size 15). | capture (4 storms) |
+| 0 | Focus 0. Moon not attackable. Area sound 8926 (radius 10, size 15). The Moon loses `floor(hp / 5)` at once, with a heal hitsplat of 0 (59 to 48, 183 to 147). | capture (4 storms) |
 | 1 | `pmoon_boss_blue_fire` (51053) along the north and south edges (32 locs, corner-first fire animations). | capture |
-| 2- | `pmoon_boss_winter_storm` NPCs (13027) spawn at the north or south edge (y=+10/+11 facing south, y=-6/-7 facing north), each with spawn animation 10970 and area sound 8900. They walk straight across one tile a tick and despawn at the far side (10972). Several spawn per tick, at random columns between x=-10 and +14. | capture |
+| 2- | `pmoon_boss_winter_storm` NPCs (13027) spawn at the north or south edge (y=+10/+11 facing south, y=-6/-7 facing north), each with spawn animation 10970 and area sound 8900. They walk straight across one tile a tick, through each other and the player, and despawn at the far side (10972). Several spawn per tick, at random columns between x=-10 and +14. | capture |
 | 3 | The player is knocked back to (+2, -1). Moon animation 11007, spotanim 2783 (delay 30, height 255). Projectile 2780 from the Moon to (-12, +2) and (+16, +2) (80-150, heights 830 to 50). | capture |
 | 7 | Both braziers out: `brazier_lit_left` and `_right` 1. Sound 8903. | capture |
 | every 10 | The Moon heals 10 per shrouded brazier (heal hitsplat). | capture; Wiki (5 times, up to 100) |
@@ -294,7 +296,7 @@ Same for all three:
 
 | Tick | What happens |
 | ---: | --- |
-| 0 | `pmoon_boss_hp` 0, `<moon>_dead` 1, `hide_npc` 1. A tracking NPC on the Moon's tile faces the player and plays the death spotanim: 2789 Blood, 2790 Blue, 2788 Eclipse. |
+| 0 | `pmoon_boss_hp` 0, `<moon>_dead` 1, `hide_npc` 1. A tracking NPC on the Moon's tile faces the player (an instant face angle) and plays the death spotanim: 2789 Blood, 2790 Blue, 2788 Eclipse. |
 | 4 | Player animation 388 (delay 15) with hitsplat 44 for 129-161 (purpose unknown; **open question**). |
 | 5 | `pmoon_hud` closes, `gotr_overlay` opens with script 5984 [52841, 1355188], sound 7928. |
 | 6 | `hide_npc` 0. The tracking NPC is removed. |
@@ -322,7 +324,7 @@ sends unprotected items to a grave outside, and anything left on the arena floor
 | Thing | What happens | Source |
 | --- | --- | --- |
 | Statue (`pmoon_entry_statue_blood/blue/eclipse`, 51372-51374, Use) | The first time, a mesbox: "You are about to enter a dangerous area. <col=#f#>Items dropped within the arena may be irretrievable.</col>". Then face, sound 7928, `gotr_overlay` with script 5984 (the Moon's colours), the arena join (above), and the move to the arena two ticks later. | capture (13 attempts) |
-| Exit stairs (`pmoon_boss_exit_stairs`, 53003; Quick-escape / Escape) | Leaves the arena. Quick-escape is the default since 3 April 2024 (Wiki). | capture (rev 228, 4 attempts); Wiki |
+| Exit stairs (`pmoon_boss_exit_stairs`, 53003; Quick-escape / Escape) | Leaves the arena, used from where the player stands (capture 2278 tick 335: from 8 tiles). Quick-escape is the default since 3 April 2024 (Wiki). Ours: an approach range of 10. | capture (rev 228, 4 attempts); Wiki |
 | Tunnels (`pmoon_telebox`, `_3x3`, `_diagonal`, `_cave`, 51375-51378, Pass-through) | `fade_overlay` [0, 255, 0, 0, 15], the boss HUD cleared, the move about 2 ticks later with spam "You follow a long and winding tunnel before emerging on the other side.", then fade back in [0, 0, 0, 255, 15], `busy` 1 meanwhile, and music 785 (Lost to Time). Destinations from captures: (1439, 9509, 1), (1440, 9615, 1), (1423, 9615, 1), (1513, 9596, 0), (1510, 9675, 0), (1355, 9538, 0). | capture (126 attempts) |
 | Moon rooms (#6937) | The Blood Moon's doorway is two stacked locs, 51375 at (1388, 9589) and (1388, 9591); both lead to (1418, 9632). Blue (1404, 9703) leads to (1440, 9653) and Eclipse (1509, 9673) to (1461, 9632). The ways back: (1419, 9631) to (1387, 9591), (1439, 9650) to (1403, 9704), (1458, 9631) to (1510, 9675). | rsprox 1104, 1135, 1137, 1140, 1150, 1693, 2278, 3276 |
 | Between the caverns (#6937) | (1521, 9720) to (1390, 9676); (1345, 9590) to (1374, 9667) and (1373, 9664) to (1347, 9590); (1512, 9597) to (1526, 9671). A cavern's exit comes up beside its antechamber door: (1423, 9615, 1) from the Ancient Prison, (1457, 9649, 1) from Streambound, and for Earthbound (1423, 9649, 1), which no capture shows. | rsprox 1104, 1162, 1693, 3128, 3276 |
@@ -344,9 +346,9 @@ Perilous Moons (`PerilousMoons.Quest.js`) builds the camps in copies of Neypotzl
 `Camps.MoonsOfPeril.js` and `River.MoonsOfPeril.js`, data `supplies`, `river` and `neypotzli`.
 The quest opens them (`moons-of-peril:camps-open`) from its camp stage (10) on, so a player gathering
 for Eyatlalli's ritual (stage 23) gets the same crates, grubs and bream as at the Moons and after the
-quest; before the camps Jessamine only warns the player off. The quest's own steps are the lizard traps
-(two rocks, then the bushes) and the knife recipes, whose scales line, cutting animation and sounds are
-from capture 1693 tick 2095. Moonlight moths stay with the Hunter plugin.
+quest; before the camps Jessamine only warns the player off. The quest's own steps are the knife
+recipes, whose scales line, cutting animation and sounds are from capture 1693 tick 2095. Moonlight moths
+and the moss lizard traps (below) are the Hunter plugin's.
 
 | Thing | What happens | Source |
 | --- | --- | --- |
@@ -360,6 +362,25 @@ from capture 1693 tick 2095. Moonlight moths stay with the Hunter plugin.
 | Food | `food.json`: cooked bream heals the lower of Cooking/3 and Fishing/3, to the nearest ("You eat the bream.", capture); cooked moss lizard the lower of Cooking/3 and Hunter/2, rounded down. | Wiki; capture |
 | Moonlight potion (`Potions.plugin.js`) | Prayer: the greater of 7 + 25% Prayer and 7 + 30% Herblore (none below 38 Herblore). Attack, Strength, Defence: 3 + 10% from 33 Herblore, 5 + 15% from 45 / 55 / 66; Defence 7 + 20% from 70, held like a divine potion's for five minutes without its damage. | Wiki |
 | Leaving Neypotzli | Bream, moss lizards, grubs, paste and sulphurous essence go and moonlight potions turn into vials of water: "The resources from Neypotzli fizzle to dust as they are severed from its magic." Checked on every map square crossed and at login; a copy of Neypotzli counts as Neypotzli. Neypotzli is the caverns (x 1344-1535, y 9536-9727, plane 0) and the antechamber (x 1408-1471, y 9600-9663, plane 1). | capture (essence: local 1001301 tick 2048, rev 237); Wiki |
+
+## Moss lizard traps
+
+`plugins/skills/hunter/Dungeon.Hunter.js`, at the two spots in the Earthbound Cavern: four rocks in a
+row with a trap site between each pair (locs `pmoon_trap_1..3`, 52994-52996, on the map; varbits
+9871-9873: 0 empty, 1 set, 2 sprung) and two bushes. From capture 1693 ticks 2151-2186; level 20 and
+90% of the Hunter level in xp (up to 90) from the Wiki.
+
+| Step | What happens |
+| --- | --- |
+| Trap on a rock (rope carried, not used up) | A tick after arriving: animation 9401, sound 1774, "You set up the first half of the trap." |
+| Trap on the rock next to it | The site between them is set: "You finish setting up the trap." (sound 7924), then the first-half line again for the new rock. |
+| Rustle a bush | A tick after arriving: animation 9401, sound 7925, "Your hunting knowledge allows you to spook more lizards!" (three) or "...another lizard!" (two). Moss lizards (13028) run from the bush to the sites, the first two ticks later and one a tick after. |
+| A lizard reaches a set site | Three ticks later: animation 11066, loc animation 11065, varbit 2, sound 606; a tick after, the varbit is 0, a raw moss lizard lies on the site and the xp is given. At an empty site it just goes. |
+| Rustle the same bush again too soon | "This bush has been shaken too recently." |
+
+Estimates: a set trap lasts 100 ticks, a bush rests 10, each extra lizard is a 10% (level 20) to 80%
+(level 99) roll, and the order of sites after the set ones. Live also sent a second, unprompted run
+of lizards from the bush about 18 ticks later; that is not implemented.
 
 ## Lunar Chest
 
@@ -410,8 +431,8 @@ Where neither a capture nor the Wiki gives the value, the data marks it `estimat
 
 - The off-glyph burn doubles from 1 within each attack (the Wiki says "up to 16" without saying
   over how long).
-- The Moon's self-damage after each attack: its health / 125, at least 1, fitted to the captured
-  `pmoon_boss_hp` (during Weapon Freeze: health / 31 every 8 ticks).
+- The Moon's self-damage during Weapon Freeze: health / 31 every 8 ticks, fitted to the captured
+  `pmoon_boss_hp`.
 - Ice-floor strikes up to 10, unparried clone strikes up to 15, storm hits up to 8, ray hits up
   to 10. Storms appear about once a tick, at each column's open ends.
 - Statue messages for a Moon already subdued ("You have already subdued the Blood Moon. Claim your

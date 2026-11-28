@@ -3,8 +3,9 @@
  * - Statue, Use: "You are about to enter a dangerous area." and "Continue anyway?" (unless the
  *   player said not to ask again), then the portal overlay in the Moon's colours with sound 7928,
  *   and two ticks later the move onto the glyph that is up (or the special's own start tile).
- * - Stairs, Quick-escape / Escape: the HUD goes, the portal overlay, and two ticks later the
- *   antechamber by the monolith (1441, 9637, 1).
+ * - Stairs, Quick-escape / Escape: used from across the arena, no walk up to them (capture: from 8
+ *   tiles). The HUD goes, the portal overlay, and two ticks later the antechamber by the monolith
+ *   (1441, 9637, 1).
  * The arenas are shared rooms (not instances), multi-combat. Logging out or dying inside puts the
  * player in the antechamber; a grave from a death there is left there too.
  */
@@ -20,6 +21,9 @@ const ALREADY_SUBDUED = (name) => `You have already subdued the ${name}. Claim y
 const NOT_YET = "You need to have completed Perilous Moons to face the Moons.";
 
 const areas = new Map();
+
+/** How far off the exit stairs can be used from: the usual approach range (the capture's 8 is within it). */
+const STAIRS_RANGE = 10;
 
 function areaClass(moon) {
   const { Area, Boundary } = Common.core;
@@ -180,6 +184,10 @@ function leaveByStairs({ player, objectId }) {
   return true;
 }
 
+function approachStairs(event) {
+  if (Common.MOONS.some((moon) => Common.data.moons[moon].stairs === event.objectId)) event.approachRange = STAIRS_RANGE;
+}
+
 // ------------------------------------------------------------------ hits on the Moon
 
 /** A player's hit on a Moon comes off their own fight; the shared Moon keeps its health. */
@@ -235,6 +243,7 @@ function attachArena(api) {
   }
   api.onObjectInteraction("Statue", { Use: useStatue });
   api.onObjectInteraction("Stairs", { "Quick-escape": leaveByStairs, Escape: leaveByStairs });
+  api.onObjectRoute(approachStairs);
   api.onNpcHitModify(hitMoon);
   api.onPlayerLogin(recoverOnLogin);
   api.onPlayerLogin(Kill.resendKills);
@@ -242,4 +251,4 @@ function attachArena(api) {
   api.onCustomEvent("gravestones:grave-location", graveOutside);
 }
 
-module.exports = { attachArena, enter, arenaOfPlayer, areas };
+module.exports = { attachArena, enter, arenaOfPlayer, areas, approachStairs };

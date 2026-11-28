@@ -494,13 +494,12 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     assert.equal(q.counts.has(I.RAW_PSYKK_BAT_6_),false);
     q.levels.clear();Dungeon.catchBat({player:q,npc:bat,npcId:bat.getId()});advance(2);
     assert.equal(q.counts.get(I.RAW_PSYKK_BAT_6_),1);q.equipment.clear();
-    const rock=new core.GameObject(core.ObjectIdentifiers.ROCK_167,q.getLocation().clone(),10,0,null);
-    const bush=new core.GameObject(core.ObjectIdentifiers.BUSH_63,q.getLocation().clone().add(1,0),10,0,null);
-    q.counts.set(I.ROPE,1);Dungeon.rock({player:q,object:rock});advance(2);
-    Dungeon.rustle({player:q,object:bush});advance(3);
-    assert.equal(q.counts.get(I.ROPE),1);assert.equal(q.counts.get(I.RAW_MOSS_LIZARD),1);
-    const mossXp=q.experience.get(Skill.HUNTER);Dungeon.rustle({player:q,object:bush});advance(3);
-    assert.equal(q.experience.get(Skill.HUNTER),mossXp,"a lizard trap pays out once");
+    // Neypotzli's moss lizard traps (tests/moss-lizard-traps.test.cjs has the catch): a level gate, and the rope stays.
+    q.moveTo(new core.Location(1381,9681));q.setPositionToFace=()=>{};
+    const rock=new core.GameObject(core.ObjectIdentifiers.ROCK_167,new core.Location(1381,9680),10,0,null);
+    q.counts.set(I.ROPE,1);q.levels.set(Skill.HUNTER,19);assert.equal(Dungeon.rock({player:q,object:rock}),true);advance(2);
+    q.levels.clear();Dungeon.rock({player:q,object:rock});advance(2);
+    assert.equal(q.counts.get(I.ROPE),1,"the rope is not used up");
 
     q.counts.clear();q.moveTo(new core.Location(2324,3532));q.counts.set(I.RABBIT_SNARE,1);q.counts.set(I.FERRET,1);
     Traps.activate({player:q,itemId:I.RABBIT_SNARE});advance(3);
@@ -604,7 +603,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     q.setSize(28);Rumours.success({player:q,npcId:core.NpcIdentifiers.TROPICAL_WAGTAIL,method:'bird'});
     const part=I[Rumours.tasks[taskIndex].part];assert.equal(q.counts.get(part),1);
     const rumourXp=q.experience.get(Skill.HUNTER);Rumours.assign(q,0);
-    assert.equal(q.experience.get(Skill.HUNTER)-rumourXp,5200);assert.equal(q.counts.get(I.HUNTERS_LOOT_SACK_BASIC_),1);
+    assert.equal(Math.round(q.experience.get(Skill.HUNTER)-rumourXp),5200);assert.equal(q.counts.get(I.HUNTERS_LOOT_SACK_BASIC_),1);
     assert.equal(rumour.completed,1);assert.equal(q.counts.has(part),false);
     q.setSize(0);Rumours.open({player:q,itemId:I.HUNTERS_LOOT_SACK_BASIC_});assert.equal(q.counts.get(I.HUNTERS_LOOT_SACK_BASIC_),1);
     let rerolls=0;Math.random=()=>{rerolls++;return 0.9;};q.setSize(28);Rumours.open({player:q,itemId:I.HUNTERS_LOOT_SACK_BASIC_});

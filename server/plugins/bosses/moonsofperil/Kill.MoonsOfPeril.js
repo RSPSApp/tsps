@@ -21,6 +21,14 @@ function landing(player, moon) {
   return Common.location(Common.data.camps[camp]);
 }
 
+/** The face angle (0 south, 512 west, 1024 north, 1536 east) from a large NPC's centre to a mobile. */
+function angleTo(npc, target) {
+  const half = (npc.getSize() - 1) / 2;
+  const dx = target.getLocation().getX() - (npc.getLocation().getX() + half);
+  const dy = target.getLocation().getY() - (npc.getLocation().getY() + half);
+  return Math.round(Math.atan2(-dx, -dy) * (1024 / Math.PI)) & 2047;
+}
+
 function kill(fight) {
   if (fight.killed) return;
   const { player, arena, moon } = fight;
@@ -38,6 +46,8 @@ function kill(fight) {
     standIn.__skipDefaultRespawn = true;
     standIn.getMovementQueue().setBlockMovement(true);
     standIn.setMobileInteraction(player);
+    // Snapped round to the player at once, so the death plays towards them (capture).
+    standIn.setFaceAngle(angleTo(standIn, player));
     standIn.performGraphic(Common.graphic(arena.spec.deathSpot));
   }
 
@@ -78,4 +88,4 @@ function resendKills({ player }) {
   });
 }
 
-module.exports = { kill, landing, resendKills };
+module.exports = { kill, landing, resendKills, angleTo };

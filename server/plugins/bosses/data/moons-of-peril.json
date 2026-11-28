@@ -226,7 +226,7 @@
     "$maxHits": "wiki: a series of three typeless hits, each rolled against slash defence; once one misses the rest miss",
     "offGlyph": { "first": 1, "max": 16, "$": "wiki: standing off the imbued sigil deals 1 a tick, doubling to 16, and adds a curse stack" }
   },
-  "selfDamage": { "divisor": 125, "$": "estimate from captured pmoon_boss_hp: about 4 at full health, 2 at half, 1 below 125, after each attack" },
+  "selfDamage": { "divisor": 100, "$": "capture 1693 pmoon_boss_hp: max(1, floor(hp / 100)) on each of an attack's first three ticks, all three Moons" },
 
   "curses": {
     "decayTicks": 5,
@@ -349,6 +349,8 @@
       ],
       "$blocks": "pmoon_boss_icicle_1-3 with pmoon_boss_overlay_*_blocking under them; pmoon_boss_icicle_state 1-3 makes one glow",
       "blockHp": 72,
+      "healthBar": { "id": 22, "width": 160 },
+      "$healthBar": "capture: headbar 22 over the block, 160 wide, down to 0 on the last punch",
       "punch": 8,
       "punchSplat": 43,
       "punchSound": 8919,
@@ -362,7 +364,7 @@
       "freezeAnim": 3170,
       "freezeSpot": 2754,
       "freezeSound": 8918,
-      "freezeProjectile": { "id": 2756, "start": 0, "end": 90, "angle": 150, "progress": 10, "startHeight": 70, "endHeight": 100 },
+      "freezeProjectile": { "id": 2756, "start": 0, "end": 90, "angle": 150, "progress": 10, "startHeight": 17, "endHeight": 25 },
       "glowAnim": 11031,
       "noWeapon": [3, 15],
       "disappearAt": 6,
@@ -406,6 +408,8 @@
     },
     "storm": {
       "startSound": 8926,
+      "drainDivisor": 5,
+      "$drainDivisor": "capture: floor(hp / 5) off pmoon_boss_hp on the storm's first tick (3276: 59 to 48; 1104: 183 to 147)",
       "fire": 51053,
       "$fire": "pmoon_boss_blue_fire",
       "fireAt": 1,
@@ -416,7 +420,7 @@
       "throwTile": [2, -1],
       "castAnim": 11007,
       "castSpot": { "id": 2783, "delay": 30, "height": 255 },
-      "castProjectile": { "id": 2780, "start": 80, "end": 150, "angle": 140, "progress": 60, "startHeight": 830, "endHeight": 50 },
+      "castProjectile": { "id": 2780, "start": 80, "end": 150, "angle": 140, "progress": 60, "startHeight": 207, "endHeight": 12 },
       "castTargets": [[-12, 2], [16, 2]],
       "shroudAt": 7,
       "shroudSound": 8903,

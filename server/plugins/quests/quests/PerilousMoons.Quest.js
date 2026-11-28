@@ -68,13 +68,11 @@
  *  - The long-winding tunnels at 51377 (1527,9670) -> (1513,9596) and
  *    (1512,9560) -> (1355,9538) use the captured fade and message; the 1493,9579
  *    gate is a walk-through opening, not a tunnel, and stays unteleported.
- *  - Moss lizards are single-step: one "Trap" click per rock (two needed), then a
- *    "Rustle" gives the lizard, and the knife recipes give the scales and tail, with
- *    short system messages the dump does not contain. The trap varbit 9871 is only
- *    sent, not read, for the pair state. The supply crates, grubby saplings and river
- *    fishing spot (62193, unnamed in the cache) are the MoonsOfPeril plugin's from
- *    the camps on, as at the Moons (Camps and River.MoonsOfPeril); before the camps
- *    Jessamine only stops the player.
+ *  - The knife recipes give the scales and tail, with short system messages the dump
+ *    does not contain. The lizard traps are the Hunter plugin's (Dungeon.Hunter), and
+ *    the supply crates, grubby saplings and river fishing spot (62193, unnamed in the
+ *    cache) the MoonsOfPeril plugin's from the camps on, as at the Moons (Camps and
+ *    River.MoonsOfPeril); before the camps Jessamine only stops the player.
  *  - "Attempt to speak to any of the three" after locating Eyatlalli always plays
  *    the full after-meeting conversation (no already-appeared sub-variant).
  *  - The finishing route follows Quest Helper: Jessamine and Zuma, then
@@ -86,7 +84,6 @@ module.exports = function registerPerilousMoonsQuest(api) {
   const {
     Animation,
     GameObject,
-    Item,
     ItemIdentifiers,
     Location,
     NpcIdentifiers,
@@ -113,7 +110,6 @@ module.exports = function registerPerilousMoonsQuest(api) {
   const CAMP_VARBITS = [9820, 9821, 9822]; // pmoon_camp_1..3
   const MURALS_VARBIT = 9823; // pmoon_murals_inspected, bitmask (1=Attala, 2=Zuma)
   const EYATLALLI_VIS_VARBIT = 16624; // client-side visibility of Eyatlalli
-  const LIZARD_TRAP_VARBIT = 9871; // pmoon_lizard_trap_set_1
   const BOSS_DEAD_VARBITS = { blood: 9858, blue: 9859, eclipse: 9860 }; // varp 4157
 
   // NPCs (NpcIdentifiers).
@@ -176,7 +172,6 @@ module.exports = function registerPerilousMoonsQuest(api) {
   const RAW_MOSS_LIZARD_ITEM_ID = ItemIdentifiers.RAW_MOSS_LIZARD; // 29076
   const RAW_BREAM_ITEM_ID = ItemIdentifiers.RAW_BREAM; // 29216
   const KNIFE_ITEM_ID = ItemIdentifiers.KNIFE; // 946
-  const ROPE_ITEM_ID = ItemIdentifiers.ROPE; // 954
   const HAMMER_ITEM_ID = ItemIdentifiers.HAMMER; // 2347
   const SAW_ITEM_ID = ItemIdentifiers.SAW; // 8794
   const BASE_TALISMAN_ITEM_IDS = new Set([WATER_TALISMAN_ITEM_ID, EARTH_TALISMAN_ITEM_ID]);
@@ -231,7 +226,6 @@ module.exports = function registerPerilousMoonsQuest(api) {
   const MURALS_ATTRIBUTE = "perilous-moons:murals";
   const MOONS_ATTRIBUTE = "perilous-moons:moons";
   const TRIO_ATTRIBUTE = "perilous-moons:trio-talked";
-  const TRAPS_ATTRIBUTE = "perilous-moons:traps-set";
   const ECLIPSE_SEEN_ATTRIBUTE = "perilous-moons:eclipse-cutscene";
   // 0 = legacy save, 2 = this build. Old completed saves used stage 31; newer
   // saves reserve 31 for the finishing line and complete at 36.
@@ -1554,12 +1548,8 @@ module.exports = function registerPerilousMoonsQuest(api) {
       handleGrubbySapling(event);
       return;
     }
-    if (objectId === LIZARD_ROCK_OBJECT_ID) {
-      handleLizardRock(event);
-      return;
-    }
-    if (objectId === LIZARD_BUSH_OBJECT_ID) {
-      handleLizardBush(event);
+    if (objectId === LIZARD_ROCK_OBJECT_ID || objectId === LIZARD_BUSH_OBJECT_ID) {
+      handleLizardSpot(event);
       return;
     }
     if (objectId === NEYPOTZLI_FISHING_SPOT_OBJECT_ID) {
@@ -1712,41 +1702,11 @@ module.exports = function registerPerilousMoonsQuest(api) {
     if (guardGathering(player)) event.handled = true;
   }
 
-  function handleLizardRock(event) {
-    const { player } = event;
+  /** The traps are the Hunter plugin's; the quest only stops them before the camps (guardGathering). */
+  function handleLizardSpot(event) {
     const option = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "");
-    if (option !== "Trap") return;
-    event.handled = true;
-    if (guardGathering(player)) return;
-    const stage = stageOf(player);
-    if (stage < STAGE_CAMPS || stage >= STAGE_RITUAL) return;
-    if (!held(player, ROPE_ITEM_ID)) {
-      player.sendMessage("You need a rope to set a trap between the rocks.");
-      return;
-    }
-    const traps = attributeMask(player, TRAPS_ATTRIBUTE);
-    if (traps >= 2) return;
-    player.setAttribute(TRAPS_ATTRIBUTE, traps + 1);
-    if (traps + 1 === 2) player.getPacketSender().sendVarbit(LIZARD_TRAP_VARBIT, 1);
-    player.sendMessage("You set up a trap between the rocks.");
-  }
-
-  function handleLizardBush(event) {
-    const { player, location } = event;
-    const option = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "");
-    if (option !== "Rustle") return;
-    event.handled = true;
-    if (guardGathering(player)) return;
-    const stage = stageOf(player);
-    if (stage < STAGE_CAMPS || stage >= STAGE_RITUAL) return;
-    if (attributeMask(player, TRAPS_ATTRIBUTE) < 2) {
-      player.sendMessage("You need to set a trap on two of the rocks first.");
-      return;
-    }
-    if (held(player, RAW_MOSS_LIZARD_ITEM_ID) || held(player, MOSS_LIZARD_TAIL_ITEM_ID)) return;
-    const item = new Item(RAW_MOSS_LIZARD_ITEM_ID, 1);
-    api.getItemOnGroundManager().registerLocation(player, item, new Location(location.x, location.y, location.z));
-    player.sendMessage("You rustle the bush and catch a moss lizard.");
+    if (option !== "Trap" && option !== "Rustle") return;
+    if (guardGathering(event.player)) event.handled = true;
   }
 
   /** The tiles of Neypotzli's own river spots: the data's spots with no `method` (a method is another quest's spot, such as Vampyrium's leechfin). */
@@ -1943,7 +1903,6 @@ module.exports = function registerPerilousMoonsQuest(api) {
     player.setAttribute(MURALS_ATTRIBUTE, 0);
     player.setAttribute(MOONS_ATTRIBUTE, 0);
     player.setAttribute(TRIO_ATTRIBUTE, 0);
-    player.setAttribute(TRAPS_ATTRIBUTE, 0);
     player.setAttribute(ECLIPSE_SEEN_ATTRIBUTE, false);
     player.setAttribute(STAGE_SCHEMA_ATTRIBUTE, 0);
     if (cavernScene(player)) Scenes.end(player, false);
@@ -2153,7 +2112,6 @@ module.exports = function registerPerilousMoonsQuest(api) {
   api.persistAttribute(MURALS_ATTRIBUTE);
   api.persistAttribute(MOONS_ATTRIBUTE);
   api.persistAttribute(TRIO_ATTRIBUTE);
-  api.persistAttribute(TRAPS_ATTRIBUTE);
   api.persistAttribute(ECLIPSE_SEEN_ATTRIBUTE);
   api.persistAttribute(STAGE_SCHEMA_ATTRIBUTE, 0);
 

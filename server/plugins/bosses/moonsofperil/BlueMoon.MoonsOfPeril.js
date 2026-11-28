@@ -3,23 +3,25 @@
  * special, data specials.freeze / specials.storm.
  *
  * Weapon Freeze (Full Moon):
- * - 2: three ice blocks rise at the same tiles every time; a stand-in plays the Moon's spell.
+ * - 2: three ice blocks rise at the same tiles every time; a stand-in plays the Moon's spell, and
+ *   the Moon itself is hidden (pmoon_boss_hide_npc) until it has left at 8.
  * - 4: "Your weapon freezes over. You're forced to let go!" - the weapon leaves the player's hands
  *   (pmoon_boss_blue_wearprevent) into one random block (pmoon_boss_icicle_state glows it); no weapon
  *   at all costs 3-15 instead (Wiki); a projectile marks the block. The Moon fades at 6 and
  *   leaves at 8.
  * - 8, then every 8: an ice floor rises in one of the captured patterns around the blocks and
- *   strikes 3 ticks later (light damage; Wiki).
+ *   strikes 3 ticks later, after that tick's movement (light damage; Wiki).
  * - Punching the marked block (8 a punch, 72 to break) gives the weapon back: "You retrieve your
  *   weapon from within the cracked ice.", and that block turns to cracked ice
  *   (pmoon_boss_icicle_state); "You've already retrieved your weapon!" after.
  * - 51: the blocks burst; a weapon still inside costs up to 28 (Wiki) and comes back. 55: the Moon
  *   returns. A player who logs out with their weapon frozen gets it back when they log in.
  * Frost Storm (New Moon):
+ * - 0: the Moon loses a fifth of its health (capture).
  * - 1: blue fire along the north and south edges; 3: the player is thrown to (+2, -1) as the Moon
  *   casts; 7: both braziers are shrouded (pmoon_boss_blue_brazier_lit_left/right).
- * - From 2: storms cross the arena north to south and back, one tile a tick; one walking into the
- *   player hurts and chills (capture: about 5, +6 cold).
+ * - From 2: storms cross the arena north to south and back, one tile a tick, through each other and
+ *   the player; one reaching the player hurts and chills (capture: about 5, +6 cold).
  * - Every 10 ticks the Moon heals 10 for each shrouded brazier (Wiki: five times). Relighting a
  *   brazier takes a cast; the second clears the cold: "Lighting the final brazier fills you with
  *   warmth, removing some of your cold buildup."
@@ -31,6 +33,9 @@ const Pieces = require("./Pieces.MoonsOfPeril");
 
 /** A weapon frozen when its owner logged out: { id, amount, meta }. */
 const FROZEN_WEAPON_ATTRIBUTE = "moons-of-peril:frozen-weapon";
+
+/** Storms cross the map's tiles as the capture's do, whatever the collision map says of them. */
+const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
 
 const freeze = () => Common.data.specials.freeze;
 const storm = () => Common.data.specials.storm;
@@ -118,8 +123,8 @@ function freezeTick(fight, offset) {
   const { player } = fight;
   if (offset === s.blocksAt) raiseBlocks(fight);
   if (offset === s.freezeAt) freezeWeapon(fight);
-  if (offset >= s.wavesFrom && offset <= s.wavesUntil && (offset - s.wavesFrom) % s.every === 0) iceFloor(fight);
   strikeFloor(fight, offset);
+  if (offset >= s.wavesFrom && offset <= s.wavesUntil && (offset - s.wavesFrom) % s.every === 0) iceFloor(fight, offset);
   if (offset >= s.selfFrom && (offset - s.selfFrom) % s.every === 0 && offset < s.explodeAt) {
     fight.selfDamage(Math.max(1, Math.round(fight.hp / s.selfDivisor)));
   }
@@ -144,9 +149,12 @@ function raiseBlocks(fight) {
   s.blocks.forEach((block, index) => {
     const npc = Pieces.spawnNpc(fight, block.npc, block.tile);
     if (npc) {
-      // One more than the punches take, so the last one leaves it standing as cracked ice.
-      npc.setMaxHitpoints(s.blockHp + 1);
-      npc.setHitpoints(s.blockHp + 1);
+      // Its hitpoints stay: the punches come off the fight's count, which its bar shows, so the
+      // last one empties the bar and leaves it standing as cracked ice.
+      npc.setMaxHitpoints(s.blockHp);
+      npc.setHitpoints(s.blockHp);
+      npc.setHitpointsLocked(true);
+      npc.setHealthBar(s.healthBar);
       npc.__moonBlock = { index };
     }
     fight.state.blocks.push(npc);
@@ -177,11 +185,11 @@ function freezeWeapon(fight) {
   }
 }
 
-function iceFloor(fight) {
+function iceFloor(fight, offset) {
   const s = freeze();
   const { player } = fight;
   const pattern = Common.pick(s.patterns);
-  fight.state.floor = { tiles: pattern, strikeIn: s.strikeTicks };
+  fight.state.floor = { tiles: pattern, strikeAt: offset + s.strikeTicks };
   for (const [index, spot] of s.waveSpots.entries()) {
     for (const tile of pattern) Common.tileGraphic(player, Common.tileAt(fight.moon, tile), spot, { delay: s.waveDelays[index] });
   }
@@ -190,9 +198,14 @@ function iceFloor(fight) {
   }
 }
 
-function strikeFloor(fight) {
+/**
+ * The shards break strikeTicks after the floor rose. The tick's task runs before the players move,
+ * so this judges where they stood once the tick before had moved them: a step away two ticks after
+ * the floor appears is still in time, as the captures show.
+ */
+function strikeFloor(fight, offset) {
   const floor = fight.state.floor;
-  if (!floor || --floor.strikeIn > 0) return;
+  if (!floor || offset < floor.strikeAt) return;
   fight.state.floor = null;
   const [dx, dy] = Pieces.playerOffset(fight);
   if (!floor.tiles.some(([x, y]) => x === dx && y === dy)) return;
@@ -206,6 +219,7 @@ function freezeStop(fight) {
   }
   Pieces.clear(fight);
   if (fight.player.isRegistered()) {
+    fight.sendHideNpc();
     Common.varbit(fight.player, "icicleState", 0);
     Common.varbit(fight.player, "wearPrevent", 0);
     Common.varbit(fight.player, "sapped", 0);
@@ -220,6 +234,8 @@ function freezeShared(arena, offset) {
       standIn?.setMobileInteraction(fight.player);
       standIn?.performGraphic(Common.graphic(s.standInSpot));
       fight.state.standIn = standIn;
+      // Only the stand-in shows until the Moon has gone (capture).
+      if (standIn && !fight.killed) Common.varbit(fight.player, "hideNpc", 1);
     }
   }
   if (offset === s.fadeAt) {
@@ -229,7 +245,10 @@ function freezeShared(arena, offset) {
     Common.animate(arena.npc, s.disappearAnim);
     for (const fight of arena.fights.values()) Pieces.removeNpc(fight, fight.state.standIn);
   }
-  if (offset === s.leaveAt) arena.setHidden(true);
+  if (offset === s.leaveAt) {
+    arena.setHidden(true);
+    for (const fight of arena.fights.values()) fight.sendHideNpc();
+  }
   if (offset === s.backAt) {
     arena.setHidden(false);
     Common.animate(arena.npc, s.appearAnim);
@@ -257,6 +276,7 @@ function hitBlock(npc, hit) {
   if (!target) return true;
   Common.sound(fight.player, s.punchSound);
   fight.state.sapped = Math.max(0, fight.state.sapped - s.punch);
+  npc.setDisplayedHealth({ current: fight.state.sapped, max: s.blockHp, bar: s.healthBar });
   Common.varbit(fight.player, "sapped", fight.state.sapped);
   if (fight.state.sapped <= 0) retrieve(fight);
   return true;
@@ -275,7 +295,10 @@ function stormStart(fight, offset) {
 function stormTick(fight, offset) {
   const s = storm();
   const { player } = fight;
-  if (offset === 0) Common.areaSound(player, Common.tileAt(fight.moon, [2, 2]), [s.startSound, 0], 10);
+  if (offset === 0) {
+    Common.areaSound(player, Common.tileAt(fight.moon, [2, 2]), [s.startSound, 0], 10);
+    fight.drain(Math.floor(fight.hp / s.drainDivisor));
+  }
   if (offset === s.fireAt) addFire(fight);
   if (offset === s.throwAt) Pieces.knockBack(fight, s.throwTile);
   if (offset === s.shroudAt) shroud(fight);
@@ -315,6 +338,8 @@ const spans = new Map();
 function walkable(npc) {
   npc.getMovementQueue().setBlockMovement(false);
   npc.setScriptedMovement?.(true);
+  npc.setFlag(Common.core.NPC.WALK_THROUGH_ENTITIES_FLAG, true);
+  npc.setFlag(IGNORE_CLIPPING_FLAG, true);
 }
 
 function columnSpan(fight, x) {
@@ -467,4 +492,8 @@ module.exports = function attachBlueMoon(api) {
   api.onCanEquip(canEquip);
   api.onPlayerLogin(returnFrozenWeapon);
 };
-module.exports._test = { takeWeapon, giveWeapon, FROZEN_WEAPON_ATTRIBUTE };
+module.exports._test = {
+  takeWeapon, giveWeapon, FROZEN_WEAPON_ATTRIBUTE, hitBlock,
+  freeze: { name: "freeze", start: freezeStart, tick: freezeTick, stop: freezeStop, shared: freezeShared },
+  storm: { name: "storm", start: stormStart, tick: stormTick, stop: stormStop },
+};

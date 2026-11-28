@@ -38,6 +38,7 @@ before(() => {
     onInterfaceActionButton() {},
     onItemOnNpc: (handler) => hooks.itemOnNpc.push(handler),
     onNpcHitModify() {},
+    onObjectRoute() {},
     onPlayerLogin() {},
     onPlayerDeath: (handler) => hooks.deaths.push(handler),
     registerArea() {},

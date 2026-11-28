@@ -59,6 +59,10 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
 
   DOOR_47_OPEN: 2001, // closed O.DOOR_47 (2000); same models, cache-derived
   DOOR_48_OPEN: 2003, // closed O.DOOR_48 (2002); same models, cache-derived
+  // The Forsaken Tower's entrance (33491 at 1382,3817) opens into this actionless, same-model
+  // loc, so the cache scan cannot pair it (#6912). Its click is a pass-through gate, which puts
+  // this leaf on the tile outside (1382,3816).
+  FORSAKEN_TOWER_DOOR_OPEN: 33492,
   PLAGUE_HOUSE_DOOR: 37321, // plagueelenadoorshut, a multi (varbit 9016) with no name of its own
   PLAGUE_HOUSE_DOOR_OPEN: 37322, // plagueelenadooropen
   LARGE_DOOR_100_OPEN: 39252, // Sins of the Father Arboretum; capture 1637
@@ -262,6 +266,10 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
     // Tower of Life's door: the open loc 21815 has the same model but no action (cache gameval
     // tol_tower_wall_door / tol_tower_wall_door_open).
     [O.TOWER_DOOR, O.TOWER_DOOR + 1],
+    // The Forsaken Tower's entrance: 33491 at 1382,3817 opens into the nameless, actionless
+    // 33492, the same model (#6912). The click itself is a PASS_THROUGH_GATES entry; the pair is
+    // kept for the reverse lookup, as Tower of Life's is.
+    [O.DOOR_571, NAMELESS_DOOR_LEAF_IDS.FORSAKEN_TOWER_DOOR_OPEN],
     // Slepe church crypt gate: its open form 39513 has the same model but no action.
     [O.GATE_210, O.GATE_211],
     // Active cache dump (osrs-241 2026-10-20): 2000/2002 "Door" have Open and
@@ -1239,6 +1247,23 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
       walkOver: true,
       closeTicks: 2,
       openSoundId: 62,
+    }),
+    // The Forsaken Tower's entrance (33491 lovaquest_tower_entry_door, a south-edge wall, face 3, at
+    // 1382,3817; the tower is north). rsprox local 1002193 (oploc1 at tick 759, ticks 763-765) and
+    // 1002135 (ticks 27386-27388): inviswall on the doorway, the actionless same-model 33492 (face 0)
+    // on the tile outside, iron_door_open (71), and the closed door back two ticks later — a
+    // walk-through that shuts behind the player, not a door left open. The Wiki attaches no
+    // requirement to the door itself, so there is no quest gate before this (door:toggle).
+    Object.freeze({
+      closed: [[O.DOOR_571, 1382, 3817, 0, 3]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 1382, 3817, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.FORSAKEN_TOWER_DOOR_OPEN, 1382, 3816, 0, 0],
+      ],
+      crossY: 3817,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 71,
     }),
     // Witch's House, Taverley (revision 242 capture 20261108T030409): the front door (ticks 154-156),
     // back door (389-391) and shed door (652-654) each swap for INVISWALL on their own tile and an

@@ -178,6 +178,13 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
       case "X5AziL": case "CHEt9f": return common.wearingGhostspeak(player);
       case "A-PiH0": return !common.wearingGhostspeak(player); // Klenter's page, after the quest
       case "Pd5RL1": return insideCity(player);
+      // osrsreboxed-db #154 (the revision 243 capture's branches):
+      case "Lu_-hc": return common.held(player, ITEM.TOKEN); // the Sphinx at 6, the token still held (t1498)
+      case "1V5w9K": return !common.held(player, ITEM.TOKEN);
+      case "nZ6h66": return !get(player, VARBIT.MET_CARPENTER); // the embalmer's last line (t2767)
+      case "snNGyp": return get(player, VARBIT.MET_CARPENTER) === 1;
+      case "02uBqg": return stage(player) === STAGE.PRIEST_DEAD; // the ceremony High Priest before the symbol
+      case "wZeHWh": return stage(player) >= STAGE.ICTHLARIN_NEXT; // "Hello again..." (t3290)
       case "CBPOsk": case "HFDnfW": return !common.wearingGhostspeak(player);
       case "49Xo0U": case "D-HbGr": case "CFMl8w": case "4fMYHu": case "pr4swa": case "ibGGn2": case "jDxKab": return common.hasCat(player);
       case "DNzgqI": case "WbhXk3": case "yO0q7C": case "Ivtofg": case "RH5k1y": case "WlWWGQ": return !common.hasCat(player);
@@ -220,7 +227,7 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
   /** Item boxes live shows for a hand-over, with what each does (`run` before it shows, `after` past it). */
   const BOXES = {
     SqSxtA: { item: () => ITEM.TOKEN, run: giveToken }, // "The Sphinx gives you a token." (t1051)
-    "-btvsf": { item: () => ITEM.TOKEN, run: giveToken },
+    "12wLe4": { item: () => ITEM.TOKEN, run: giveToken }, // "The Sphinx gives you another token."
     Z1e3FH: { item: () => ITEM.TOKEN, run: handInToken }, // "You hand the token to the High Priest." (t1178)
     rQcSO2: { item: (p) => state.jar(p)?.item, run: (p) => giveJar(p) },
     qpmBy3: { item: saltItem, run: (p) => handIn(p, "salt") }, // "You hand some salt to the embalmer." (t2166)
@@ -236,7 +243,7 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
     XO50xP: { item: () => ITEM.HOLY_SYMBOL, run: giveHolySymbol },
     agi1bx: { item: () => ITEM.HOLY_SYMBOL, run: giveHolySymbol },
     FnTufS: { item: () => ITEM.HOLY_SYMBOL, run: giveHolySymbol },
-    Ochbk1: { item: () => ITEM.HOLY_SYMBOL, run: handInHolySymbol }, // "You give the holy symbol to the High Priest." (t2832)
+    mm9a1g: { item: () => ITEM.HOLY_SYMBOL, run: handInHolySymbol }, // "You give the holy symbol to the High Priest." (t2832)
     "2cyI1G": { run: (p) => giveJar(p) }, // "You notice an oddly familiar decorative jar lying nearby and pick it up."
     "4TL_gG": { run: (p) => giveJar(p) },
     Pu6Za8: { run: (p) => common.pickUpCat(p) }, // "You pick up your cat." (t466)

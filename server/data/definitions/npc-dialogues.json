@@ -631220,7 +631220,7 @@
       ],
       "figuring-out-what-on-gielinor-is-going-on-flashback-1-touching-the-door-of-klenter-s-pyramid-attempting-to-climb-up-the-ladder-during-the-flashback": [
         {
-          "player": "I must get to the heard of the pyramid..."
+          "player": "I must get to the heart of the pyramid..."
         },
         {
           "type": "choice",
@@ -631845,6 +631845,9 @@
           "text": "If the player has a cat follower or in the inventory:",
           "steps": [
             {
+              "player": "Good day."
+            },
+            {
               "type": "message",
               "text": "The Sphinx ignores you.",
               "id": "qgNLK9"
@@ -631859,45 +631862,123 @@
               ]
             },
             {
-              "type": "line",
-              "speaker": "Cat",
-              "text": "Meow.",
-              "speaker_ids": [
-                1619,
-                1620,
-                1621,
-                1622,
-                1623,
-                1624,
-                6662,
-                6663,
-                6664,
-                6665,
-                6666,
-                6667
-              ]
+              "type": "condition",
+              "text": "If the player still has the Sphinx's token:",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Cat",
+                  "text": "Meow.",
+                  "speaker_ids": [
+                    1619,
+                    1620,
+                    1621,
+                    1622,
+                    1623,
+                    1624,
+                    6662,
+                    6663,
+                    6664,
+                    6665,
+                    6666,
+                    6667
+                  ]
+                },
+                {
+                  "type": "message",
+                  "text": "Your cat and the Sphinx converse in a yeowling language for a short time.",
+                  "id": "e7Zb_e"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Sphinx",
+                  "text": "Human, your cat tells me that you are yet to speak to the High Priest. I wonder why I tried to help at all.",
+                  "speaker_ids": [
+                    2637,
+                    4209
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Cat",
+                  "text": "Meow!",
+                  "speaker_ids": [
+                    1619,
+                    1620,
+                    1621,
+                    1622,
+                    1623,
+                    1624,
+                    6662,
+                    6663,
+                    6664,
+                    6665,
+                    6666,
+                    6667
+                  ]
+                },
+                {
+                  "player": "Could you remind me where he is?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Sphinx",
+                  "text": "Try the large building in the south west of Sophanem.",
+                  "speaker_ids": [
+                    2637,
+                    4209
+                  ]
+                }
+              ],
+              "id": "Lu_-hc"
             },
             {
-              "type": "message",
-              "text": "Your cat and the Sphinx converse in a yeowling language for a short time.",
-              "id": "2zYNhf"
-            },
-            {
-              "player": "I lost that token you gave me. Could I have another please?"
-            },
-            {
-              "type": "line",
-              "speaker": "Sphinx",
-              "text": "Ah, you humans.",
-              "speaker_ids": [
-                2637,
-                4209
-              ]
-            },
-            {
-              "type": "message",
-              "text": "The Sphinx gives you another token.",
-              "id": "-btvsf"
+              "type": "condition",
+              "text": "If the player has lost the token:",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Cat",
+                  "text": "Meow.",
+                  "speaker_ids": [
+                    1619,
+                    1620,
+                    1621,
+                    1622,
+                    1623,
+                    1624,
+                    6662,
+                    6663,
+                    6664,
+                    6665,
+                    6666,
+                    6667
+                  ]
+                },
+                {
+                  "type": "message",
+                  "text": "Your cat and the Sphinx converse in a yeowling language for a short time.",
+                  "id": "p1YVHY"
+                },
+                {
+                  "player": "I lost that token you gave me. Could I have another please?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Sphinx",
+                  "text": "Ah, you humans.",
+                  "speaker_ids": [
+                    2637,
+                    4209
+                  ]
+                },
+                {
+                  "type": "message",
+                  "text": "The Sphinx gives you another token.",
+                  "id": "12wLe4"
+                }
+              ],
+              "id": "1V5w9K"
             },
             {
               "player": "Thanks."
@@ -632603,7 +632684,7 @@
             {
               "type": "line",
               "speaker": "High Priest",
-              "text": "Please hurry. The people are beginning to... well...",
+              "text": "Please hurry. The people are begining to... well...",
               "speaker_ids": [
                 4206,
                 11502,
@@ -633873,23 +633954,6 @@
         },
         {
           "type": "condition",
-          "text": "If the player has a bucket of sap:",
-          "steps": [
-            {
-              "type": "message",
-              "text": "You hand a bucket of sap to the embalmer.",
-              "id": "wicewv"
-            },
-            {
-              "type": "jump",
-              "reference": "continue",
-              "id": "LMy1Pp"
-            }
-          ],
-          "id": "FipZzG"
-        },
-        {
-          "type": "condition",
           "text": "If the player has salt:",
           "steps": [
             {
@@ -633904,6 +633968,23 @@
             }
           ],
           "id": "vtJH1G"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has a bucket of sap:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You hand a bucket of sap to the embalmer.",
+              "id": "wicewv"
+            },
+            {
+              "type": "jump",
+              "reference": "continue",
+              "id": "LMy1Pp"
+            }
+          ],
+          "id": "FipZzG"
         },
         {
           "type": "condition",
@@ -634153,7 +634234,24 @@
               ]
             },
             {
-              "player": "Great. I guess I should go and see how the carpenter is getting on."
+              "type": "condition",
+              "text": "If the player has not spoken to the carpenter yet:",
+              "steps": [
+                {
+                  "player": "Great. I guess I'll go and see the carpenter then."
+                }
+              ],
+              "id": "nZ6h66"
+            },
+            {
+              "type": "condition",
+              "text": "If the player has spoken to the carpenter:",
+              "steps": [
+                {
+                  "player": "Great. I guess I should go and see how the carpenter is getting on."
+                }
+              ],
+              "id": "snNGyp"
             },
             {
               "type": "end"
@@ -634274,18 +634372,16 @@
                   ]
                 },
                 {
-                  "type": "jump",
-                  "reference": "other",
-                  "id": "maQ-5a"
+                  "player": "Okay, I'll get going."
                 }
               ],
               "id": "VaetBI"
             },
             {
-              "text": "Okay, I'll get going.",
+              "text": "I'll get going.",
               "steps": [
                 {
-                  "player": "Okay, I'll get going."
+                  "player": "I'll get going."
                 }
               ]
             }
@@ -634593,7 +634689,7 @@
             {
               "type": "line",
               "speaker": "Carpenter",
-              "text": "Well you should as soon as possible. He'll be down in the pyramid by now.",
+              "text": "Well you should do so as soon as possible. He'll be down in the pyramid by now.",
               "speaker_ids": [
                 4203,
                 5289
@@ -634957,105 +635053,135 @@
       ],
       "the-devourer-revealed-talking-to-the-high-priest-after-saving-the-ceremony": [
         {
-          "type": "line",
-          "speaker": "High Priest",
-          "text": "Thank you so much, adventurer. Thanks to you, we were able to complete the ceremony.",
-          "speaker_ids": [
-            4206,
-            11502,
-            11602,
-            11603,
-            11604,
-            11605
-          ]
+          "type": "condition",
+          "text": "If the player has not given the holy symbol yet:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "High Priest",
+              "text": "Thank you so much, adventurer. Thanks to you, we were able to complete the ceremony.",
+              "speaker_ids": [
+                4206,
+                11502,
+                11602,
+                11603,
+                11604,
+                11605
+              ]
+            },
+            {
+              "player": "Well it was the least I could do. After all, it was sort of my fault all this happened."
+            },
+            {
+              "type": "line",
+              "speaker": "High Priest",
+              "text": "Well on that note, what exactly did happen there? That was the Devourer!",
+              "speaker_ids": [
+                4206,
+                11502,
+                11602,
+                11603,
+                11604,
+                11605
+              ]
+            },
+            {
+              "player": "It seems the wanderer that hypnotised me was actually the Devourer all along."
+            },
+            {
+              "player": "I'm guessing the reason she had me steal that burial jar was because she knew you'd have to gather here to reconsecrate the tomb again."
+            },
+            {
+              "type": "line",
+              "speaker": "High Priest",
+              "text": "She wanted to kill us all in one go?",
+              "speaker_ids": [
+                4206,
+                11502,
+                11602,
+                11603,
+                11604,
+                11605
+              ]
+            },
+            {
+              "player": "Yes, and she had me plant an unholy symbol here to allow her to teleport right in."
+            },
+            {
+              "type": "line",
+              "speaker": "High Priest",
+              "text": "Well once again, thank you. Without you, the Devourer would have struck a devastating blow against Icthlarin.",
+              "speaker_ids": [
+                4206,
+                11502,
+                11602,
+                11603,
+                11604,
+                11605
+              ]
+            },
+            {
+              "player": "Here's that holy symbol, by the way."
+            },
+            {
+              "type": "message",
+              "text": "You give the holy symbol to the High Priest.",
+              "id": "mm9a1g"
+            },
+            {
+              "type": "line",
+              "speaker": "High Priest",
+              "text": "Thank you. We wouldn't have been able to complete the ceremony without that in our presence.",
+              "speaker_ids": [
+                4206,
+                11502,
+                11602,
+                11603,
+                11604,
+                11605
+              ]
+            },
+            {
+              "player": "So what now?"
+            },
+            {
+              "type": "line",
+              "speaker": "High Priest",
+              "text": "We have a few things to finish here, but then we'll head back up into the city. Please join us there.",
+              "speaker_ids": [
+                4206,
+                11502,
+                11602,
+                11603,
+                11604,
+                11605
+              ]
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "02uBqg"
         },
         {
-          "player": "Well it was the least I could do. After all, it was sort of my fault all this happened."
-        },
-        {
-          "type": "line",
-          "speaker": "High Priest",
-          "text": "Well on that note, what exactly did happen there? That was the Devourer!",
-          "speaker_ids": [
-            4206,
-            11502,
-            11602,
-            11603,
-            11604,
-            11605
-          ]
-        },
-        {
-          "player": "It seems the wanderer that hypnotised me was actually the Devourer all along."
-        },
-        {
-          "player": "I'm guessing the reason she had me steal that burial jar was because she knew you'd have to gather here to reconsecrate the tomb again."
-        },
-        {
-          "type": "line",
-          "speaker": "High Priest",
-          "text": "She wanted to kill us all in one go?",
-          "speaker_ids": [
-            4206,
-            11502,
-            11602,
-            11603,
-            11604,
-            11605
-          ]
-        },
-        {
-          "player": "Yes, and she had me plant an unholy symbol here to allow her to teleport right in."
-        },
-        {
-          "type": "line",
-          "speaker": "High Priest",
-          "text": "Well once again, thank you. Without you, the Devourer would have struck a devastating blow against Icthlarin.",
-          "speaker_ids": [
-            4206,
-            11502,
-            11602,
-            11603,
-            11604,
-            11605
-          ]
-        },
-        {
-          "player": "Here's that holy symbol, by the way."
-        },
-        {
-          "type": "message",
-          "text": "You give the holy symbol to the High Priest.",
-          "id": "Ochbk1"
-        },
-        {
-          "type": "line",
-          "speaker": "High Priest",
-          "text": "Thank you. We wouldn't have been able to complete the ceremony without that in our presence.",
-          "speaker_ids": [
-            4206,
-            11502,
-            11602,
-            11603,
-            11604,
-            11605
-          ]
-        },
-        {
-          "player": "So what now?"
-        },
-        {
-          "type": "line",
-          "speaker": "High Priest",
-          "text": "We have a few things to finish here, but then we'll head back up into the city. Please join us there.",
-          "speaker_ids": [
-            4206,
-            11502,
-            11602,
-            11603,
-            11604,
-            11605
-          ]
+          "type": "condition",
+          "text": "If the player has already given the holy symbol:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "High Priest",
+              "text": "Hello again. We have a few things to finish here, but then we'll head back up into the city. Please join us there.",
+              "speaker_ids": [
+                4206,
+                11502,
+                11602,
+                11603,
+                11604,
+                11605
+              ]
+            }
+          ],
+          "id": "wZeHWh"
         }
       ],
       "the-devourer-revealed-flashback-4-leaving-the-ceremonial-room": [

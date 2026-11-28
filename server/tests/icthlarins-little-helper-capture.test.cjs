@@ -973,3 +973,28 @@ test('flashback 1\'s pit is jumped like any other (t1170-t1188): the player land
   assert.equal(stage(f), 4);
   assert.equal(f.varbit(VARBIT.FLASHBACK), 1);
 });
+
+test('the Sphinx at 6 with the token still held: "Human, your cat tells me..." and no second token (t1498-t1509)', async (t) => {
+  const f = fixture(t, [3300, 2785, 0]);
+  setStage(f, 6);
+  f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2, [VARBIT.MET_SPHINX]: 1, [VARBIT.CAT_SAFE]: 1, [VARBIT.TOKEN_RECEIVED]: 1 });
+  f.give(I().SPHINXS_TOKEN);
+  withCat(f);
+  const sphinx = f.npc(4209, [3300, 2783, 0]);
+  await f.clickNpc(sphinx);
+  const lines = await f.talk([], { stop: (l) => l[0] === 'options' });
+  assert.ok(texts(lines).includes('Human, your cat tells me that you are yet to speak to the High Priest. I wonder why I tried to help at all.'));
+  assert.ok(texts(lines).includes('Try the large building in the south west of Sophanem.'));
+  assert.equal(f.has(I().SPHINXS_TOKEN), 1);
+});
+
+test('the ceremony High Priest after the symbol: only "Hello again..." (t3290)', async (t) => {
+  const f = fixture(t, [3294, 2779, 0]);
+  await enterPyramid(f, 24, { [VARBIT.PRIESTS]: 1 });
+  const highPriest = ceremonyNpcs(f).find((npc) => npc.getId() === 11649);
+  place(f, 3307, 9195);
+  await f.clickNpc(highPriest);
+  const lines = await f.talk();
+  assert.deepEqual(texts(lines), ["Hello again. We have a few things to finish here, but then we'll head back up into the city. Please join us there."]);
+  assert.equal(stage(f), 24);
+});

@@ -554,3 +554,16 @@ test("requirements (Wiki): below 46 Hunter Apatura turns the player away and the
   assert.equal(stage(f), 0);
   assert.ok(!said.some((line) => line.startsWith("MENU")), "no start menu");
 });
+
+test("Verity: the quest's first talk is her rumours introduction; a player she already introduced gets 'Hi Verity...'", async (t) => {
+  const fresh = actor(t, { tile: TILE.VERITY, stage: 1, attributes: { "at-first-light:stage-version": 1 } });
+  const verity = npcAt(fresh, NPC.VERITY, [1559, 9464, 0]);
+  const first = await play(fresh, () => h.talk(fresh, verity), ["Yes please."]);
+  assert.match(first[0], /^Guild Scribe Verity: Oh, hello there newcomer\./);
+  assert.equal(fresh.player.getAttribute("hunter.rumours").unlocked, true, "the explanation counts");
+  const known = actor(t, { tile: TILE.VERITY, stage: 1, attributes: { "at-first-light:stage-version": 1,
+    "hunter.rumours": { assignments: {}, active: null, completed: 0, outfit: 0, unlocked: true } } });
+  const again = await play(known, () => h.talk(known, verity));
+  assert.equal(again[0], "PLAYER: Hi Verity. I heard there might be something I could help you with?");
+  assert.equal(stage(known), 2);
+});

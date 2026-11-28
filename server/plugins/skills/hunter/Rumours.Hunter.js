@@ -274,4 +274,15 @@ function milestoneCondition({player,npcId,text}){
   const match=MILESTONE_CONDITION.exec(String(text??"").trim());
   return match?(state(player).completed|0)>=Number(match[1]):null;
 }
-module.exports={ATTRIBUTE,state,VERITY_TUTORIAL,masters,interact,rumour,partPhrase,OFFERS,verity,check,success,open,assign,sackRewards,tasks,completedCount,milestoneCondition};
+/**
+ * `hunter:verity-introduction` { player, done?, introduced }: whether Verity has explained the rumours to the player,
+ * and with `done: true` marks it so. At First Light's first Verity talk is that explanation (live: after the quest
+ * she greets "Nilsal, hunter.", not a newcomer; the user's rev 243 capture ticks 243-258 and 1352).
+ */
+function verityIntroduction(request){
+  if(!request?.player)return;
+  const s=state(request.player);
+  if(request.done===true)s.unlocked=true;
+  request.introduced=s.unlocked===true;
+}
+module.exports={ATTRIBUTE,state,VERITY_TUTORIAL,masters,interact,rumour,partPhrase,OFFERS,verity,check,success,open,assign,sackRewards,tasks,completedCount,milestoneCondition,verityIntroduction};

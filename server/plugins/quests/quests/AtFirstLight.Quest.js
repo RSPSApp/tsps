@@ -149,6 +149,7 @@ module.exports = function registerAtFirstLightQuest(api) {
   /** Text-only message boxes (g3koUf: the bed checked again, capture tick 871). */
   const STATEMENTS = new Set(["MdlNBh", "LNk3X1", "fZnlnI", "AFxMNH", "oSl9ut", "g3koUf"]);
 
+  const VERITY_EXPLAINED_LINE = "Now, what else can I do for you.";
   const VERITY_LEAD_LINE = "If anyone did, it would've been Wolf. She's always getting Fox into some kind of trouble.";
   const WOLF_MOUSE_LINE = "He's very easy to distract. We have a little fake mouse we use sometimes.";
   const WOLF_PYRE_LINE = "He'll have stopped off for a bit of hunting first. There are some pyre foxes about halfway between here and the Locus Oasis that he was eyeing up. I bet that's where you'll find him.";
@@ -233,6 +234,13 @@ module.exports = function registerAtFirstLightQuest(api) {
 
   function understandsCats(player) {
     return hasCatspeakAmulet(player) || isQuestComplete(player, "dragon_slayer_ii");
+  }
+
+  /** Whether Verity has explained the rumours (skills/hunter/Rumours.Hunter.js owns that state). */
+  function verityIntroduced(player, done = false) {
+    const request = { player, done };
+    api.emitCustomEvent("hunter:verity-introduction", request);
+    return request.introduced === true;
   }
 
   function canRepairBed(player) {
@@ -361,10 +369,10 @@ module.exports = function registerAtFirstLightQuest(api) {
     switch (stepId) {
       case "X-9CI3": // does not meet the quest's requirements
         return !meetsRequirements(player);
-      case "2AzwyN": // never talked to Verity
-        return stage <= STAGE_STARTED;
+      case "2AzwyN": // never talked to Verity: her rumours introduction not yet given (Hunter plugin)
+        return !verityIntroduced(player);
       case "dgY8x-": // previously talked to Verity
-        return stage > STAGE_STARTED;
+        return verityIntroduced(player);
       case "iOxnjg": // space and has not yet gotten the mouse
         return !inventoryFull(player) && sub(player, "mouseTaken") === 0;
       case "SHkSHB": // has the toy mouse in their inventory
@@ -437,6 +445,8 @@ module.exports = function registerAtFirstLightQuest(api) {
     // Met Apatura: set as her second line appears, at the first meeting (capture tick 123).
     if (npcId === APATURA_NPC_ID && stage === 0) at(APATURA_MET_LINE, () => setSub(player, "masterMet", 1));
     if (npcId === VERITY_NPC_ID && stage === STAGE_STARTED) at(VERITY_LEAD_LINE, () => advance(player, STAGE_VERITY));
+    // Her explanation in the quest's first talk counts as the rumours introduction (capture ticks 243-258, 1352).
+    if (npcId === VERITY_NPC_ID && text === VERITY_EXPLAINED_LINE) event.before = () => verityIntroduced(player, true);
     if (npcId === WOLF_NPC_ID) {
       if (stage === STAGE_VERITY) at(WOLF_MOUSE_LINE, () => advance(player, STAGE_MOUSE));
       if (stage === STAGE_MOUSE) at(WOLF_PYRE_LINE, () => advance(player, STAGE_PYRE_FOXES));

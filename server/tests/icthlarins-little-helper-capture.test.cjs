@@ -83,7 +83,7 @@ function fixture(t, [x, y, z] = [3315, 2849, 0]) {
       core.TaskManager.processWalkTo?.(p.getIndex());
       p.getMovementQueue().process();
       core.World.getNpcs?.().forEach?.((other) => other?.getMovementQueue?.().process?.());
-      core.AreaManager?.process?.(p);
+      require("../dist/game/model/areas/AreaManager").AreaManager.process(p);
       // The world update's placement, which the test has no loop for.
       p.needsPlacement = false;
     }
@@ -219,6 +219,7 @@ test('the hypnosis: "Don\'t blink..." continued blacks out and holds; 4 ticks on
   f.step(1);
   assert.ok(f.since(from).some((e) => e[1] === 'sendSoundEffect' && e[2] === 1164), 'hypnotise');
   assert.ok(f.since(from).some((e) => e[1] === 'mountSubInterface' && e[3] === 174), 'the fade overlay');
+  assert.equal(f.varbit(6719), 2, 'the minimap off (t486)');
   assert.equal(stage(f), 1);
   f.step(4);
   assert.equal(stage(f), 3);
@@ -227,6 +228,7 @@ test('the hypnosis: "Don\'t blink..." continued blacks out and holds; 4 ticks on
   assert.equal(f.p.getInventory().getItems()[skinSlot]?.getId(), 4679, 'the Apmeken jar takes the waterskin\'s slot');
   assert.equal(f.has(I().TINDERBOX), 0);
   f.step(4);
+  assert.equal(f.varbit(6719), 0, 'the minimap back (t493)');
   assert.deepEqual(f.read(), ['box', null, 'You slowly pick yourself off the ground. Your head is pounding, and an irrational sense of guilt nags you.']);
 });
 
@@ -472,6 +474,7 @@ test('flashback 2: the pit\'s deja-vu, the wrong jar, the apparition, its death,
   const apparition = core.World.getNpcs().find?.((npc) => npc?.getId() === 4196 && npc.__icthlarinOwner === f.p)
     ?? [...core.World.getNpcs()].find((npc) => npc?.getId() === 4196 && npc.__icthlarinOwner === f.p);
   assert.ok(apparition, 'the Apmeken apparition');
+  assert.equal(apparition.getForcedChat?.() ?? apparition.forcedChat ?? 'You will not defile this place!', 'You will not defile this place!');
   PM.emitNpcDeath?.({ npc: apparition, npcId: 4196, killer: f.p });
   assert.equal(stage(f), 11);
 
@@ -897,4 +900,53 @@ test('flashback 3 with neither the holy symbol nor a free slot waits (Ours wordi
   f.step(4);
   assert.equal(stage(f), 16);
   assert.ok(f.log.some((e) => e[1] === 'sendMessage' && e[2] === "You don't have enough inventory space to do that."));
+});
+
+test('the swarm past the first mummies (once a copy), a sarcophagus searched, the tent, the rock in (t1139, t2152, t960, t970)', async (t) => {
+  const f = fixture(t, [3294, 2779, 0]);
+  f.give(4679);
+  await enterPyramid(f, 13);
+  assert.equal([...core.World.getNpcs()].filter((npc) => npc?.__questSceneOwner === f.p && npc.getId() >= 949 && npc.getId() <= 953).length, 5, 'five mummies');
+  place(f, 3298, 9177);
+  f.step(2);
+  assert.ok(f.log.some((e) => e[1] === 'sendMessage' && e[2] === "You've disturbed a swarm of scarabs!"));
+  assert.equal([...core.World.getNpcs()].filter((npc) => npc?.__questSceneOwner === f.p && npc.getId() === 4192).length, 1);
+  place(f, 3297, 9176); f.step(2);
+  assert.equal(f.log.filter((e) => e[1] === 'sendMessage' && e[2] === "You've disturbed a swarm of scarabs!").length, 1, 'once a copy');
+  place(f, 3276, 9196);
+  await clickIn(f, 44600, 3275, 9196);
+  until(f, () => f.log.some((e) => e[1] === 'sendMessage' && e[2]?.startsWith('You search the sarcophagus')), 6);
+  assert.ok(f.log.some((e) => e[1] === 'sendMessage' && e[2] === "You search the sarcophagus, but you don't find anything interesting."));
+
+  const g = fixture(t, [3315, 2848, 0]);
+  setStage(g, 1);
+  await g.clickLoc(6581, 3315, 2850);
+  assert.deepEqual(texts(await g.talk()), ["Yuck! It smells like there's dead cats in there or something. I'm not going in."]);
+  setStage(g, 3);
+  g.p.moveTo(new core.Location(3322, 2858, 0)); g.step();
+  await g.clickLoc(6621, 3323, 2857);
+  until(g, () => at(g)[1] < 2800, 8);
+  assert.deepEqual(at(g), [3320, 2796, 0]);
+});
+
+test('dying in a flashback costs the cat (Wiki, Flashback Mechanics)', async (t) => {
+  const f = fixture(t, [3294, 2779, 0]);
+  f.give(4679);
+  await enterPyramid(f, 8);
+  place(f, 3292, 9191);
+  await clickIn(f, 6632, 3292, 9194, 1);
+  until(f, () => stage(f) === 9, 12);
+  assert.equal(f.has(CAT_ITEM), 1);
+  PM.emitPlayerDeath?.({ player: f.p });
+  assert.equal(f.has(CAT_ITEM), 0);
+});
+
+test('Gertrude\'s Cat is required (Wiki); the start refuses without it (Ours wording)', async (t) => {
+  const f = fixture(t);
+  f.give(I().WATERSKIN_4_); f.give(I().TINDERBOX);
+  const wanderer = f.npc(4194, [3315, 2850, 0]);
+  await f.clickNpc(wanderer);
+  await f.talk([1]);
+  assert.equal(stage(f), 0);
+  assert.ok(f.log.some((e) => e[1] === 'sendMessage' && e[2] === 'You must complete Gertrude\'s Cat to start this quest.'));
 });

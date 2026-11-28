@@ -1604937,11 +1604937,6 @@
         "npc": "Hey, are you wanting to try some of my fine wines and spirits? All brewed locally on Karamja island."
       },
       {
-        "type": "message",
-        "text": "",
-        "id": "3XaP1Q"
-      },
-      {
         "type": "choice",
         "options": [
           {

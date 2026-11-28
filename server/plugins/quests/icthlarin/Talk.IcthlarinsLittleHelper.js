@@ -310,8 +310,9 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
       if (event.playing?.page === PAGE || pageStepIds().has(event.stepId)) event.box = { statement: true };
       return false;
     }
-    box.run?.(event.player);
+    // The box shows what is handed over, so its item is read before the hand-over takes it.
     const item = box.item?.(event.player);
+    box.run?.(event.player);
     if (Number.isInteger(item)) event.box = { items: [item] };
     return true;
   }

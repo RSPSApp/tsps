@@ -62,8 +62,8 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
   }
 
   function action(event) {
-    talk.handleAction(event);
-    if (!event.handled) ceremony.handleAction(event);
+    ceremony.handleAction(event);
+    if (!event.handled) talk.handleAction(event);
   }
 
   function line(request) {

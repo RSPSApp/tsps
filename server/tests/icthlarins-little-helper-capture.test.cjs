@@ -528,3 +528,196 @@ test('the jar dropped anywhere else turns to dust (Wiki, Canopic jar), and the H
   assert.ok(lines.some((l) => l[0] === 'item' && l[1] === 4679));
   assert.equal(f.has(4679), 1);
 });
+
+// ---------------------------------------------------------------------------
+// Ceremony preparations
+// ---------------------------------------------------------------------------
+
+test('the High Priest at 14: stage 15 on "That\'s right. We need the carpenter..." (t2530)', async (t) => {
+  const f = fixture(t, [3281, 2770, 0]);
+  setStage(f, 14);
+  f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2, [VARBIT.KLENTER]: 1 });
+  const priest = f.npc(6192, [3281, 2772, 0]);
+  await f.clickNpc(priest);
+  await f.talk([], { stop: (l) => l[2]?.startsWith("That's right. We need the carpenter") });
+  assert.equal(stage(f), 15);
+});
+
+test('the embalmer: salt, sap and linen handed over in item boxes, his varbits as live sets them (t2566-t2765)', async (t) => {
+  const f = fixture(t, [3287, 2757, 0]);
+  setStage(f, 15);
+  f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2 });
+  f.give(I().BAG_OF_SALT); f.give(I().BUCKET_OF_SAP);
+  const embalmer = f.npc(4202, [3287, 2755, 0]);
+  await f.clickNpc(embalmer);
+  let lines = await f.talk();
+  const boxes = lines.filter((l) => l[0] === 'item');
+  assert.deepEqual(boxes, [
+    ['item', I().BAG_OF_SALT, 'You hand some salt to the embalmer.'],
+    ['item', I().BUCKET_OF_SAP, 'You hand a bucket of sap to the embalmer.'],
+  ]);
+  assert.deepEqual([saved(f)[399], saved(f)[400]], [1, 3], 'ics_metembalmer, ics_little_embalmer_multi 1|2');
+  // Raetul's linen (t2649): 30 coins, the box, the linen.
+  f.give(I().COINS, 50);
+  const raetul = f.npc(4204, [3311, 2786, 0]);
+  f.p.moveTo(new core.Location(3311, 2788, 0)); f.step();
+  await f.clickNpc(raetul);
+  lines = await f.talk();
+  assert.ok(lines.some((l) => l[0] === 'item' && l[1] === I().LINEN && l[2].startsWith('The merchant takes your money')));
+  assert.equal(f.has(I().COINS), 20);
+  assert.equal(f.has(I().LINEN), 1);
+  f.p.moveTo(new core.Location(3287, 2757, 0)); f.step();
+  await f.clickNpc(embalmer);
+  lines = await f.talk();
+  assert.ok(lines.some((l) => l[0] === 'item' && l[1] === I().LINEN));
+  assert.equal(saved(f)[400], 7);
+});
+
+test('the carpenter: the logs in a box, then the holy symbol: stage 16 and the town\'s priests to the ceremony (t2804-t2833)', async (t) => {
+  const f = fixture(t, [3313, 2772, 0]);
+  setStage(f, 15);
+  f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2, 399: 1, 400: 7 });
+  f.give(I().WILLOW_LOGS);
+  const carpenter = f.npc(4203, [3313, 2771, 0]);
+  await f.clickNpc(carpenter);
+  const lines = await f.talk();
+  const boxes = lines.filter((l) => l[0] === 'item');
+  assert.deepEqual(boxes, [
+    ['item', I().WILLOW_LOGS, 'You give the carpenter some willow logs.'],
+    ['item', I().HOLY_SYMBOL_3, 'The carpenter gives you a holy symbol.'],
+  ]);
+  assert.equal(stage(f), 16);
+  assert.equal(saved(f)[VARBIT.PRIESTS], 1);
+  assert.equal(f.has(I().HOLY_SYMBOL_3), 1);
+});
+
+test('the suntrap: saltwater dried to a pile of salt (Wiki), nothing suitable without it (rec 331)', async (t) => {
+  const f = fixture(t, [3305, 2758, 0]);
+  setStage(f, 15);
+  f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2, 399: 1 });
+  await f.clickLoc(6606, 3305, 2756);
+  let lines = await f.talk();
+  assert.ok(texts(lines).some((t) => t.startsWith("You don't have anything suitable to use with the suntrap")));
+  f.give(I().BUCKET_OF_SALTWATER);
+  await f.clickLoc(6606, 3305, 2756);
+  lines = await f.talk();
+  assert.ok(texts(lines).some((t) => t.startsWith('You pour the water into the suntrap')));
+  assert.equal(f.has(I().PILE_OF_SALT), 1);
+  assert.equal(f.has(I().BUCKET), 1);
+});
+
+// ---------------------------------------------------------------------------
+// The ceremony
+// ---------------------------------------------------------------------------
+
+/** Steps until `done()` holds, at most `max` ticks; returns how many it took. */
+function until(f, done, max = 12) {
+  for (let i = 0; i <= max; i++) { if (done()) return i; f.step(); }
+  return -1;
+}
+
+const ceremonyNpcs = (f) => [...core.World.getNpcs()].filter((npc) => npc && npc.__questSceneOwner === f.p && [11649, 11606, 4210, 11590].includes(npc.getId()));
+
+test('flashback 3: the holy symbol for the unholy one, hidden in a sarcophagus (18), out of the room the ceremony stands (19, t3024-t3078)', async (t) => {
+  const f = fixture(t, [3294, 2779, 0]);
+  f.give(I().HOLY_SYMBOL_3);
+  const symbolSlot = f.slot(I().HOLY_SYMBOL_3);
+  await enterPyramid(f, 16, { [VARBIT.PRIESTS]: 1 });
+  assert.equal(ceremonyNpcs(f).length, 4, 'the ceremony is under way in the eastern room (t2515)');
+  place(f, 3292, 9191);
+  await clickIn(f, 6632, 3292, 9194, 1);
+  for (let i = 0; i < 6 && !f.read(); i++) f.step();
+  f.step(5 + 2);
+  assert.equal(stage(f), 17);
+  assert.deepEqual(sourceOf(f), [3295, 9198, 0]);
+  assert.equal(ceremonyNpcs(f).length, 0, 'not in the past');
+  assert.equal(f.p.getInventory().getItems()[symbolSlot]?.getId(), I().UNHOLY_SYMBOL_3);
+  f.step(4);
+  assert.equal(f.read()?.[2], "I need to hide the mistress's symbol in the ceremonial room...");
+  await f.cont(); f.step();
+  place(f, 3306, 9200);
+  await clickIn(f, 44060, 3306, 9199);
+  f.step(4);
+  place(f, 3311, 9195);
+  const [sx, sy] = tileIn(f, 3312, 9195);
+  await f.send({ type: 'item_on_object', objectId: 44600, x: sx, y: sy, itemId: I().UNHOLY_SYMBOL_3, slot: f.slot(I().UNHOLY_SYMBOL_3), widgetId: 149 << 16 });
+  f.step(2);
+  assert.equal(stage(f), 18);
+  let lines = await f.talk();
+  assert.deepEqual(lines.map((l) => l.slice(0, 3)), [
+    ['item', I().UNHOLY_SYMBOL_3, 'You hide the unholy symbol in the sarcophagus.'],
+    ['player', 'player', 'Yes... Now the mistress can enter the pyramid whenever she pleases...'],
+  ]);
+  place(f, 3306, 9198);
+  await clickIn(f, 44060, 3306, 9199);
+  assert.ok(until(f, () => stage(f) === 19) >= 0);
+  f.step(2);
+  assert.deepEqual(sourceOf(f), [3292, 9192, 0]);
+  assert.equal(f.p.getInventory().getItems()[symbolSlot]?.getId(), I().HOLY_SYMBOL_3, 'the holy symbol back in its slot');
+  assert.equal(ceremonyNpcs(f).length, 4);
+  lines = await f.talk();
+  assert.deepEqual(texts(lines), ["The wanderer! She's going to attack the ceremony! I need to warn them!"]);
+});
+
+test('the ceremony scene: cutscene on, the Wanderer turns Amascut and possesses a priest (22), the fight, the potion (23, t3111-t3223)', async (t) => {
+  const f = fixture(t, [3294, 2779, 0]);
+  f.give(I().HOLY_SYMBOL_3);
+  await enterPyramid(f, 19, { [VARBIT.PRIESTS]: 1 });
+  place(f, 3306, 9200);
+  await clickIn(f, 44060, 3306, 9199);
+  assert.ok(until(f, () => stage(f) === 21) >= 0);
+  assert.equal(f.varbit(542), 1, 'cutscene_status');
+  const lines = await f.talk([], { pace: 1 });
+  assert.equal(lines[0][2], 'Ah there you are. Do you have the holy symbol?');
+  assert.ok(lines.some((l) => l[1] === 11591 && l[2] === 'Adventurer, kill these pathetic priests.'), 'Amascut\'s head');
+  f.step(2);
+  assert.equal(stage(f), 22);
+  assert.equal(f.varbit(542), 0, 'cutscene over');
+  const priest = [...core.World.getNpcs()].find((npc) => npc?.getId() === 4210 && npc.__icthlarinOwner === f.p);
+  assert.ok(priest, 'the possessed priest');
+  PM.emitNpcDeath?.({ npc: priest, npcId: 4210, killer: f.p });
+  assert.equal(stage(f), 23);
+  const potion = core.ItemOnGroundManager.ownedBy(f.p.getUsername()).find((g) => g.getItem().getId() === I().ATTACK_POTION_4_);
+  assert.ok(potion, 'Apmeken\'s jar: an attack potion(4) (Wiki; t3223)');
+});
+
+test('the thanks (24 on "We have a few things to finish here..."), Icthlarin\'s flashback (25), the trinket completes it once (t3226-t3378)', async (t) => {
+  const f = fixture(t, [3294, 2779, 0]);
+  f.give(I().HOLY_SYMBOL_3);
+  await enterPyramid(f, 23, { [VARBIT.PRIESTS]: 1 });
+  const highPriest = ceremonyNpcs(f).find((npc) => npc.getId() === 11649);
+  place(f, 3307, 9195);
+  await f.clickNpc(highPriest);
+  let lines = await f.talk();
+  assert.ok(lines.some((l) => l[0] === 'item' && l[1] === I().HOLY_SYMBOL_3 && l[2] === 'You give the holy symbol to the High Priest.'));
+  assert.equal(f.has(I().HOLY_SYMBOL_3), 0);
+  assert.equal(stage(f), 24);
+  place(f, 3306, 9198);
+  await clickIn(f, 44060, 3306, 9199);
+  until(f, () => !!f.read());
+  assert.deepEqual(f.read(), ['box', null, 'All of a sudden, a final sense of deja-vu sweeps over you...']);
+  f.step(3 + 2 + 5);
+  lines = await f.talk([], { pace: 1 });
+  assert.deepEqual(lines.slice(0, 5).map((l) => [l[1], l[2]]), [
+    [4199, 'And what do we have here?'],
+    ['player', 'I must do as the mistress commands...'],
+    [4199, 'Did my sister really think that I would not sense her presence here?'],
+    [4199, 'Amascut! Release your hold on this human!'],
+    ['player', 'Argh...'],
+  ]);
+  f.step(6);
+  assert.equal(stage(f), 25);
+  assert.deepEqual(at(f), [3294, 2781, 0]);
+  const priest = f.npc(6192, [3281, 2772, 0]);
+  f.p.moveTo(new core.Location(3281, 2770, 0)); f.step();
+  const thieving = f.p.getSkillManager().getExperience(core.Skill.THIEVING);
+  await f.clickNpc(priest);
+  lines = await f.talk([2]);
+  assert.equal(stage(f), 26);
+  assert.equal(f.has(I().CATSPEAK_AMULET), 1);
+  assert.equal(f.p.getSkillManager().getExperience(core.Skill.THIEVING) - thieving, 4500);
+  assert.equal(f.has(4679), 0, 'no quest items left');
+  await f.clickNpc(priest);
+  await f.talk([2]);
+  assert.equal(f.has(I().CATSPEAK_AMULET), 1, 'rewarded once');
+});

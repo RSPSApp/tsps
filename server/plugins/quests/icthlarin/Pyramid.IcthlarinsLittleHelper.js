@@ -624,7 +624,7 @@ function createPyramid(api, state, common, { STAGE, VARBIT, JARS }) {
     const v = visit(player);
     const slot = common.slotOf(player, common.ITEM.UNHOLY_SYMBOL);
     if (slot < 0) return true;
-    player.getInventory().set(slot, new Item(-1, 0));
+    player.getInventory().set(slot, new api.core.Item(-1, 0));
     player.getInventory().refreshItems();
     // The present's holy symbol comes back into this slot when the flashback ends.
     if (v?.swapped) v.swapped.slot = slot;

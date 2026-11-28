@@ -279,10 +279,10 @@ function createCeremony(api, state, common, { STAGE, VARBIT, JARS, pyramid, getQ
     const { player, stepId } = event;
     switch (stepId) {
       case "v-TFI2": event.handled = true; makeSalt(player); return;
-      case "juxFZi": wandererArrives(player); return;
-      case "KGKUnx": devourerLeaves(player); return;
-      case "zMjQK_": sceneEnds(player); return;
-      case "UAAgOr": lastFlashbackEnds(player, event); return;
+      case "juxFZi": event.handled = true; wandererArrives(player); return;
+      case "KGKUnx": event.handled = true; devourerLeaves(player); return;
+      case "zMjQK_": event.handled = true; sceneEnds(player); return;
+      case "UAAgOr": event.handled = true; lastFlashbackEnds(player, event); return;
       default:
     }
   }

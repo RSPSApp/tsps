@@ -59,6 +59,9 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
 
   DOOR_47_OPEN: 2001, // closed O.DOOR_47 (2000); same models, cache-derived
   DOOR_48_OPEN: 2003, // closed O.DOOR_48 (2002); same models, cache-derived
+  // The Forsaken Tower's entrance (33491 at 1382,3817) opens into this actionless, same-model
+  // loc, so the cache scan cannot pair it (#6912).
+  FORSAKEN_TOWER_DOOR_OPEN: 33492,
   PLAGUE_HOUSE_DOOR: 37321, // plagueelenadoorshut, a multi (varbit 9016) with no name of its own
   PLAGUE_HOUSE_DOOR_OPEN: 37322, // plagueelenadooropen
   LARGE_DOOR_100_OPEN: 39252, // Sins of the Father Arboretum; capture 1637
@@ -262,6 +265,9 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
     // Tower of Life's door: the open loc 21815 has the same model but no action (cache gameval
     // tol_tower_wall_door / tol_tower_wall_door_open).
     [O.TOWER_DOOR, O.TOWER_DOOR + 1],
+    // The Forsaken Tower's entrance: 33491 at 1382,3817 opens into the nameless, actionless
+    // 33492, the same model (#6912).
+    [O.DOOR_571, NAMELESS_DOOR_LEAF_IDS.FORSAKEN_TOWER_DOOR_OPEN],
     // Slepe church crypt gate: its open form 39513 has the same model but no action.
     [O.GATE_210, O.GATE_211],
     // Active cache dump (osrs-241 2026-10-20): 2000/2002 "Door" have Open and

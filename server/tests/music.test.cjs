@@ -124,18 +124,26 @@ test('music unlocks pack complete cache bitfields and restore from persisted tra
   assert.deepEqual(player.configs.find(([id]) => id === 20), [20, (1 << firstBit) | (1 << secondBit)]);
 });
 
-test('Olaf keeps his Trials dialogue reachable while the quest is active', async () => {
+test("Olaf's own after-the-Trials talk sells the cape: its conditions and hand-outs (Transcript:Olaf the Bard)", async () => {
   await setup();
-  const player = makePlayer();
-  player.trialsStarted = true;
-  assert.equal(MusicPlugin._test.talkToOlaf({ player }), false);
-  assert.deepEqual(player.prompts, []);
-  player.trialsComplete = true;
-  assert.equal(MusicPlugin._test.talkToOlaf({ player }), true);
-  assert.equal(player.prompts.at(-1).title, 'Music cape');
-  player.trialsStarted = false;
-  player.trialsComplete = false;
-  assert.equal(MusicPlugin._test.talkToOlaf({ player }), true);
+  questAnswer = undefined;
+  diaryAnswer = undefined;
+  const OLAF = api.core.NpcIdentifiers.OLAF_THE_BARD;
+  const poor = makePlayer({ coins: 10 });
+  const answer = (player, text, npcId = OLAF) => MusicPlugin._test.answerOlafCondition({ player, npcId, text });
+  assert.equal(answer(poor, "If the player has unlocked all the songs:"), false);
+  assert.equal(answer(poor, "If the player has not unlocked all songs:"), true);
+  assert.equal(answer(poor, "If the player does not have at least 99,000 coins in their inventory:"), true);
+  assert.equal(answer(poor, "If the player has unlocked all the songs:", 3924), null, "another NPC's condition");
+  const rich = makePlayer({ tracks: catalog.nonHolidayTrackIds, coins: 99000 });
+  assert.equal(answer(rich, "If the player has unlocked all the songs:"), true);
+  assert.equal(answer(rich, "If the player has at least 99,000 coins in their inventory:"), true);
+  const sale = { player: rich, npcId: OLAF, stepId: "5oO1bZ", handled: false };
+  MusicPlugin._test.olafCapeAction(sale);
+  assert.equal(sale.handled, true);
+  assert.deepEqual(rich.items, [[api.core.ItemIdentifiers.MUSIC_CAPE, 1], [api.core.ItemIdentifiers.MUSIC_HOOD, 1]]);
+  MusicPlugin._test.olafCapeAction({ player: rich, npcId: OLAF, stepId: "NC7XvX" });
+  assert.deepEqual(rich.items.at(-1), [api.core.ItemIdentifiers.MUSIC_HOOD, 1]);
 });
 
 test('an unlock names the track in the chatbox-transparency colour, unclosed and without a full stop', async () => {

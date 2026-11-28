@@ -167,11 +167,12 @@ test("a learned story keeps varbit 9472 on login, and an unlearned one stays at 
   assert.equal(fresh.getPacketSender().getVarbit(STORY_VARBIT), 0);
 });
 
-test("Music keeps Olaf's Talk-to cape prompt for a player who has not started the Trials", (t) => {
+test("Olaf's Talk-to is his own transcript, not a Music cape prompt, for a player who has not started the Trials", (t) => {
+  // The cape is sold from his after-the-Trials talk (Transcript:Olaf the Bard); Music.plugin.js no longer takes Talk-to.
   const { player } = actor(t);
   const olaf = core.NPC.create(core.NpcIdentifiers.OLAF_THE_BARD, new core.Location(2673, 3685, 0));
   PluginManager.emitNpcInteraction({
     player, npc: olaf, npcId: olaf.getId(), definition: olaf.getDefinition(), clickType: 1, handled: false,
   });
-  assert.equal(core.MultiChatboxPrompt.getPending(player)?.title, "Music cape");
+  assert.notEqual(core.MultiChatboxPrompt.getPending(player)?.title, "Music cape");
 });

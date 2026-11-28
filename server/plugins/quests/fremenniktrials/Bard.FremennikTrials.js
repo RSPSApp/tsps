@@ -24,6 +24,11 @@ module.exports = function attachFremennikTrialsBard(api, ctx) {
   const BARD_ATTRIBUTE = "quest.fremennik_trials.bard";
   const BIT_PLAN = 0;
   const BIT_ROCK_GIVEN = 1;
+  /**
+   * Olaf's long walkthrough was heard: later re-talks are the short reminder (1002313 t642; the long
+   * one in 1002236 t3545 on the first talk after accepting). Ours: what switches it.
+   */
+  const BIT_OLAF_EXPLAINED = 2;
 
   const PAGE_BOUNCER = "Longhall Bouncer";
   const PAGE_LALLI = "Lalli";
@@ -32,6 +37,7 @@ module.exports = function attachFremennikTrialsBard(api, ctx) {
   const V = {
     olafOffer: P,
     olafAgain: `${P}-talking-to-him-again`,
+    olafReminder: `${P}-talking-to-him-again-talking-to-him-again-afterwards`,
     olafDone: `${P}-subsequent-dialogue-with-olaf`,
     lalliFirst: `${P}-talking-to-lalli`,
     lalliRock: `${P}-talking-to-lalli-again-with-the-pet-rock`,
@@ -176,14 +182,16 @@ module.exports = function attachFremennikTrialsBard(api, ctx) {
   function olafVariant(player, stage) {
     const state = ctx.trialState(player, T.BARD);
     if (state === 2) return V.olafDone;
-    if (stage >= ctx.STAGE_STARTED) return state >= 1 ? V.olafAgain : V.olafOffer;
+    if (stage >= ctx.STAGE_STARTED) return state >= 1 ? olafRunning(player) : V.olafOffer;
     return null;
   }
 
   function olafOffer(player) {
     const state = ctx.trialState(player, T.BARD);
-    return state === 2 ? V.olafDone : state === 1 ? V.olafAgain : V.olafOffer;
+    return state === 2 ? V.olafDone : state === 1 ? olafRunning(player) : V.olafOffer;
   }
+
+  const olafRunning = (player) => bard(player, BIT_OLAF_EXPLAINED) ? V.olafReminder : V.olafAgain;
 
   function lalliVariant(player) {
     const state = ctx.trialState(player, T.BARD);
@@ -195,14 +203,17 @@ module.exports = function attachFremennikTrialsBard(api, ctx) {
     return V.lalliFirst;
   }
 
+  /** Once the Bard's trial has passed he is back to his own talk (1002313 t2883). */
   function askeladdenVariant(player) {
-    if (!started(player)) return V.askeladdenBase;
+    if (!started(player) || ctx.trialState(player, T.BARD) === 2) return V.askeladdenBase;
     return ctx.held(player, I.PET_ROCK) || rockGiven(player) ? V.askeladdenAgain : V.askeladdenOlaf;
   }
 
   /** Talk-to on the bouncer: the blessed-lyre line while the enchanted lyre is held; otherwise his own page. */
   function bouncerVariant(player) {
-    return ctx.held(player, I.ENCHANTED_LYRE) ? V.bouncerBlessed : undefined;
+    if (ctx.held(player, I.ENCHANTED_LYRE)) return V.bouncerBlessed;
+    // His own page's after-the-trial talk (1002313 t7825, after the quest; the door already uses it).
+    return ctx.trialState(player, T.BARD) === 2 ? { page: PAGE_BOUNCER, variant: V.bouncerAfter } : undefined;
   }
 
   function startTrial(event, text) {
@@ -265,7 +276,8 @@ module.exports = function attachFremennikTrialsBard(api, ctx) {
     if (!player) return;
     const text = String(event.text ?? "");
     // The runner builds a run of lines ahead, so the rock goes as the player's line before it is continued.
-    if (NPC.ASKELADDEN.has(npcId) && text === "Do you have any spare rocks then?") {
+    // The lost-rock branch is the same: the rock arrives as "Sure thing buddy!..." shows (1002313 t119).
+    if (NPC.ASKELADDEN.has(npcId) && (text === "Do you have any spare rocks then?" || text === "Can I have another rock? I lost mine...")) {
       event.after = () => {
         if (!ctx.held(player, I.PET_ROCK)) ctx.give(player, I.PET_ROCK, 1);
         setBard(player, BIT_ROCK_GIVEN);
@@ -279,6 +291,7 @@ module.exports = function attachFremennikTrialsBard(api, ctx) {
       return;
     }
     if (npcId === NPC.FOSSEGRIMEN && text === "What can I do for you?") event.expression = CHATQUIZ1; // 1001364 t2661
+    if (NPC.OLAF.has(npcId) && text === "So how would I go about writing this epic?") setBard(player, BIT_OLAF_EXPLAINED);
   }
 
   /** The data's receive step sits before "What pet is this then?": the rock comes with the last line instead. */
@@ -309,17 +322,18 @@ module.exports = function attachFremennikTrialsBard(api, ctx) {
     event.box = { statement: true };
   }
 
-  /** Summon menu: a held fish. No capture; per the data it is the blessing, as the altar gives it. */
+  /**
+   * Summon menu: a held fish is the altar's blessing, all on the tick it is picked (rsprox 1002313
+   * t524: the menu closes, the message, spotanim, seq, sound, the slot swap and her line together).
+   */
   function presentFish(event) {
     const { player } = event;
-    ctx.later(player, 1, () => {
-      const fish = WORTHY_FISH.find((id) => ctx.held(player, id));
-      if (!fish || !ctx.held(player, I.LYRE) || !active(player)) {
-        // Ours: a bass, or no strung lyre to enchant: the talk just ends.
-        return;
-      }
-      enchantLyre(player, slotOf(player, fish));
-    });
+    const fish = WORTHY_FISH.find((id) => ctx.held(player, id));
+    if (!fish || !ctx.held(player, I.LYRE) || !active(player)) {
+      // Ours: a bass, or no strung lyre to enchant: the talk just ends.
+      return;
+    }
+    enchantLyre(player, slotOf(player, fish), true);
   }
 
   // --------------------------------------------------------------------------------------------------------------
@@ -374,7 +388,10 @@ module.exports = function attachFremennikTrialsBard(api, ctx) {
     return true;
   }
 
-  /** Golden wool on the unstrung lyre: 1002236 t4419, all in the click tick; the lyre stays in its slot. */
+  /**
+   * Golden wool on the unstrung lyre, all in the click tick: both go and the lyre takes the lower of
+   * their two slots (1002313 t331 wool 12 + lyre 13 -> 12; 1002247 t5862 -> 0; 1002236 t4419 -> 0).
+   */
   function stringLyre(event) {
     const { player } = event;
     if (player.getSkillManager().getMaxLevel(Skill.FLETCHING) < STRING_FLETCHING_LEVEL) {
@@ -388,8 +405,8 @@ module.exports = function attachFremennikTrialsBard(api, ctx) {
     if (lyreSlot < 0 || woolSlot < 0) return true;
     player.sendMessage("You attach the golden strings to the lyre.");
     const inventory = player.getInventory();
-    inventory.setItem(woolSlot, empty());
-    inventory.setItem(lyreSlot, new api.core.Item(I.LYRE, 1));
+    inventory.setItem(Math.max(woolSlot, lyreSlot), empty());
+    inventory.setItem(Math.min(woolSlot, lyreSlot), new api.core.Item(I.LYRE, 1));
     inventory.refreshItems();
     xp(player, Skill.FLETCHING, STRING_LYRE_XP);
     return true;
@@ -417,12 +434,17 @@ module.exports = function attachFremennikTrialsBard(api, ctx) {
     });
   }
 
+  /** The fleece used on the wheel spins two ticks after arrival (1002313 t317 -> t319, 1002236 t4410 -> t4412). */
   function spinFleeceOnWheel(event) {
     event.handled = true;
     const { player } = event;
-    // The use may land after a walk: spin only the fleece still in the used slot.
-    if (player.getInventory().forSlot(event.itemSlot)?.getId() !== I.GOLDEN_FLEECE) return;
-    spinFleece(player, event.object, event.itemSlot);
+    const from = player.getLocation().clone();
+    ctx.later(player, 2, () => {
+      // Spin only the fleece still in the used slot, and only if the player stayed at the wheel.
+      if (!player.getLocation().equals(from)) return;
+      if (player.getInventory().forSlot(event.itemSlot)?.getId() !== I.GOLDEN_FLEECE) return;
+      spinFleece(player, event.object, event.itemSlot);
+    });
   }
 
   function spinAtWheel(event) {
@@ -525,7 +547,7 @@ module.exports = function attachFremennikTrialsBard(api, ctx) {
   }
 
   /** The blessing, all in one tick (1002236 t4800): the enchanted lyre goes into the fish's slot. */
-  function enchantLyre(player, fishSlot) {
+  function enchantLyre(player, fishSlot, blessingAfterRunner = false) {
     const fish = player.getInventory().forSlot(fishSlot)?.getId();
     if (!WORTHY_FISH.includes(fish)) return false;
     const lyreSlot = slotOf(player, I.LYRE);
@@ -540,7 +562,11 @@ module.exports = function attachFremennikTrialsBard(api, ctx) {
     player.getPacketSender().sendSound(SOUND_ENCHANT, 1, 0);
     const npc = spawnFossegrimen(player);
     if (npc) faceEachOther(player, npc);
-    startLines(player, [{ npcId: NPC.FOSSEGRIMEN, name: "Fossegrimen", text: FOSSEGRIMEN_BLESSING, expression: CHATNEU2 }]);
+    const bless = () => startLines(player, [{ npcId: NPC.FOSSEGRIMEN, name: "Fossegrimen", text: FOSSEGRIMEN_BLESSING, expression: CHATNEU2 }]);
+    // From the Summon menu the runner is still finishing the menu's branch (its jump leaves the record and
+    // ends the chat): the blessing opens once it has, in the same tick.
+    if (blessingAfterRunner) queueMicrotask(bless);
+    else bless();
     return true;
   }
 
@@ -622,8 +648,12 @@ module.exports = function attachFremennikTrialsBard(api, ctx) {
     }
     swapDoorOpen(player, at(BACKSTAGE_TILE));
     ctx.later(player, 1, () => {
+      // The next tick the two face each other (1002313 t805, 1002250, 1002236).
       ctx.play(player, bouncer, V.bouncerBackstage);
-      ctx.later(player, 1, () => nearbyNpc(player, bouncer)?.setPositionToFace(player.getLocation().clone()));
+      const npc = nearbyNpc(player, bouncer);
+      if (!npc) return;
+      npc.setPositionToFace(player.getLocation().clone());
+      player.setPositionToFace(npc.getLocation().clone());
     });
   }
 
@@ -653,8 +683,9 @@ module.exports = function attachFremennikTrialsBard(api, ctx) {
   }
 
   /**
-   * Off stage (or without the trial to pass) the lyre is only tuned (1001364 t2712-2728): T+1 withdraw,
-   * T+2/5/8/11 the scale, T+14 the last strum, T+16 "perfectly tuned". Walking stops it (t2723).
+   * Off stage (or without the trial to pass) the lyre is only tuned, W = the withdraw: W+1/4/7/10 the scale,
+   * W+13 the last strum, W+15 "perfectly tuned" (1001364 t2712-2728). Standing, W is the click tick
+   * (1002313 t536); 1001364's T+1/T+2 withdraws came after a step. Walking stops it (t2723, 1002313 t539).
    */
   function tune(player) {
     const session = { locked: false };
@@ -667,20 +698,18 @@ module.exports = function attachFremennikTrialsBard(api, ctx) {
       fn();
     });
     const out = player.getPacketSender();
-    at(1, () => {
-      player.sendMessage("You withdraw your lyre.");
-      animate(player, SEQ_LYRE_READY);
-    });
-    TUNING.forEach((line, index) => at(2 + index * 3, () => {
+    player.sendMessage("You withdraw your lyre.");
+    animate(player, SEQ_LYRE_READY);
+    TUNING.forEach((line, index) => at(1 + index * 3, () => {
       player.forceChat(line);
       animate(player, SEQ_LYRE_LOOP);
       out.sendSong(SONG_SILENCE).sendJingle(index === 0 ? JINGLE_REFRAIN_START : JINGLE_REFRAIN_LOOP);
     }));
-    at(14, () => {
+    at(13, () => {
       animate(player, SEQ_LYRE_ONCE);
       out.sendJingle(JINGLE_REFRAIN_END);
     });
-    at(16, () => {
+    at(15, () => {
       player.sendMessage("Your lyre is perfectly tuned.");
       stopPlaying(player, session);
     });
@@ -742,7 +771,8 @@ module.exports = function attachFremennikTrialsBard(api, ctx) {
     if (session.finished) return;
     session.finished = true;
     stopPlaying(player, session);
-    player.sendMessage("You feel the musical ability from the Fossegrimen leave you...");
+    // Rev 243 dropped "the" (1002313 t863; rev 241/242 said "from the Fossegrimen").
+    player.sendMessage("You feel the musical ability from Fossegrimen leave you...");
     ctx.completeTrial(player, T.BARD);
     // Every enchanted lyre held loses it (Wiki); each strung lyre goes to the first free slot (slot 0/12 live).
     let count = player.getInventory().getAmount(I.ENCHANTED_LYRE);
@@ -752,14 +782,20 @@ module.exports = function attachFremennikTrialsBard(api, ctx) {
     }
   }
 
-  /** Fridgeir heckles from the crowd at a random point (1002236 M+21/M+24, 1002250 M+14/M+17; none in 1001364). */
+  /**
+   * Fridgeir heckles from the crowd at a random point (1002236 M+21/M+24, 1002250 M+14/M+17), but not every
+   * time: none in 1001364 or 1002313 though he stood in view. Ours: half the performances.
+   */
   function heckle(player, session) {
+    if (Math.random() >= HECKLE_CHANCE) return;
     const start = 14 + Math.floor(Math.random() * 8); // Ours: the window between the two captured starts
     HECKLES.forEach((line, index) => ctx.later(player, start + index * 3, () => {
       if (playing.get(player) !== session && !session.finished) return;
       nearbyNpc(player, FRIDGEIR)?.forceChat(line);
     }));
   }
+
+  const HECKLE_CHANCE = 0.5;
 
   function playEnchantedLyre(event) {
     const { player } = event;

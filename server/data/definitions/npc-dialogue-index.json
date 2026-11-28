@@ -4662,13 +4662,15 @@
       "variants": [
         "the-council-members-olaf-the-bard",
         "the-council-members-olaf-the-bard-talking-to-him-again",
+        "the-council-members-olaf-the-bard-talking-to-him-again-talking-to-him-again-afterwards",
         "the-council-members-olaf-the-bard-performing-with-the-lyre",
         "the-council-members-olaf-the-bard-subsequent-dialogue-with-olaf",
         "the-council-members-sigmund-the-merchant-s-small-favour-finding-the-unique-flower-s-whereabouts-talking-to-olaf",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-olaf-the-bard",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-sigli-s-bowstring-talking-to-olaf",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-the-boots-to-olaf",
-        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-olaf-again"
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-olaf-again",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-olaf"
       ]
     }
   ],
@@ -14204,6 +14206,7 @@
       "page": "Transcript:Maria Gunnars",
       "variants": [
         "before-the-fremennik-trials",
+        "travelling-to-neitiznot-before-the-fremennik-isles",
         "after-the-fremennik-isles",
         "talking-to-maria-gunnars-on-neitiznot"
       ]
@@ -14234,6 +14237,7 @@
       "page": "Transcript:Maria Gunnars",
       "variants": [
         "before-the-fremennik-trials",
+        "travelling-to-neitiznot-before-the-fremennik-isles",
         "after-the-fremennik-isles",
         "talking-to-maria-gunnars-on-neitiznot"
       ]
@@ -14497,6 +14501,7 @@
       "page": "Transcript:Mord Gunnars",
       "variants": [
         "before-the-fremennik-trials",
+        "travelling-to-jatizso-before-the-fremennik-isles",
         "after-the-fremennik-isles-at-rellekka",
         "after-the-fremennik-isles-on-jatizso"
       ]
@@ -14902,6 +14907,7 @@
       "page": "Transcript:Mord Gunnars",
       "variants": [
         "before-the-fremennik-trials",
+        "travelling-to-jatizso-before-the-fremennik-isles",
         "after-the-fremennik-isles-at-rellekka",
         "after-the-fremennik-isles-on-jatizso"
       ]
@@ -28981,6 +28987,8 @@
     {
       "page": "Transcript:The Fremennik Trials",
       "variants": [
+        "the-non-council-members-sailor",
+        "the-non-council-members-sailor-travelling-to-miscellania-during-the-trials",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-the-sailor",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-sigli-s-bowstring-talking-to-the-sailor",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-the-ballad-to-the-sailor",
@@ -33848,6 +33856,7 @@
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-peer-the-seer-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-peer-the-seer-the-bodyguard-contract",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-peer-the-seer-again-2",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-peer-the-seer",
         "the-council-members-peer-the-seer",
         "the-council-members-peer-the-seer-s-trial",
         "the-council-members-peer-the-seer-s-trial-talking-to-peer-the-seer-again",
@@ -33877,8 +33886,10 @@
         "the-council-members-sigmund-the-merchant-s-small-favour-finding-the-unique-flower-s-whereabouts-talking-to-thorvald",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-sigli-s-bowstring-talking-to-thorvald",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-convincing-thorvald-to-be-a-bodyguard",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-thorvald-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-thorvald-his-token",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-thorvald-again-2",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-thorvald",
         "the-council-members-thorvald-the-warrior",
         "the-council-members-thorvald-the-warrior-talking-to-thorvald-again",
         "the-council-members-peer-the-seer-entering-the-arena",
@@ -34314,7 +34325,8 @@
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-manni-the-reveller",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-manni-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-manni-his-legendary-cocktail",
-        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-manni-again-2"
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-manni-again-2",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-manni"
       ]
     }
   ],
@@ -34356,8 +34368,10 @@
         "the-council-members-sigli-the-huntsman-talking-to-sigli-after-defeating-the-draugen-subsequent-dialogue-with-sigli",
         "the-council-members-sigmund-the-merchant-s-small-favour-finding-the-unique-flower-s-whereabouts-talking-to-sigli",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-sigli-s-bowstring",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-sigli-s-bowstring-talking-to-sigli-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-the-bowstring-to-sigli",
-        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-sigli-again"
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-sigli-again",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-sigli"
       ]
     }
   ],
@@ -34376,6 +34390,7 @@
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-swensen-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-swensen-the-forecast",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-swensen-again-2",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-swensen",
         "the-council-members-swensen-s-trial-attempting-to-climb-down-the-ladder-or-trapdoor-before-accepting-the-challenge",
         "the-council-members-swensen-s-trial-talking-to-swensen",
         "the-council-members-swensen-s-trial-talking-to-swensen-again",
@@ -34418,12 +34433,14 @@
     {
       "page": "Transcript:The Fremennik Trials",
       "variants": [
+        "the-non-council-members-yrsa",
         "the-council-members-sigmund-the-merchant-s-small-favour-finding-the-unique-flower-s-whereabouts-talking-to-yrsa",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-yrsa",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-yrsa-talking-to-yrsa-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-sigli-s-bowstring-talking-to-yrsa",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-the-fiscal-statement-to-yrsa",
-        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-yrsa-again"
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-yrsa-again",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-yrsa"
       ]
     }
   ],
@@ -34444,7 +34461,8 @@
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-the-fisherman",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-the-fisherman-talking-to-the-fisherman-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-the-fisherman-the-map",
-        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-the-fisherman-again"
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-the-fisherman-again",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-the-fisherman"
       ]
     }
   ],
@@ -34465,7 +34483,8 @@
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-sigli-s-bowstring-talking-to-skulgrimen",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-sigli-s-bowstring-talking-to-skulgrimen-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-the-fish-to-skulgrimen",
-        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-skulgrimen-again"
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-skulgrimen-again",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-skulgrimen"
       ]
     }
   ],
@@ -34495,6 +34514,8 @@
     {
       "page": "Transcript:The Fremennik Trials",
       "variants": [
+        "the-non-council-members-sailor",
+        "the-non-council-members-sailor-travelling-to-miscellania-during-the-trials",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-the-sailor",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-sigli-s-bowstring-talking-to-the-sailor",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-the-ballad-to-the-sailor",
@@ -34517,6 +34538,12 @@
       "variants": [
         "investigating-the-disturbance-after-acquiring-the-unsealed-letter-brundt",
         "longhall-celebration"
+      ]
+    },
+    {
+      "page": "Transcript:The Fremennik Trials",
+      "variants": [
+        "the-non-council-members-agnar"
       ]
     }
   ],
@@ -70808,8 +70835,10 @@
         "starting-off-talking-to-brundt-the-chieftain",
         "the-council-members-sigmund-the-merchant-s-small-favour-finding-the-unique-flower-s-whereabouts-talking-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt-talking-to-brundt-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-the-map-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-brundt-again",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-brundt",
         "the-council-members-talking-to-brundt",
         "post-quest-dialogue"
       ]
@@ -72061,8 +72090,10 @@
         "starting-off-talking-to-brundt-the-chieftain",
         "the-council-members-sigmund-the-merchant-s-small-favour-finding-the-unique-flower-s-whereabouts-talking-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt-talking-to-brundt-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-the-map-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-brundt-again",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-brundt",
         "the-council-members-talking-to-brundt",
         "post-quest-dialogue"
       ]
@@ -72089,8 +72120,10 @@
         "the-council-members-sigmund-the-merchant-s-small-favour-finding-the-unique-flower-s-whereabouts-talking-to-thorvald",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-sigli-s-bowstring-talking-to-thorvald",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-convincing-thorvald-to-be-a-bodyguard",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-thorvald-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-thorvald-his-token",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-thorvald-again-2",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-thorvald",
         "the-council-members-thorvald-the-warrior",
         "the-council-members-thorvald-the-warrior-talking-to-thorvald-again",
         "the-council-members-peer-the-seer-entering-the-arena",
@@ -72126,6 +72159,7 @@
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-peer-the-seer-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-peer-the-seer-the-bodyguard-contract",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-peer-the-seer-again-2",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-peer-the-seer",
         "the-council-members-peer-the-seer",
         "the-council-members-peer-the-seer-s-trial",
         "the-council-members-peer-the-seer-s-trial-talking-to-peer-the-seer-again",
@@ -72149,6 +72183,7 @@
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-swensen-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-swensen-the-forecast",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-swensen-again-2",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-swensen",
         "the-council-members-swensen-s-trial-attempting-to-climb-down-the-ladder-or-trapdoor-before-accepting-the-challenge",
         "the-council-members-swensen-s-trial-talking-to-swensen",
         "the-council-members-swensen-s-trial-talking-to-swensen-again",
@@ -72267,8 +72302,10 @@
         "starting-off-talking-to-brundt-the-chieftain",
         "the-council-members-sigmund-the-merchant-s-small-favour-finding-the-unique-flower-s-whereabouts-talking-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt-talking-to-brundt-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-the-map-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-brundt-again",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-brundt",
         "the-council-members-talking-to-brundt",
         "post-quest-dialogue"
       ]
@@ -72654,8 +72691,10 @@
         "starting-off-talking-to-brundt-the-chieftain",
         "the-council-members-sigmund-the-merchant-s-small-favour-finding-the-unique-flower-s-whereabouts-talking-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt-talking-to-brundt-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-the-map-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-brundt-again",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-brundt",
         "the-council-members-talking-to-brundt",
         "post-quest-dialogue"
       ]
@@ -72983,8 +73022,10 @@
         "starting-off-talking-to-brundt-the-chieftain",
         "the-council-members-sigmund-the-merchant-s-small-favour-finding-the-unique-flower-s-whereabouts-talking-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt-talking-to-brundt-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-the-map-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-brundt-again",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-brundt",
         "the-council-members-talking-to-brundt",
         "post-quest-dialogue"
       ]
@@ -85432,8 +85473,10 @@
         "starting-off-talking-to-brundt-the-chieftain",
         "the-council-members-sigmund-the-merchant-s-small-favour-finding-the-unique-flower-s-whereabouts-talking-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt-talking-to-brundt-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-the-map-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-brundt-again",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-brundt",
         "the-council-members-talking-to-brundt",
         "post-quest-dialogue"
       ]
@@ -85536,8 +85579,10 @@
         "starting-off-talking-to-brundt-the-chieftain",
         "the-council-members-sigmund-the-merchant-s-small-favour-finding-the-unique-flower-s-whereabouts-talking-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt-talking-to-brundt-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-the-map-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-brundt-again",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-brundt",
         "the-council-members-talking-to-brundt",
         "post-quest-dialogue"
       ]
@@ -85619,8 +85664,10 @@
         "starting-off-talking-to-brundt-the-chieftain",
         "the-council-members-sigmund-the-merchant-s-small-favour-finding-the-unique-flower-s-whereabouts-talking-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt-talking-to-brundt-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-the-map-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-brundt-again",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-brundt",
         "the-council-members-talking-to-brundt",
         "post-quest-dialogue"
       ]
@@ -85702,8 +85749,10 @@
         "starting-off-talking-to-brundt-the-chieftain",
         "the-council-members-sigmund-the-merchant-s-small-favour-finding-the-unique-flower-s-whereabouts-talking-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt-talking-to-brundt-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-the-map-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-brundt-again",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-brundt",
         "the-council-members-talking-to-brundt",
         "post-quest-dialogue"
       ]
@@ -85785,8 +85834,10 @@
         "starting-off-talking-to-brundt-the-chieftain",
         "the-council-members-sigmund-the-merchant-s-small-favour-finding-the-unique-flower-s-whereabouts-talking-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt-talking-to-brundt-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-the-map-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-brundt-again",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-brundt",
         "the-council-members-talking-to-brundt",
         "post-quest-dialogue"
       ]
@@ -85841,6 +85892,12 @@
         "investigating-the-disturbance-after-acquiring-the-unsealed-letter-brundt",
         "longhall-celebration"
       ]
+    },
+    {
+      "page": "Transcript:The Fremennik Trials",
+      "variants": [
+        "the-non-council-members-agnar"
+      ]
     }
   ],
   "9274": [
@@ -85863,13 +85920,15 @@
       "variants": [
         "the-council-members-olaf-the-bard",
         "the-council-members-olaf-the-bard-talking-to-him-again",
+        "the-council-members-olaf-the-bard-talking-to-him-again-talking-to-him-again-afterwards",
         "the-council-members-olaf-the-bard-performing-with-the-lyre",
         "the-council-members-olaf-the-bard-subsequent-dialogue-with-olaf",
         "the-council-members-sigmund-the-merchant-s-small-favour-finding-the-unique-flower-s-whereabouts-talking-to-olaf",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-olaf-the-bard",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-sigli-s-bowstring-talking-to-olaf",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-the-boots-to-olaf",
-        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-olaf-again"
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-olaf-again",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-olaf"
       ]
     }
   ],
@@ -85901,7 +85960,8 @@
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-manni-the-reveller",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-manni-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-manni-his-legendary-cocktail",
-        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-manni-again-2"
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-manni-again-2",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-manni"
       ]
     }
   ],
@@ -86001,8 +86061,10 @@
         "starting-off-talking-to-brundt-the-chieftain",
         "the-council-members-sigmund-the-merchant-s-small-favour-finding-the-unique-flower-s-whereabouts-talking-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt-talking-to-brundt-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-the-map-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-brundt-again",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-brundt",
         "the-council-members-talking-to-brundt",
         "post-quest-dialogue"
       ]
@@ -86084,8 +86146,10 @@
         "starting-off-talking-to-brundt-the-chieftain",
         "the-council-members-sigmund-the-merchant-s-small-favour-finding-the-unique-flower-s-whereabouts-talking-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt-talking-to-brundt-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-the-map-to-brundt",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-brundt-again",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-brundt",
         "the-council-members-talking-to-brundt",
         "post-quest-dialogue"
       ]
@@ -86112,8 +86176,10 @@
         "the-council-members-sigmund-the-merchant-s-small-favour-finding-the-unique-flower-s-whereabouts-talking-to-thorvald",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-sigli-s-bowstring-talking-to-thorvald",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-convincing-thorvald-to-be-a-bodyguard",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-thorvald-again",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-giving-thorvald-his-token",
         "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-swensen-the-navigator-talking-to-thorvald-again-2",
+        "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-thorvald",
         "the-council-members-thorvald-the-warrior",
         "the-council-members-thorvald-the-warrior-talking-to-thorvald-again",
         "the-council-members-peer-the-seer-entering-the-arena",

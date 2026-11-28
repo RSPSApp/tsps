@@ -283,17 +283,20 @@ test("a request is only recorded on its own branch: Ask about becoming a Fremenn
   assert.equal(asked(f), 0);
 });
 
-test("out-of-turn talks follow the current request; earlier links remind", async (t) => {
+test("out-of-turn talks follow the current request; only the link that wants it reminds (rsprox 1002313 t3069-t3600)", async (t) => {
   // Sigli asked for the bowstring (5 heard): the Sailor and Peer answer the bowstring question.
   const f = actor(t, { chain: 6, merchant: 1 });
   assert.equal(texts(await converse(f, N.SAILOR_2))[1], "Not really my affair, outerlander.");
   assert.equal(texts(await converse(f, N.PEER_THE_SEER))[0], "I don't suppose you have any idea where I could find a finely balanced custom bowstring, do you?");
   assert.equal(asked(f), 5);
-  // Everything up to Thora heard: Thora's reminder points to Askeladden.
+  // Everything up to Thora heard: Thora's reminder points to Askeladden; the earlier links are asked
+  // where the note is, each with their own answer.
   const g = actor(t, { chain: 13, merchant: 1 });
-  assert.equal(texts(await converse(g, N.THORA_THE_BARKEEP))[0], "I don't suppose you have any idea where I could find a written promise from Askeladden to stay out of the Longhall?");
-  assert.equal(texts(await converse(g, N.MANNI_THE_REVELLER))[1], "Uh... yes, the longhall barkeep has it. So could you get me my drink now please?");
-  assert.equal(texts(await converse(g, N.THORVALD_THE_WARRIOR))[0], "I don't suppose you have any idea where I could find a Champions' Token?");
+  const PROMISE = "I don't suppose you have any idea where I could find a written promise from Askeladden to stay out of the Longhall?";
+  assert.equal(texts(await converse(g, N.THORA_THE_BARKEEP))[0], PROMISE);
+  assert.deepEqual(texts(await converse(g, N.MANNI_THE_REVELLER)).slice(0, 2),
+    [PROMISE, "Uh... call it a crazy hunch, but did you even try asking Askeladden about that?"]);
+  assert.deepEqual(texts(await converse(g, N.THORVALD_THE_WARRIOR)).slice(0, 2), [PROMISE, "Not in the slightest."]);
 });
 
 test("after a link's own trade it plays its 'again' talk", async (t) => {
@@ -305,9 +308,11 @@ test("after a link's own trade it plays its 'again' talk", async (t) => {
 });
 
 test("a lost chain item: Askeladden sells the note again for 5,000 gp", async (t) => {
-  // Old save at M_FISH (20) with the fish lost: the whole request leg is heard.
+  // Old save at M_FISH (20) with the fish lost: the whole request leg is heard, so Skulgrimen is asked
+  // about the note like the other early links (rsprox 1002313 t3378).
   const f = actor(t, { old: 20, merchant: 0, items: [[I.COINS, 5000]] });
-  assert.equal(texts(await converse(f, N.SKULGRIMEN))[0], "I don't suppose you have any idea where I could find an exotic and extremely rare fish, do you?");
+  assert.deepEqual(texts(await converse(f, N.SKULGRIMEN)).slice(0, 2), ["I don't suppose you have any idea where I could find a written promise from Askeladden to stay out of the Longhall?",
+    "I never saw anything like that in my store before."]);
   assert.equal(asked(f), 13);
   const sale = await converse(f, N.ASKELADDEN, { answers: ["Yes"] });
   assert.deepEqual(lineWith(sale, "Done, and done.").items, [I.PROMISSORY_NOTE]);

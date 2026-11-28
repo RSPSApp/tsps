@@ -355,8 +355,10 @@ test("back to Sigli: the trial passes on the continue of 'Thanks!', with no mess
   assert.deepEqual(f.messages, []);
   // viking = 1 + trials passed: the fixture's Merchant vote and now this one.
   assert.ok(f.configs.some((c) => c.id === VARP_VIKING && c.value === 3), JSON.stringify(f.configs));
-  // Afterwards: the subsequent line.
+  // Afterwards: the player's question, then Sigli's line (rsprox 1002313 t1987).
   await talk(f);
+  assert.equal(text(f), "So can I rely on your vote with the council of elders in my favour?");
+  await continueLine(f);
   assert.equal(text(f), "Absolutely outerlander! Anyone brave enough to hunt and defeat the Draugen will be a great addition to our clan!");
 });
 
@@ -421,4 +423,14 @@ test("an expired butterfly: the next Locate says it moved and finds a new one", 
   const said = await locate(f);
   assert.equal(said[0], "The Draugen has moved elsewhere...");
   assert.equal(owned(f, BUTTERFLY).length, 1);
+});
+
+test("a banked talisman is kept: Sigli's 'Laziness' line and no second one (rsprox 1002313 t1550, t1587)", async (t) => {
+  const f = actor(t, { hunter: 1, sigli: true });
+  f.player.getBank(0).add(new core.Item(TALISMAN, 1), false);
+  await talk(f);
+  const lines = await readAll(f);
+  assert.equal(lines[1], "Not yet...");
+  assert.ok(lines[2].startsWith("Hmmm. Laziness is not a trait that I admire."));
+  assert.equal(held(f, TALISMAN), 0, "no new talisman while one is in the bank");
 });

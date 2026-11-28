@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-199 quests · ✅ passed: 24 · ⚠️ passed with issues: 22 · 🔄 in progress: 17 · ❌ failed: 0 · 🔁 needs recheck: 50 · untested: 86
+199 quests · ✅ passed: 24 · ⚠️ passed with issues: 23 · 🔄 in progress: 17 · ❌ failed: 0 · 🔁 needs recheck: 50 · untested: 85
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -170,7 +170,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | The Forsaken Tower | untested |  |  |  |  |
 | The Fremennik Exiles | untested |  |  |  |  |
 | The Fremennik Isles | untested |  |  |  |  |
-| The Fremennik Trials | untested |  |  |  |  |
+| [The Fremennik Trials](fremennik-trials/README.md) | ⚠️ passed with issues | 2026-11-28 | agent | claude-opus-5-5 | 2 |
 | [The Frozen Door](the-frozen-door/README.md) | 🔄 in progress |  | agent | claude-sonnet-5-5 |  |
 | The Garden of Death | untested |  |  |  |  |
 | [The Giant Dwarf](giant-dwarf/README.md) | untested |  |  |  |  |

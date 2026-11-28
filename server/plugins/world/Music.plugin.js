@@ -225,20 +225,36 @@ function buyMusicCape(player) {
   player.sendMessage("You buy a music cape and music hood.");
 }
 
-function talkToOlaf({ player }) {
-  const trials = { player, key: "fremennik_trials", started: false, complete: false };
-  pluginApi.emitCustomEvent("quest:is-started", trials);
-  pluginApi.emitCustomEvent("quest:is-complete", trials);
-  if (trials.started && !trials.complete) return false;
-  pluginApi.sendMultiChatboxPrompt(
-    player,
-    "Music cape",
-    "Buy a music cape and hood (99,000 coins)",
-    buyMusicCape,
-    "Cancel",
-    () => {},
-  );
-  return true;
+/**
+ * Olaf sells the cape from his own after-the-Trials talk (Transcript:Olaf the Bard, "About the Music
+ * Cape..."; rsprox 1002313 t7799-7817 shows the talk). These answer its conditions and do its hand-outs.
+ */
+const OLAF_PAGE_CONDITIONS = new Map([
+  ["If the player has unlocked all the songs:", (player) => Progress.allUnlocked(player, nonHolidayTrackIds)],
+  ["If the player has not unlocked all songs:", (player) => !Progress.allUnlocked(player, nonHolidayTrackIds)],
+  ["If the player has at least 99,000 coins in their inventory:", (player) => player.getInventory().getAmount(COINS) >= CAPE_PRICE],
+  ["If the player does not have at least 99,000 coins in their inventory:", (player) => player.getInventory().getAmount(COINS) < CAPE_PRICE],
+]);
+const OLAF_SELLS_CAPE = "5oO1bZ";
+const OLAF_GIVES_HOOD = "NC7XvX";
+
+function isOlaf(npcId) {
+  return npcId === core.NpcIdentifiers.OLAF_THE_BARD || npcId === core.NpcIdentifiers.OLAF_THE_BARD_2;
+}
+
+function answerOlafCondition({ player, npcId, text }) {
+  if (!isOlaf(npcId)) return null;
+  return OLAF_PAGE_CONDITIONS.get(String(text ?? "").trim())?.(player) ?? null;
+}
+
+function olafCapeAction(event) {
+  if (!isOlaf(event.npcId)) return;
+  if (event.stepId === OLAF_SELLS_CAPE) {
+    event.handled = true;
+    buyMusicCape(event.player);
+  } else if (event.stepId === OLAF_GIVES_HOOD) {
+    event.player.getInventory().adds(core.ItemIdentifiers.MUSIC_HOOD, 1);
+  }
 }
 
 function hasMusicCape(player) {
@@ -658,7 +674,7 @@ function describeTeleports({ list }) {
 
 module.exports = {
   name: "Music",
-  description: "The music tab: track unlocking, jukebox selection, now-playing, the music cape from Olaf the Bard and air guitar unlock.",
+  description: "The music tab: track unlocking, jukebox selection, now-playing, the music cape from Olaf the Bard's after-the-Trials talk and air guitar unlock.",
   register(api) {
     core = api.core;
     pluginApi = api;
@@ -719,12 +735,13 @@ module.exports = {
     api.onCustomEvent("music:unlock-track", unlockTrack);
     api.onCustomEvent("quest:completed", onQuestCompleted);
     api.onCustomEvent("music:air-guitar-unlocked", answerAirGuitarUnlock);
-    api.onNpcInteraction("Olaf the Bard", { "Talk-to": talkToOlaf });
+    api.onNpcDialogueCondition(answerOlafCondition);
+    api.onCustomEvent("npc-dialogue:action", olafCapeAction);
     api.onItemAction(capeAction);
     api.onCanEquip(canEquipMusicCape);
   },
   _test: {
-    unlockTrack, syncMusicVarps, allDiariesComplete, canTrim, buyMusicCape, talkToOlaf, capeAction,
+    unlockTrack, syncMusicVarps, allDiariesComplete, canTrim, buyMusicCape, answerOlafCondition, olafCapeAction, capeAction,
     enableMusicActions, removeInvalidEquippedCape,
     getCatalog: () => ({ allTrackIds, nonHolidayTrackIds, slotByTrackId, canonicalTrackBySlot, autoUnlockTrackIds, questUnlocks }),
     canEquipMusicCape, onMusicLogin, onMusicWelcomeAction, answerAirGuitarUnlock,

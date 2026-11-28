@@ -4,10 +4,13 @@ Server: `server/plugins/quests/quests/FremennikTrials.Quest.js` (the quest, Brun
 per trial in `server/plugins/quests/fremenniktrials/` (`State` is the shared context; `Journal` and `Name` the journal and
 the Fremennik name). Issue #4886.
 
-Sources: rsprox captures of the whole quest in one session (local 1002236, rev 242: start t3091, complete t10305), the third
-trial on to completion (local 1001646, rev 241), single trials (local 1002250 and 1002249, rev 242; local 1001364, rev 241;
-local 1002247, rev 242), plus the OSRS Wiki and its transcript for branches no capture shows. Ticks below are those
-recordings' own.
+Sources: rsprox captures of the whole quest in one session (local 1002236, rev 242: start t3091, complete t10305), every
+trial again from just after the start to completion and the unlocks after it (local 1002313, rev 243: Bard t0-863, Reveller
+-t1475, Hunter -t1974, Merchant -t3671, Warrior -t6547, Navigator -t6871, Seer -t7497, complete t7531, Rellekka and its
+ferries t7531-8351), the third trial on to completion (local 1001646, rev 241), single trials (local 1002250 and 1002249,
+rev 242; local 1001364, rev 241; local 1002247, rev 242), plus the OSRS Wiki and its transcript for branches no capture
+shows. Ticks below are those recordings' own. Every captured line's chathead animation is in
+`plugins/quests/data/chathead-animations.json` (1002313).
 
 ## Quest state
 
@@ -32,7 +35,55 @@ recordings' own.
   existed, shown in the journal ("They also gave me a new name:", 1001646 t3517) and spoken wherever a dialogue says
   "[Fremennik name]". Other plugins ask for it with the custom event `fremennik-trials:name`.
 - Ours: in 1001646 Brundt said "Raktin" while the journal read "Raklak" on the same tick; we use the saved name for
-  both. The quest rating interface (983) that follows Brundt's line is not shown.
+  both. Not shown: the quest rating interface (983), which live opens with the scroll and closes with it (1002313 t7531,
+  t7538), and the last_completed_quest varbits; both are QuestRuntime's, for every quest.
+- The scroll's helm sits at 74,128 (1002313 t7531, if_setposition).
+- The reward's level-ups wait until the naming line is continued (1002313: scroll closed t7538, Brundt's line, the Fishing
+  level-up at t7546). SkillLevelUp holds an announcement while a plugin answers `skill-level-up:hold`; the Name unit does
+  from the completion until the naming line closes.
+- Brundt with no votes: "I don't have any votes yet." and the "Go and speak to the twelve members..." line, without the
+  "Remember:" line (1002313 t692, t782; data condition 61Mzn_).
+
+## The journal
+
+The running journal is live's (1002313, read 14 times from t93 to t7510): the struck start, the vote line ("I don't have
+any votes yet" + "I should try and find some of the council members", "I have one ... six vote(s) so far", "I have seven
+votes! I should go and speak to Brundt again"), then one section per trial in a fixed order: Navigator, Merchant, Hunter,
+Seer, Warrior, Reveller, Bard. A trial not started is one blank line (the Merchant three), a passed one its struck "I now
+have the X's vote at the council" (the Merchant's after two blanks); full stops as live has them. Running sections:
+
+- Hunter, Reveller, Seer: the header "The X will vote for me if I can pass his trial" and the task line.
+- Merchant: header, "Someone in this town has a rare flower that he wants.", a blank, the current request's line, a
+  blank. Only the armourer's ("...a rare inedible fish...", t2582) is captured; other links show none.
+- Bard: header, task, the three steps, then by the lyre held: golden wool (t323), strung lyre (t452), enchanted (t611).
+- Ours: the Navigator's and the Warrior's running lines (no recording reads them), in the captured headers' pattern.
+
+## Rellekka's townsfolk
+
+`fremenniktrials/Townsfolk.FremennikTrials.js`, registered after every quest (Quests.plugin.js) so a later Fremennik
+quest's own stage window answers a shared NPC first:
+
+- While the quest runs, the townsfolk not on the council play the quest page's "not a council member" talk (1002313 t701
+  Bjorn, t707 Eldgrim, t2390 Agnar; the others the Wiki's).
+- Once it is complete, every Rellekka NPC plays their own page's after-the-quest talk, as live does (1002313
+  t7650-t8337): Eldgrim, Bjorn, Thora, Askeladden, Sigli, Inga, Skulgrimen, Thorvald, Sigmund, Jarvald (his Waterbirth
+  trip is free there), Haskell, Torfinn, Agnar, Yrsa, Peer, Swensen, Olaf, the fish monger, Manni, Lalli and the bouncer.
+  The trial units stop answering at completion. The module answers those talks' conditions (inventory space, a pet rock
+  kept, 1,000 coins, Jarvald's armour parts by item name) and hand-outs (Askeladden's new pet rock, Lalli's fleece for
+  1,000 coins, Wiki; with a full inventory the fleece goes on the floor). Brundt's "(Charm) Can I have a new name?" stays
+  hidden: its rename ("[new Fremennik name] [honorific]") is not implemented; live showed his four options (t7563).
+- Brundt after the quest, before the Exiles: "Ask for a quest. | Ask about anything else." (the Seal of Passage and
+  mountain camp options once Lunar Diplomacy / Mountain Daughter are started); "Ask for a quest." is his "Not at the
+  moment" line and the requirements message box while the Exiles cannot start (t7551-t7563).
+- Olaf's Music cape is his page's "About the Music Cape..." (Music.plugin.js answers its conditions and the sale); the
+  invented "Buy a music cape" menu is gone.
+- Yrsa's "I'd like to change my shoes" opens the makeover on shoes (1002313 t8292; Makeover.plugin.js).
+- Ferries (`plugins/world/data/ferries.json` gates): the Sailor's Miscellania option mid-quest plays his "not a council
+  member" lines (1002313 t3630; 1001646 t1505); after the Trials and before the Isles, Mord and Maria refuse with their
+  message boxes (t7989, t8001, t8014).
+- Recorded differences: Waterbirth landings 2543,3762 out and 2620,3685 back (1002313 t8088, t8119), against ours
+  2545,3761 and 2621,3683 from recording 2714. Not done: misc_visited / misc_approval 32 on the first Miscellania
+  arrival (t7924; Throne of Miscellania's state) and dag_island_quick_travel (t8081).
 
 ## Manni the Reveller
 
@@ -78,10 +129,12 @@ the win), 1001364 (rev 241).
   - One bang per object: FIRECRACKER is cleared.
   - Wiki: without the object in the pipe, Manni's "Thinking of cheating my test, outerlander?" plays.
 - **Poison salesman** (t4461-4652): 250 coins for the low-alcohol keg. "The salesman takes a deep
-  breath." and "He seems to have finished for the time being." are message boxes. Ours: once the pitch
-  has been heard (attribute `quest.fremennik_trials.poison_pitch`) or a keg bought, his "again" talk
-  plays. Its Yes and No replay the pitch's own Yes and No, so a lost keg can be bought again. Before and
-  after the quest he plays his own page.
+  breath." and "He seems to have finished for the time being." are message boxes. Every Talk-to while the
+  quest runs opens on "Talk about the Murder Mystery Quest | Talk about the Fremennik Trials" (1002313
+  t1193, t1203, t1217). Once the pitch has been heard (attribute `quest.fremennik_trials.poison_pitch`, Ours)
+  or a keg bought, the Fremennik option is his "again" offer; its Yes and No are the pitch's own and answer
+  on the pick's tick (t1214, t1222), so a lost keg can be bought again. Before and after the quest he plays
+  his own page.
 - **After the quest (Wiki):** Manni's own page `after-the-fremennik-trials` ("Hey! It's [Fremennik
   name]!"). He gives a beer (RSKxfK). Ours: no beer when the inventory is full.
 - **Lit object timer (Wiki):** a lit object still in the inventory after 117-167 ticks (70-100 s)
@@ -91,8 +144,7 @@ the win), 1001364 (rev 241).
 - Not covered:
   - The busy varbit 12393.
   - The area sound reaches only the player who switched the kegs. Live's sound_area is zone-wide.
-  - Text typos in the data (gap 12): "As, I see...", "As you wish, outerlander;", "Alsho feel...". These are
-    osrsreboxed-db fixes. The overhead "What was THAT?" is sent by the unit, so the data's "what was THAT?" is not used.
+  - The overhead "What was THAT?" is sent by the unit, so the data's "what was THAT?" is not used.
 
 ## Olaf the Bard
 
@@ -106,14 +158,14 @@ Captures: 1002236, 1002247, 1002250 (rev 242), 1001364 (rev 241). Test: `server/
 | Lalli | First talk; with the pet rock the plan, ending in a message box (t4129). After the plan (bit `quest.fremennik_trials.bard` 0, or any soup item for old saves) Lalli's "talking-to-lalli-again" (Wiki). After the soup: the fleece arrives with "Here you go. Hah! ..." (t4213). |
 | Askeladden | Rock + varbit askelladen_hasop 6486=1 as his last line ("Sure thing buddy, although...") shows (t4008); varbit resent at login (bit 1). Afterwards / lost rock: the "again" variant, whose lost-rock branch gives another (Wiki). |
 | Rock soup | Each item on Lalli's Stew: its own "You put a potato/an onion/a cabbage/your pet rock into the cauldron."; vegetables then Lalli "It am ready now?" / "Not just yet..."; the 4th item (any order) plays the done branch (2e7LZD) (1002236 t4140-4186, 1001364 t1975-2064). Trial not started: Lalli's own "attempting-to-put-anything" line (Wiki). |
-| Spinning | Fleece on a spinning wheel or the wheel's Spin with a fleece held: seq 13138, loc anim 466, sound 2590; the wool in the fleece's slot 3 ticks later, 2.5 Crafting XP (Wiki), no message, no menu (1002236 t4412-4415, 1001364 t2419). Rellekka's wheel before the quest: "Only Fremenniks may use this spinning wheel." (Wiki). |
-| Stringing | Golden wool on the unstrung lyre: "You attach the golden strings to the lyre.", the lyre in the unstrung lyre's slot, 1 Fletching XP, same tick (t4419). Under 25 Fletching: the data's message. |
+| Spinning | Fleece on a spinning wheel (2 ticks after arrival: 1002313 t317-319, 1002236 t4410-4412) or the wheel's Spin with a fleece held: seq 13138, loc anim 466, sound 2590; the wool in the fleece's slot 3 ticks later, 2.5 Crafting XP (Wiki), no message, no menu (1002236 t4412-4415, 1001364 t2419). Rellekka's wheel before the quest: "Only Fremenniks may use this spinning wheel." (Wiki). |
+| Stringing | Golden wool on the unstrung lyre: "You attach the golden strings to the lyre.", the lyre in the lower of the two slots, 1 Fletching XP, same tick (t4419; 1002313 t331, 1002247 t5862, 1001364 t2429). Under 25 Fletching: the data's message. |
 | Strung lyre Play | Player line "I really wouldn't know where to begin playing anything on this..." (1001364 t2435). |
 | Altar | Raw shark / manta ray / sea turtle on the Strange altar with the strung lyre held: "Fossegrimen has enchanted your lyre so that you may play it.", seq 8315, spotanim 758, sound 136, Fossegrimen (owner-only) rises at 2626,3596 facing the player, the enchanted lyre goes into the fish's slot, her blessing line (chatneu2) (1002236 t4800). She stays until the player is more than 16 tiles away (t4825) or logs out. |
-| Summon / Talk-to | Fossegrimen rises (once) and plays "talking-to-the-fossegrimen" (first line chatquiz1); a fish not held is a message box (1001364 t2661-2700). A held worthy fish picked there enchants as the altar does (data: jump to the blessing; no capture). |
-| Backstage door | With the enchanted lyre: inviswall 38848 at 2667,3683 + viking_door_inactive 4249 rot 1 at 2666,3683, sound 62, the player walks through; +1 the bouncer's "entering-the-backstage" line; +2 the door is back. Leaving: the same swap, no line (1002250 t805-808). Without the lyre: the bouncer page's refusal (Wiki; after the trial its "after-completing" variant). |
-| Tuning | Play on the enchanted lyre off stage (or with no trial to pass): T+1 "You withdraw your lyre." + seq 1318; T+2/5/8/11 "Doh Ray Me So." / "Fah La Ti Doh." / "La La La La." / "De-Doo-De-Doo." with seq 1321, silence, jingle 165/164; T+14 seq 1320 + jingle 163; T+16 "Your lyre is perfectly tuned.". Walking stops it (1001364 t2712-2730). |
-| Performance | On stage (2655-2662, 3683-3685) in the trial: M "You withdraw your lyre." (movement held, faces the hall); M+1 seq 1318; M+2/6/10/14 the ballad overheads + seq 1321 + silence + jingle 165/164; M+18 "Your lyre is perfectly tuned." / "Congratulations! You have completed the Bard's Trial!" / "As you finished playing you felt Fossegrimen's power leave you...", seq 1319, jingle 163, Olaf's two chat_left lines (chatneu3, chatneu2). Last continue: "You feel the musical ability from the Fossegrimen leave you...", the vote, enchanted lyre(s) back to strung lyre(s), movement freed (1002250 t814-846, 1002236 t5724-5752, 1001364 t2844-2868). Fridgeir (if near) heckles "Is that supposed to impress us outerlander?" then "I do such feats before breakfast!" 3 ticks later. |
+| Summon / Talk-to | Fossegrimen rises (once) and plays "talking-to-the-fossegrimen" (first line chatquiz1); a fish not held is a message box (1001364 t2661-2700). A held worthy fish picked there enchants as the altar does, all on the pick's tick (1002313 t524). |
+| Backstage door | With the enchanted lyre: inviswall 38848 at 2667,3683 + viking_door_inactive 4249 rot 1 at 2666,3683, sound 62, the player walks through; +1 the bouncer's "entering-the-backstage" line (+0 in 1002313 t804), he and the player face each other; +2 the door is back. Leaving: the same swap, no line (1002250 t805-808). Without the lyre: the bouncer page's refusal (Wiki; after the trial its "after-completing" variant). |
+| Tuning | Play on the enchanted lyre off stage (or with no trial to pass): W "You withdraw your lyre." + seq 1318 (W the click tick standing, 1002313 t536; a step later after a walk, 1001364); W+1/4/7/10 "Doh Ray Me So." / "Fah La Ti Doh." / "La La La La." / "De-Doo-De-Doo." with seq 1321, silence, jingle 165/164; W+13 seq 1320 + jingle 163; W+15 "Your lyre is perfectly tuned.". Walking stops it (1001364 t2712-2730, 1002313 t539). |
+| Performance | On stage (2655-2662, 3683-3685) in the trial: M "You withdraw your lyre." (movement held, faces the hall); M+1 seq 1318; M+2/6/10/14 the ballad overheads + seq 1321 + silence + jingle 165/164; M+18 "Your lyre is perfectly tuned." / "Congratulations! You have completed the Bard's Trial!" / "As you finished playing you felt Fossegrimen's power leave you...", seq 1319, jingle 163, Olaf's two chat_left lines (chatneu3, chatneu2). Last continue: "You feel the musical ability from Fossegrimen leave you..." (rev 243, 1002313 t863; rev 241/242 "from the Fossegrimen"), the vote, enchanted lyre(s) back to strung lyre(s), movement freed (1002250 t814-846, 1002236 t5724-5752, 1001364 t2844-2868). Fridgeir (if near) heckles "Is that supposed to impress us outerlander?" then "I do such feats before breakfast!" 3 ticks later. |
 
 Ballad: the data's conditions in its order, first true: Champions' Guild (32 Quest Points), Heroes' Quest complete, Legends' Quest complete, 99 in a non-melee skill (Wiki trivia), none. The Champions' lines are live's (every capture); the others are the data's (Wiki).
 
@@ -122,7 +174,13 @@ Ours:
 - Walking off the tree before the 3 ticks cancels the cut.
 - A second of the same soup item: "Nothing interesting happens.".
 - Summon-menu pick with a raw bass, or with no strung lyre: the talk just ends. Raw bass / the lyre itself on the altar: not handled ("Nothing interesting happens.").
-- The heckles start at a random tick M+14..M+21 (captures: M+14, M+21).
+- The heckles come in half the performances (1002236 and 1002250 had them; 1001364 and 1002313 did not, Fridgeir in view)
+  and start at a random tick M+14..M+21 (captures: M+14, M+21).
+- Olaf mid-trial: the long walkthrough the first time (1002236 t3545), the short reminder ("What do I have to do to earn
+  your vote ... again?", data `...-talking-to-him-again-afterwards`) once it has been heard (1002313 t642). What switches
+  it is ours (bit 2 of `quest.fremennik_trials.bard`). Each reminder's menu drops the option just picked (data).
+- Askeladden: the lost-rock branch hands the rock over as "Sure thing buddy!..." shows (1002313 t119); after the Bard's
+  trial he plays his own talk (t2883).
 - During the performance only movement is held; a chat closed some other way than its continue still ends the performance (vote given), so nobody stays held.
 - Not sent: tracking_logs_chopped +1 and the loot-tracker scripts on the branch, varbit last_quest_id on the vote.
 
@@ -161,9 +219,11 @@ For link i, in this order:
 1. holds its input item: the hand-over talk;
 2. holds its output item or anything later in the chain: the "after" talk;
 3. i is the next request: the request;
-4. i was asked before: its reminder (Yrsa, Skulgrimen, Fisherman, Swensen, Peer, Thorvald, Manni
-   and Thora have one). While Sigli's bowstring is wanted, the Sailor, Olaf and Yrsa ask the
-   bowstring question instead. The others repeat their request.
+4. i was asked before: its reminder (Yrsa, Brundt, Sigli, Skulgrimen, Fisherman, Swensen, Peer,
+   Thorvald, Manni and Thora have one). While Sigli's bowstring is wanted, the Sailor, Olaf and Yrsa
+   ask the bowstring question instead. Once Thora's request is heard, only Thora reminds: the earlier
+   links are asked where Askeladden's note is, each with their own answer (1002313 t3069-t3600, the
+   items dropped with every request heard). The others repeat their request.
 5. i comes later: the flower question while requests 0-4 are heard, and the bowstring question
    at 5-6 (the Wiki's "finding the ... whereabouts" sections). After that, the NPC's own talk.
 
@@ -188,8 +248,12 @@ Ours:
 - After Sigmund's trial is passed, the helpers no longer play chain talks; each NPC's own talk
   answers.
 
-Not covered: Sailor op3 "Miscellania" before completion (1001646 t1505-1509: "Hi. Are you a
-member of the council?" / "Nope. I'm just a sailor." / "Fair enough.").
+- "Ask about becoming a Fremennik" from the chain's townsfolk not on the council plays their "not a council
+  member" talk (1002313 t2178 the Sailor, t2363 Yrsa, t2536 Skulgrimen; Thora and the fisherman from the data).
+- Dropping and taking back a chain item sends only the put_down and pick2 sounds; the next link takes the item
+  back as usual (1002313 t2963-t3602).
+- The Sailor's op3 "Miscellania" while the quest runs plays "Hi. Are you a member of the council?" / "Nope.
+  I'm just a sailor." / "Fair enough." (1001646 t1505-1509, 1002313 t3630).
 
 ## Swensen the Navigator's maze
 
@@ -218,6 +282,8 @@ rev 241, 1002250):
 - Flag `NAVIGATOR` (bit 7 of `quest.fremennik_trials.flags`) is set on the exit ladder and
   cleared on "Thanks!": a player who relogs before then, or an old save that finished the maze on
   the old code, hears TyXhH2 on the next Talk-to Swensen and passes then.
+
+After passing, Swensen's talk opens with the player's "Hello!" (1002313 t6885).
 
 Wiki only (no capture): the entrance ladder before accepting plays Swensen's "Have you no manners
 outerlander?..." / "Erm.... sorry I guess."; after passing, the player's "No way am I doing that
@@ -249,9 +315,8 @@ lock under a riddle plaque. Facts from rsprox captures 1001646 (rev 241, ticks 2
   solve the riddle.". Solving does not move the player.
 - Opening the door after solving lets the player in, with `door_open` (synth 62).
 
-Riddles: MIND (1002236) and WIND (1001646) as the captures show them. LIFE, TIME and TREE are from
-the Wiki's Transcript:The Fremennik Trials. FIRE's transcript lines repeat "the sea" and "mountains",
-so its lines come from the riddle table on the quest page.
+Riddles: MIND (1002236), WIND (1001646) and FIRE (1002313 t6943) as the captures show them. LIFE, TIME and
+TREE are from the Wiki's Transcript:The Fremennik Trials.
 
 Ours:
 
@@ -299,9 +364,12 @@ doorway, `viking_door_inactive` (4249, shape 0 rot 0) stands on the inside tile 
   "You have successfully completed the Seer's Trial." and then Peer's "Incredible! To have solved my
   puzzle so quickly! I have<br>no choice but to vote in your favour!". Peer is not interacted with,
   and there is no other congratulation.
-- Leaving by the entrance from inside (Wiki uvFMwf, no capture): a message box, "If you leave by
-  this door you will fail this trial. Press continue to go through the door anyway.". Continue takes
-  the house items and walks the player out. Closing the box instead leaves the puzzle as it was.
+- Leaving by the entrance from inside (1002313 t7180-7182; Wiki uvFMwf): a message box, "If you leave by
+  this door you will fail this trial.<br>Press continue to go through the door anyway.". Continue takes
+  the house items and walks the player out on the same tick. The riddle stays solved: the door let the
+  player straight back in (t7195). Closing the box instead leaves the puzzle as it was.
+- Peer's Talk-to once Sigmund's trial has passed opens straight on his trial offer, without the
+  Merchant / Fremennik / depositing menu (1002313 t6907).
 
 Inside:
 
@@ -318,30 +386,36 @@ Inside:
   and four ticks later the find and its item, or "You find nothing of interest." when the player
   already holds one (1002236 t10042-10046, t10087-10091, 1001646 t3280).
 - Both bookcases hide the red herring, with the same four-tick search (1002236 at 2635,3665,
-  1001646 at 2634,3665). The Wiki's "north-east bookcase: nothing" is not what live does.
+  1001646 at 2634,3665). The Wiki's "north-east bookcase: nothing" is not what live does. With the
+  herring, its goop or the cooked plain herring held: "You find nothing of interest." (1002313 t7443-7449).
 - The heads: two message boxes, and the disk is given as the second one opens (1002236 t10050-10055,
   t10063). Studying the unicorn again shows the first box, then the game message "It's unusual
   because you removed it already!" (1001646 t3145). Once its disk is in the mural, the bull gives the
   single box "There is a hole in this bull head where a right eye should be." (1001646 t3259).
 - The mural: Study says "You study the mural... it appears to be missing something..." and opens
-  `viking_mural` (376). Either red disk can go in first; each gives "You put the red disk into the
-  empty hole on the mural." and "It is a perfect fit!". The second adds "The center of the mural
-  falls out!", and the vase lid takes that disk's slot. The mural loc does not change.
+  `viking_mural` (376) through script 2524 (0, 150), its six red coins (3715, zoom 116) set, each black
+  circle 3716 until its disk is in, 3715 after, and the lid outline 3717 (zoom 10) once both are
+  (1002313 t7252, t7264; which circle is which disk is ours). Either red disk can go in first; each
+  gives "You put the red disk into the empty hole on the mural." and "It is a perfect fit!". The second
+  adds "The center of the mural falls out!", and the vase lid goes to the first free slot (1002313
+  t7261, 1002236 t10147). The mural loc does not change.
 - The range and the herring: a message box ("As you cook the herring on the stove, ..."). The
   herring keeps its slot as a plain herring, and the goop goes into a new slot. The goop on the
   wooden disk: "You coat the wooden coin with the sticky red goop.".
 - Water: from the tap, "You fill the bucket from the tap." (a partly full bucket too). Pouring says
   "You fill the <target> to the brim." when the target is now full, and "You empty the <source>
   into the <target>." otherwise. Both items change in their own slots. The drain plays
-  `throw_bucketofwater` 1077 + `holy_water_pour` 1733 with "You empty the jug down the drain.".
+  `throw_bucketofwater` 1077 + `holy_water_pour` 1733 on arrival, and a tick later the vessel empties with
+  "You empty the jug down the drain." (1002313 t7321-7322, 1002236 t10177-10178, 1001646 t3307-3308).
 - The scales chest (4170): the bucket at four-fifths gives three lines plus `human_openchest`, and
   the bucket's slot becomes the vase (1002236 t10204). Open, a full jug, an empty bucket and a full
   bucket give the Wiki's lines.
 - The vase: Shake gives a message box (1001646 t3373; the water and frozen versions are Wiki). The
-  tap fills it, and the lid seals it in its slot. The frozen table shatters the sealed vase of
+  tap fills it, and the lid seals it in the lower of the two slots (1002313 t7380, 1002236 t10223). The frozen table shatters the sealed vase of
   water into the frozen key, and the range melts the ice (1002236 t10212-10242).
-- From the Wiki only: the red herrings' boxes and crates (magnet, thread, toy ship, small pick) and
-  their lines, the frozen-table and range lines for empty and frozen vessels and the vase, the lid
+- The red herrings' piles on the puzzle floor: the magnet in 4183 at 2636,3660, the toy ship in 4186,
+  the thread in 4184, each "You search the boxes..." and the find four ticks later (1002313
+  t7450-7490). From the Wiki only: the small pick (4185) and the piles' item lines, the frozen-table and range lines for empty and frozen vessels and the vase, the lid
   on a frozen vase, and the wooden disk on the mural.
 
 Ours:
@@ -355,9 +429,8 @@ Ours:
   Close on an open trapdoor shuts it for that player.
 - A lost bucket, jug, herring or disk can be found again. Live's answer to a second search while
   not holding one is not captured.
-- Which chest and which pile the Wiki's compass words mean. Only the chest at 2635,3660 gives the
-  jug. 4183 at 2633,3660 gives the magnet, 4186 the toy ship, 4185 the small pick, 4184 the
-  thread, and 4183 at 2636,3660 gives nothing.
+- Both chests give the jug (the south one, 1002236 t10091; the east one at 2638,3662, 1002313 t7483 with a
+  jug of water held); with an empty jug held, nothing (1001646 t3280). 4183 at 2633,3660 holds nothing.
 - On the scales, partial jugs and buckets under four-fifths are "too light". When one pour both
   fills the target and empties the source, the "to the brim" line is used.
 - Remove-lid splits a sealed vase back into its vase and the lid, silently.
@@ -372,15 +445,17 @@ Live (rsprox 1002236 rev 242 t8254-9696; 1001646 rev 241 t2279-2722):
 - **Hut ladder** `viking_warrior_ladder` 4187 op2 Climb-down: seq 828 and the move to
   2671,10098,2 on the same tick (t8388); 3 ticks later "Explore this battleground and find your
   foe..." (data U98HqS, t8391). The generic Ladders plugin is bypassed through `ladders:climb`.
-- **Refusal** (data YSTKi0, Wiki only): Thorvald's two rule lines, the player stays. What counts
-  (Wiki, Thorvald's section): worn or carried, any item the cache gives a worn slot other than
-  amulet/ring, except god books, boots of lightness and H.A.M. pieces; carried runes; carried
+- **Refusal** (data YSTKi0; 1002313 t4149-4157, carrying a scimitar, staves, axes, runes and Graceful):
+  Thorvald's two rule lines, the player stays. What counts (Wiki, Thorvald's section): worn or carried,
+  any item the cache gives a worn slot other than amulet/ring, except bracelets (1002313 t4724 went in
+  wearing a combat bracelet), god books, boots of lightness and H.A.M. pieces; carried runes; carried
   fletching materials (logs, arrowtips, arrow shafts, headless arrows, bolt tips, `(unf)`, `(u)`).
   Ours: the name patterns stand in for the Wiki's item classes; a rune pouch is not inspected.
 - **Arena** (an `Area`, 2641-2673 x 10064-10100 plane 2, the cache's walkable room plus a tile):
   dropping says "You cannot drop items in this area." (1001646 t2291) and keeps the item.
-- **Koschei comes** after the player has stood still 9-15 ticks (241: 9, t2322-2331; 242: 15,
-  t8397-8412), on a free tile next to the player (diagonals first, both captures), owner-only,
+- **Koschei comes** 24-55 ticks after the player enters, walking or not (1002236 24, 1001646 52, 1002313 55
+  with the player walking throughout; ours: any tick in that range), on a free tile next to the player
+  (diagonal in 1002236 and 1001646, north in 1002313), facing south, owner-only,
   with a random overhead from the data's random list, smokepuff 86 + area sound 1930 (range 10)
   on his tile, varbit 14192 = 7 and the NPC hint arrow. He attacks first (t8415).
 - **Forms**: one NPC. At 0 HP (onNpcBeforeDeath, preventDeath) the player is locked (varbit
@@ -403,9 +478,12 @@ Live (rsprox 1002236 rev 242 t8254-9696; 1001646 rev 241 t2279-2722):
 
 Wiki only / Ours:
 
-- Wiki: prayer is kept at 0 through form 4.
-- Wiki (data ppj2xU): 10 minutes (1000 ticks) in form 3 or 4 and he leaves with the two data
-  messages; the fight starts over (he comes back in form 1 after the player stands again).
+- Form 4 drains prayer every tick; restores work (1002313 t5151-5188: 36, 32, 29, 26, 23, 21 ...). Ours:
+  a tenth of the current points, at least 1, fitted to that series (Protect from Melee was on too).
+- Wiki (data ppj2xU): 10 minutes (1000 ticks) in form 3 and he leaves with the two data messages; the
+  fight starts over. Not form 4: 1002313 fought it 1409 ticks (t5138-t6547) with no timeout.
+- After the quest Thorvald plays his own page's after-the-Trials talk (1002313 t7853), and the hut ladder
+  the player's "...now that I have been accepted as a member of the Fremennik clan." (t7860).
 - Wiki (data -dImPE): killing form 4 removes him with a smokepuff, gives the Fremennik blade,
   "Congratulations! you have completed the warriors trial!" (WSyuYN), trial passed.
 - Wiki "safe death" in forms 1-3. Ours: death prevented, no item loss, HP/prayer restored,
@@ -419,15 +497,8 @@ Wiki only / Ours:
 
 Data gaps for osrsreboxed-db (The Fremennik Trials):
 
-- WzpjVF is missing Thorvald's lines 3 and 4 (1001646 t2703-2709): "I did not say you had to,
-  outerlander! All I asked was that you fought to the death! And you did! The death was your
-  own!" / "I was not interested in how strong you are! I was interested in how BRAVE you are!
-  You fought a superior enemy to your very last breath - THAT is bravery." Its message KVGiuL
-  comes before the first Thorvald line (with "...still alive somehow?"), not after line 3.
-- The random list: live "Outerlander... you made a mistake coming down here!" (data "you have
-  made a mistake"); live "What kind of person calls himself <name>?" (data "What kind of a
-  person calls [him/her]self [player name]?"); missing "Hey outerlander! Let's see what you
-  have!" (1001646 t2440).
+- WzpjVF's message KVGiuL comes before the first Thorvald line (with "...still alive somehow?"), not after
+  line 3. (Its missing lines 3 and 4 and the random list's wording are fixed in the data now.)
 - Liuu-2 has no variant for a player without prayer: "You show some skill at combat... I will
   hold back no longer!" (1001646 t2582); the unit cuts the long line at its first "!".
 
@@ -457,7 +528,8 @@ Captures: 1002236 (rev 242, t3327-t3461 offer, t4833-t5674 hunt and return), 100
   - Then: "The talisman guides you <dir>." The direction is one of 8, taken from sign(dx) and sign(dy) toward the
     butterfly's live tile. A cardinal is used when one axis is equal (1002250 t156 "east").
 - A hunt whose butterfly expired says "moved" on its next Locate. The 1002249 and 1002250 first clicks did this.
-- Not modelled: in one segment, 1002236 t5378-t5496, 7 of 13 answers did not point at the butterfly. Either the
+- Not modelled: in one segment, 1002236 t5378-t5496, 7 of 13 answers did not point at the butterfly (1002313's ten all
+  did, t1776-t1825). Either the
   Draugen has a hidden position that loosely follows the butterfly, or live adds noise. We always point at the
   butterfly.
 
@@ -485,13 +557,18 @@ Captures: 1002236 (rev 242, t3327-t3461 offer, t4833-t5674 hunt and return), 100
 - Ours: one Draugen per hunt. While it is out, Locate says "here". It leaves after 500 ticks, or at a Locate made
   more than 16 tiles from it, so a fled or died-to hunt can find it again.
 - Wiki: losing the charged talisman after the kill restarts the hunt. Sigli gives a new uncharged one, and so does a
-  Locate on an uncharged one.
+  Locate on an uncharged one. A talisman in the bank counts as kept: Sigli's "Laziness" line and no new one (1002313
+  t1550, t1587); only one in neither place is lost (t1761).
+- After the trial the player asks "So can I rely on your vote..." before Sigli's "Absolutely outerlander!..." (1002313
+  t1987).
 - Ours: a Draugen killed without the uncharged talisman in the inventory charges nothing.
 - Logout removes the player's butterflies and Draugen. After a relog the next Locate starts a fresh hunt.
 - Not done (Wiki): "Locate with a dropped/old talisman destroys it".
 
 ### Known data gaps (shared data, not changed)
-- npc-combat-sounds.json has no 3922 entry. Live: attack unarmed_punch 2566, hit ghost_hit 439.
+- npc-combat-sounds.json has 3922's hit (ghost_hit 439) and no attack. Live sends unarmed_punch 2566 on its swings, and
+  Koschei's forms staff_stab 2562 / human_hit 513 (1002313); the miner (scripts/mine-npc-combat-sounds.mjs), rerun over
+  every transcript, keeps none of them, as the unarmed player's own swing sends the same sounds.
 - In our loaded definition, 3922 swings seq 422 (seen in the test) and blocks with 424, although npc-animations.json
   has [390, 388]. Live: 390 (human_sword_slash) and 388 (human_sword_def). `NpcDefinition.getMaxHit()` is 1 while
   monsters-complete.json says 7, and live hits went up to 7. Whether combat uses that 1 was not checked.

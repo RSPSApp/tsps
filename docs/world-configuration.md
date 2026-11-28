@@ -1090,7 +1090,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `MapEditorCommands` | MapEditorCommands | world | yes | Lets the world owner load saved map packs without restarting. |
 | `MultiCombatApi` | MultiCombatApi | world | yes | Serves the bounds of multi-combat zones to the client over the content API, without exposing the full development world data. |
 | `Museum` | Museum | world | yes | Varrock Museum Kudos: the Dig Site cleaning activity, the finds storage crate, display cases, Historian Minas's quest timeline reports, Curator Haig Halen's salvaging relics, the fossil displays and the wall maps. (members only) |
-| `Music` | Music | world | yes | The music tab: track unlocking, jukebox selection, now-playing, the music cape from Olaf the Bard and air guitar unlock. |
+| `Music` | Music | world | yes | The music tab: track unlocking, jukebox selection, now-playing, the music cape from Olaf the Bard's after-the-Trials talk and air guitar unlock. |
 | `PlayerOnlineTimer` | PlayerOnlineTimer | world | yes | Tracks each player's current session and lifetime online seconds, for other plugins to read through events. |
 | `ProceduralRegionStream` | ProceduralRegionStream | world | yes | Developer ::procregion command that generates and streams a procedural town of buildings and streets into a map region for the staff member. |
 | `Quetzals` | Quetzals | world | yes | Quetzal Transport System: Renu's flights, landing sites, quetzal whistles and recharges from Pitri, and Primio's Varrock to Fortis trips. (members only) |

@@ -156,5 +156,7 @@ module.exports = {
       require(`./quests/${quest}.Quest`)(questApi);
     }
     if (api.core.WorldDefinition.isMembersWorld()) require("./SirTiffy.Quests")(api);
+    // After every quest, so a later Fremennik quest's own stage window claims a shared Rellekka NPC first.
+    if (api.core.WorldDefinition.isMembersWorld()) require("./fremenniktrials/Townsfolk.FremennikTrials")(api);
   },
 };

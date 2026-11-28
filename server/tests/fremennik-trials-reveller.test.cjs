@@ -348,12 +348,13 @@ test("the poison salesman sells the low-alcohol keg for 250 coins (1002236 t4461
   assert.equal(amount(f, ID.COINS), 50);
   assert.equal(amount(f, ID.LOW_KEG), 1);
   assert.deepEqual(f.messages, [], "no narration goes to chat");
-  // Talked to again: the short offer (Ours), whose Yes buys another.
+  // Talked to again: the same menu, then the short offer, whose Yes answers in the pick's tick
+  // (rsprox 1002313 t1203-1205, t1222).
   await talk(f, salesman);
+  await choose(f, "Talk about the Fremennik Trials");
   assert.equal(shown(f).text, "I understand you have some low alcohol beer for sale...?");
   await until(f, "Yes | No");
   await choose(f, "Yes");
-  ticks(f, 2);
   assert.equal(shown(f).text, "Yes please!");
   await finishChat(f);
   assert.equal(amount(f, ID.LOW_KEG), 1, "50 coins buy nothing");
@@ -477,4 +478,20 @@ test("a lit object kept 70-100 s explodes in the inventory (Wiki)", async (t) =>
   assert.ok(boom && boom.tick - lit >= 117 && boom.tick - lit <= 167, JSON.stringify(boom));
   assert.equal(amount(f, ID.LIT), 0);
   assert.ok(f.chats.some((c) => c.who === "player" && c.text === "Ow!"));
+});
+
+test("after the quest the salesman's Fremennik option sells nothing (review of #6942)", async (t) => {
+  const f = actor(t, { items: [[ID.COINS, 1000]], at: [2696, 3491, 0] });
+  QuestRuntime.getRegisteredQuests().findLast((entry) => entry.key === "fremennik_trials").setStage(f.player, 8);
+  f.player.setAttribute("quest.fremennik_trials.poison_pitch", 1);
+  const salesman = spawn(f, ID.POISON, [2697, 3491, 0]);
+  await talk(f, salesman);
+  if (MultiChatboxPrompt.getPending(f.player)?.options?.includes("Talk about the Fremennik Trials")) {
+    await choose(f, "Talk about the Fremennik Trials");
+    for (let i = 0; i < 12 && shown(f); i++) {
+      if (MultiChatboxPrompt.getPending(f.player)?.options?.includes("Yes")) await choose(f, "Yes"); else await continueLine(f);
+    }
+  }
+  assert.equal(amount(f, ID.COINS), 1000);
+  assert.equal(amount(f, ID.LOW_KEG), 0);
 });

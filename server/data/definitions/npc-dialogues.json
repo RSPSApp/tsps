@@ -186544,7 +186544,7 @@
               "text": "Ask about anything else.",
               "steps": [
                 {
-                  "npc": "Hello again [brother/sister] [Fremennik name]! I hope your travels have brought you wealth and joy! What compels you to visit me on this day?"
+                  "npc": "Hello again, [Fremennik name]! I hope your travels have brought you wealth and joy! What compels you to visit me on this day?"
                 },
                 {
                   "type": "choice",
@@ -186556,7 +186556,7 @@
                           "player": "I just came to say hello."
                         },
                         {
-                          "npc": "Well met, [brother/sister] [Fremennik name]. It is always good to see your face in glorious Rellekka once more!"
+                          "npc": "Well met, [Fremennik name]. It is always good to see your face in glorious Rellekka once more!"
                         }
                       ]
                     },
@@ -186578,7 +186578,7 @@
                           "player": "Nice hat!"
                         },
                         {
-                          "npc": "Aye, that it is [brother/sister] [Fremennik name]. Should you desire one of your own, you should go to Skulgrimen's shop and see what they have available!"
+                          "npc": "Aye, that it is, [Fremennik name]. Should you desire one of your own, you should go to Skulgrimen's shop and see what they have available!"
                         }
                       ]
                     },
@@ -186613,7 +186613,7 @@
                                   "npc": "Well, it was a raiding party like any other. We had just struck one of the smaller northern islands to harvest supplies by combat, as our laws allow,"
                                 },
                                 {
-                                  "npc": "when we saw a figure in the icey waters. As we were at least a 3 week sail from any port, and saw no other ships nearby, he must have been there some time."
+                                  "npc": "when we saw a figure in the icy waters. As we were at least a 3 week sail from any port, and saw no other ships nearby, he must have been there some time."
                                 },
                                 {
                                   "npc": "We could not leave someone to the cold death of the ocean, even an outerlander, so we fished him aboard. He muttered continually, but his words made no sense."
@@ -186634,7 +186634,7 @@
                                   "npc": "He suddenly left her house one day, fully healed, and able to speak to us as though nothing had happened to him."
                                 },
                                 {
-                                  "npc": "He still had no recollection of how he had come to be in the icey ocean, or of who he was, or where he had come from, but this did not matter to us or him."
+                                  "npc": "He still had no recollection of how he had come to be in the icy ocean, or of who he was, or where he had come from, but this did not matter to us or him."
                                 },
                                 {
                                   "npc": "He took his trials of adulthood, as you did, and has been a boon to our clan ever since. Someday I fear he may regain his memory, and leave us for his past..."
@@ -245861,8 +245861,8 @@
                 },
                 {
                   "type": "message",
-                  "text": "The workman winks at you",
-                  "id": "QaYRK9"
+                  "text": "The workman winks at you.",
+                  "id": "8hS3hT"
                 },
                 {
                   "npc": "Just make sure yer don't get me none of that non alcoholic rubbish from that poison salesman guy at the tavern!"
@@ -245883,8 +245883,8 @@
                 },
                 {
                   "type": "message",
-                  "text": "The workman winks at you",
-                  "id": "Tg1ehy"
+                  "text": "The workman winks at you.",
+                  "id": "5A_4Fr"
                 },
                 {
                   "npc": "Just make sure yer don't get me none of that non alcoholic rubbish from that poison salesman guy at the tavern!"
@@ -245895,9 +245895,6 @@
         }
       ],
       "standard-dialogue-when-using-a-beer-or-beer-tankard-on-the-workman": [
-        {
-          "npc": "A bit early in the day fer that ain't it?"
-        },
         {
           "npc": "Ta very much, like. That'll hit the spot nicely. Here, you can have this. I picked it up as a souvenir on me last hols."
         },
@@ -658433,6 +658430,9 @@
                                   "action": "teleport",
                                   "action_source": "text",
                                   "id": "vb-jLW"
+                                },
+                                {
+                                  "npc": "I would head straight for the cave and not tarry too long [Fremennik name], the cold winds on this island can cut right through you should you spend too long in them."
                                 }
                               ]
                             },
@@ -762547,16 +762547,6 @@
           "player": "Hello there."
         },
         {
-          "type": "line",
-          "speaker": "Lokar Searunner",
-          "text": "Don't talk to me outerlander! I don't have time for the likes of you!",
-          "speaker_ids": [
-            3855,
-            6648,
-            9306
-          ]
-        },
-        {
           "player": "Hey! Don't call me outerlander! I'm known as the mighty [Fremennik name]!"
         },
         {
@@ -798809,6 +798799,13 @@
         },
         {
           "npc": "Maybe you should speak with Rellekka's Chieftain."
+        }
+      ],
+      "travelling-to-neitiznot-before-the-fremennik-isles": [
+        {
+          "type": "message",
+          "text": "You'll have to talk to Mord before Maria will let you travel with her.",
+          "id": "XLYr8c"
         }
       ],
       "after-the-fremennik-isles": [
@@ -843185,6 +843182,13 @@
         },
         {
           "npc": "Maybe you should speak with Rellekka's Chieftain."
+        }
+      ],
+      "travelling-to-jatizso-before-the-fremennik-isles": [
+        {
+          "type": "message",
+          "text": "You'll have to get to know Mord a little better before you can travel with him.",
+          "id": "tp-Z16"
         }
       ],
       "after-the-fremennik-isles-at-rellekka": [
@@ -1353769,8 +1353773,12 @@
             },
             {
               "type": "line",
-              "speaker": "Maira Gunnars",
-              "text": "You should speak with my husband. He has been looking for you."
+              "speaker": "Maria Gunnars",
+              "text": "You should speak with my husband. He has been looking for you.",
+              "speaker_ids": [
+                1882,
+                1883
+              ]
             },
             {
               "type": "end"
@@ -1353798,7 +1353806,7 @@
             {
               "type": "line",
               "speaker": "Mord Gunnars",
-              "text": "Hello, are you [Fremennik name]? by any chance?",
+              "text": "Hello, are you [Fremennik name] by any chance?",
               "speaker_ids": [
                 1900,
                 1940
@@ -1366070,15 +1366078,41 @@
           "player": "I know this is a bit of a long shot... but are you a member of the council of elders?"
         },
         {
-          "type": "line",
-          "speaker": "Bjorn",
-          "text": "I'm now a member of the counshil of eblars? Thanksh a lot buddy! (hic) Letsh have a drink to celebrate!",
-          "speaker_ids": [
-            3916
+          "type": "random",
+          "options": [
+            {
+              "text": "Dialogue 1",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Bjorn",
+                  "text": "I'm now a member of the counshil of eblars? Thanksh a lot buddy! (hic) Letsh have a drink to celebrate!",
+                  "speaker_ids": [
+                    3916
+                  ]
+                },
+                {
+                  "player": "Uh... I'll take that as a no."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 2",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Bjorn",
+                  "text": "(hic) Washa counshil wha?",
+                  "speaker_ids": [
+                    3916
+                  ]
+                },
+                {
+                  "player": "I guess not."
+                }
+              ]
+            }
           ]
-        },
-        {
-          "player": "Uh... I'll take that as a no."
         }
       ],
       "the-non-council-members-thora-the-barkeep": [
@@ -1366103,15 +1366137,41 @@
           "player": "I know this is a bit of a long shot... but are you a member of the council of elders?"
         },
         {
-          "type": "line",
-          "speaker": "Eldgrim",
-          "text": "Counshil alwaysh meshing up my drinksh 'do thish, do that, pass this tesht something something something something'.. man I hate that counshil.",
-          "speaker_ids": [
-            3917
+          "type": "random",
+          "options": [
+            {
+              "text": "Dialogue 1",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Eldgrim",
+                  "text": "Counshil alwaysh meshing up my drinksh 'do thish, do that, pass this tesht something something something something'.. man I hate that counshil.",
+                  "speaker_ids": [
+                    3917
+                  ]
+                },
+                {
+                  "player": "I guess you're not then."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 2",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Eldgrim",
+                  "text": "(hic) Washa counshil wha?",
+                  "speaker_ids": [
+                    3917
+                  ]
+                },
+                {
+                  "player": "I guess not."
+                }
+              ]
+            }
           ]
-        },
-        {
-          "player": "I guess you're not then."
         }
       ],
       "the-non-council-members-inga": [
@@ -1366461,6 +1366521,64 @@
               ]
             }
           ]
+        }
+      ],
+      "the-non-council-members-sailor": [
+        {
+          "type": "call",
+          "branch": "-_cyaA"
+        }
+      ],
+      "the-non-council-members-sailor-travelling-to-miscellania-during-the-trials": [
+        {
+          "type": "call",
+          "branch": "-_cyaA"
+        }
+      ],
+      "the-non-council-members-yrsa": [
+        {
+          "player": "Are you a member of the council of elders?"
+        },
+        {
+          "type": "line",
+          "speaker": "Yrsa",
+          "text": "No, sorry, I'm not. Best look elsewhere outerlander.",
+          "speaker_ids": [
+            3933
+          ]
+        },
+        {
+          "player": "Okay, thanks."
+        }
+      ],
+      "the-non-council-members-agnar": [
+        {
+          "player": "Hello. Are you a council member?"
+        },
+        {
+          "type": "line",
+          "speaker": "Agnar",
+          "text": "Could be. Who wants to know?",
+          "speaker_ids": [
+            3937,
+            9273
+          ]
+        },
+        {
+          "player": "Er... I do."
+        },
+        {
+          "type": "line",
+          "speaker": "Agnar",
+          "text": "Well, yes I am. Why do you want to find a council member?",
+          "speaker_ids": [
+            3937,
+            9273
+          ]
+        },
+        {
+          "type": "missing",
+          "id": "HbDB4v"
         }
       ],
       "the-council-members-manni-the-reveller": [
@@ -1366842,6 +1366960,9 @@
               "text": "No",
               "steps": [
                 {
+                  "player": "I wasn't planning on it, no."
+                },
+                {
                   "type": "line",
                   "speaker": "Council workman",
                   "text": "Aye, that's what I told t'gaffer. Nobody wants to go up and hang out with a buncha dumb barbarians when there's a perfectly good inn to sup in, in t'seers village.",
@@ -1366907,7 +1367028,17 @@
           "type": "choice",
           "options": [
             {
-              "text": "Talk about the Murder Mystery Quest"
+              "text": "Talk about the Murder Mystery Quest",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Poison Salesman",
+                  "text": "I hear you're pretty smart to have solved the Sinclair Murder!",
+                  "speaker_ids": [
+                    4227
+                  ]
+                }
+              ]
             },
             {
               "text": "Talk about the Fremennik Trials",
@@ -1367719,9 +1367850,48 @@
                   ]
                 },
                 {
-                  "type": "jump",
-                  "reference": "previous",
-                  "id": "vy03cF"
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Remind me about Fossegrimen",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "UsugRl",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-23f8db956de8a129"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Remind me about playing on stage",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "i3acRA",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-cc4b75361edf0f9c"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "I don't need another reminder",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "guoLd1"
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -1367752,7 +1367922,7 @@
                 {
                   "type": "line",
                   "speaker": "Olaf the Bard",
-                  "text": "the amount of time you will be blessed for. You will not be able to perform on stage without the blessing of the Fossegrimen.",
+                  "text": "the amount of time you will be blessed for. You will not be able to perform on stage without the blessing of Fossegrimen.",
                   "speaker_ids": [
                     802,
                     9274
@@ -1367768,9 +1367938,48 @@
                   ]
                 },
                 {
-                  "type": "jump",
-                  "reference": "previous",
-                  "id": "7RjfT4"
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Remind me about crafting a lyre",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "exWsSn",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-3827f8444dc6bfd2"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Remind me about playing on stage",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "oEptQ7",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-cc4b75361edf0f9c"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "I don't need another reminder",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "guoLd1"
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -1367826,9 +1368035,48 @@
                   ]
                 },
                 {
-                  "type": "jump",
-                  "reference": "previous",
-                  "id": "yHv1ZW"
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Remind me about crafting a lyre",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "DqYxT0",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-3827f8444dc6bfd2"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Remind me about Fossegrimen",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "ixy8jR",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-23f8db956de8a129"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "I don't need a reminder",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "guoLd1"
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -1367836,7 +1368084,90 @@
               "text": "I don't need a reminder",
               "steps": [
                 {
-                  "player": "No thanks, I think that's all pretty straight forward. I'll go and make my lyre now."
+                  "type": "call",
+                  "branch": "guoLd1"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "the-council-members-olaf-the-bard-talking-to-him-again-talking-to-him-again-afterwards": [
+        {
+          "player": "What do I have to do to earn your vote at the council of elders again?"
+        },
+        {
+          "type": "line",
+          "speaker": "Olaf the Bard",
+          "text": "Ah, it but a small thing outerlander. Simply make yourself an instrument, get the blessing of Fossegrimen, and then sing your own ballad at the longhall.",
+          "speaker_ids": [
+            802,
+            9274
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Olaf the Bard",
+          "text": "Is that clear enough, outerlander? Would you like me to repeat anything?",
+          "speaker_ids": [
+            802,
+            9274
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Remind me about crafting a lyre",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "RrIgiz",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-3827f8444dc6bfd2"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Remind me about Fossegrimen",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "YPYYhw",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-23f8db956de8a129"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Remind me about playing on stage",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "QkBj1q",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-cc4b75361edf0f9c"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "I don't need a reminder",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "guoLd1"
                 }
               ]
             }
@@ -1369380,6 +1369711,9 @@
       ],
       "the-council-members-sigli-the-huntsman-talking-to-sigli-after-defeating-the-draugen-subsequent-dialogue-with-sigli": [
         {
+          "player": "So can I rely on your vote with the council of elders in my favour?"
+        },
+        {
           "type": "line",
           "speaker": "Sigli the Huntsman",
           "text": "Absolutely outerlander! Anyone brave enough to hunt and defeat the Draugen will be a great addition to our clan!",
@@ -1370395,6 +1370729,88 @@
           ]
         }
       ],
+      "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-talking-to-brundt-talking-to-brundt-again": [
+        {
+          "type": "line",
+          "speaker": "Brundt the Chieftain",
+          "text": "Greetings again outerlander! How goes your attempts to gain votes with the council of elders?",
+          "speaker_ids": [
+            8048,
+            8145,
+            8153,
+            8161,
+            8169,
+            9263,
+            9265,
+            9266,
+            9267,
+            9268,
+            9278,
+            9279
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Ask about the Merchant's trial",
+              "steps": [
+                {
+                  "player": "I don't suppose you have any idea where I could find a map to unspoiled hunting grounds, do you?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Brundt the Chieftain",
+                  "text": "Ah, outerlander... if you wish to become a Fremennik you should try and pay more attention to what people tell you...",
+                  "speaker_ids": [
+                    8048,
+                    8145,
+                    8153,
+                    8161,
+                    8169,
+                    9263,
+                    9265,
+                    9266,
+                    9267,
+                    9268,
+                    9278,
+                    9279
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Brundt the Chieftain",
+                  "text": "Sigli the hunter is the only one who knows of such hunting grounds. Go and request his knowledge.",
+                  "speaker_ids": [
+                    8048,
+                    8145,
+                    8153,
+                    8161,
+                    8169,
+                    9263,
+                    9265,
+                    9266,
+                    9267,
+                    9268,
+                    9278,
+                    9279
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Ask about becoming a Fremennik",
+              "steps": [
+                {
+                  "type": "jump",
+                  "reference": "above",
+                  "id": "KYSn-j"
+                }
+              ]
+            }
+          ]
+        }
+      ],
       "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-sigli-s-bowstring": [
         {
           "type": "choice",
@@ -1370467,6 +1370883,47 @@
             {
               "text": "Ask about becoming a Fremennik",
               "steps": []
+            }
+          ]
+        }
+      ],
+      "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-sigli-s-bowstring-talking-to-sigli-again": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Ask about the Merchant's trial",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Sigli the Huntsman",
+                  "text": "Greetings outerlander.",
+                  "speaker_ids": [
+                    3924
+                  ]
+                },
+                {
+                  "player": "I don't suppose you have any idea where I could find a finely balanced custom bowstring, do you?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Sigli the Huntsman",
+                  "text": "If I knew I would not have asked you to go and get me one, now would I?",
+                  "speaker_ids": [
+                    3924
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Ask about becoming a Fremennik",
+              "steps": [
+                {
+                  "type": "jump",
+                  "reference": "above",
+                  "id": "skN8nL"
+                }
+              ]
             }
           ]
         }
@@ -1371333,12 +1371790,17 @@
               "text": "Ask about the Merchant's trial",
               "steps": [
                 {
-                  "player": "I don't suppose you have any idea where I could find a Champions' Token?"
+                  "player": "I don't suppose you have any idea where I could find the token to allow your seat at the champions table?"
                 },
                 {
                   "type": "line",
-                  "speaker": "Thorvald",
-                  "text": "If you can persuade one of the Revellers to give up their Champions' Token to you so that I might take their place, you may have my contract as a bodyguard."
+                  "speaker": "Thorvald the Warrior",
+                  "text": "You will need to persuade one of the revellers in the Long Hall to give up their token, and their place, in deference to my own worthiness somehow.",
+                  "speaker_ids": [
+                    3896,
+                    8146,
+                    9280
+                  ]
                 }
               ]
             },
@@ -1373174,6 +1373636,392 @@
           ]
         }
       ],
+      "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-manni": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Ask about the Merchant's trial",
+              "steps": [
+                {
+                  "player": "I don't suppose you have any idea where I could find a written promise from Askeladden to stay out of the Longhall?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Manni the Reveller",
+                  "text": "Uh... call it a crazy hunch, but did you even try asking Askeladden about that?",
+                  "speaker_ids": [
+                    3920,
+                    9275
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Ask about becoming a Fremennik",
+              "steps": [
+                {
+                  "type": "jump",
+                  "reference": "above",
+                  "id": "CQNxLv"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-thorvald": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Ask about the Merchant's trial",
+              "steps": [
+                {
+                  "player": "I don't suppose you have any idea where I could find a written promise from Askeladden to stay out of the Longhall?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Thorvald the Warrior",
+                  "text": "Not in the slightest.",
+                  "speaker_ids": [
+                    3896,
+                    8146,
+                    9280
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Ask about becoming a Fremennik",
+              "steps": [
+                {
+                  "type": "jump",
+                  "reference": "above",
+                  "id": "YJXWNo"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-peer-the-seer": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Ask about the Merchant's trial",
+              "steps": [
+                {
+                  "player": "I don't suppose you have any idea where I could find a written promise from Askeladden to stay out of the Longhall?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Peer the Seer",
+                  "text": "I'm afraid not, outerlander.",
+                  "speaker_ids": [
+                    3895,
+                    8147
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Ask about becoming a Fremennik",
+              "steps": [
+                {
+                  "type": "jump",
+                  "reference": "above",
+                  "id": "Hfs89z"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-swensen": [
+        {
+          "player": "Hello!"
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Ask about the Merchant's trial",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Swensen the Navigator",
+                  "text": "Greetings outerlander.",
+                  "speaker_ids": [
+                    3925,
+                    8148
+                  ]
+                },
+                {
+                  "player": "I don't suppose you have any idea where I could find a written promise from Askeladden to stay out of the Longhall?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Swensen the Navigator",
+                  "text": "Er... from Askeladden, maybe?",
+                  "speaker_ids": [
+                    3925,
+                    8148
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Ask about becoming a Fremennik",
+              "steps": [
+                {
+                  "type": "jump",
+                  "reference": "above",
+                  "id": "gQeOwZ"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-the-fisherman": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Ask about the Merchant's trial",
+              "steps": [
+                {
+                  "player": "I don't suppose you have any idea where I could find a written promise from Askeladden to stay out of the Longhall?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Fisherman",
+                  "text": "I never saw anything like that in my store before.",
+                  "speaker_ids": [
+                    3934
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Ask about becoming a Fremennik",
+              "steps": [
+                {
+                  "type": "jump",
+                  "reference": "above",
+                  "id": "POviAM"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-skulgrimen": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Ask about the Merchant's trial",
+              "steps": [
+                {
+                  "player": "I don't suppose you have any idea where I could find a written promise from Askeladden to stay out of the Longhall?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skulgrimen",
+                  "text": "I never saw anything like that in my store before.",
+                  "speaker_ids": [
+                    3935
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Ask about becoming a Fremennik",
+              "steps": [
+                {
+                  "type": "jump",
+                  "reference": "above",
+                  "id": "iZkpey"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-sigli": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Ask about the Merchant's trial",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Sigli the Huntsman",
+                  "text": "Greetings outerlander.",
+                  "speaker_ids": [
+                    3924
+                  ]
+                },
+                {
+                  "player": "I don't suppose you have any idea where I could find a written promise from Askeladden to stay out of the Longhall?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Sigli the Huntsman",
+                  "text": "Did you even ASK Askeladden?",
+                  "speaker_ids": [
+                    3924
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Ask about becoming a Fremennik",
+              "steps": [
+                {
+                  "type": "jump",
+                  "reference": "above",
+                  "id": "6jS0lS"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-brundt": [
+        {
+          "type": "line",
+          "speaker": "Brundt the Chieftain",
+          "text": "Greetings again outerlander! How goes your attempts to gain votes with the council of elders?",
+          "speaker_ids": [
+            8048,
+            8145,
+            8153,
+            8161,
+            8169,
+            9263,
+            9265,
+            9266,
+            9267,
+            9268,
+            9278,
+            9279
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Ask about the Merchant's trial",
+              "steps": [
+                {
+                  "player": "I don't suppose you have any idea where I could find a written promise from Askeladden to stay out of the Longhall?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Brundt the Chieftain",
+                  "text": "Not really my affair, outerlander.",
+                  "speaker_ids": [
+                    8048,
+                    8145,
+                    8153,
+                    8161,
+                    8169,
+                    9263,
+                    9265,
+                    9266,
+                    9267,
+                    9268,
+                    9278,
+                    9279
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Ask about becoming a Fremennik",
+              "steps": [
+                {
+                  "type": "jump",
+                  "reference": "above",
+                  "id": "1RZl6X"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-yrsa": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Ask about the Merchant's trial",
+              "steps": [
+                {
+                  "player": "I don't suppose you have any idea where I could find a written promise from Askeladden to stay out of the Longhall?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Yrsa",
+                  "text": "No... sorry, I don't.",
+                  "speaker_ids": [
+                    3933
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Ask about becoming a Fremennik",
+              "steps": [
+                {
+                  "type": "jump",
+                  "reference": "above",
+                  "id": "8AulsO"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-finding-askeladden-s-written-promise-talking-to-olaf": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Ask about the Merchant's trial",
+              "steps": [
+                {
+                  "player": "I don't suppose you have any idea where I could find a written promise from Askeladden to stay out of the Longhall?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Olaf the Bard",
+                  "text": "I'm sorry, no I don't.",
+                  "speaker_ids": [
+                    802,
+                    9274
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Ask about becoming a Fremennik",
+              "steps": [
+                {
+                  "type": "jump",
+                  "reference": "above",
+                  "id": "hG6e6y"
+                }
+              ]
+            }
+          ]
+        }
+      ],
       "the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-giving-the-flowers-to-sigmund": [
         {
           "player": "Hello there!"
@@ -1374339,7 +1375187,27 @@
       ],
       "the-council-members-peer-the-seer-after-defeating-koschei-attempting-to-climb-down-the-stairs-again": [
         {
-          "player": "I'd really rather not go back down there again, now that I have Thorvald's vote at the council of elders."
+          "type": "condition",
+          "text": "Before completing the quest:",
+          "steps": [
+            {
+              "player": "I'd really rather not go back down there again, now that I have Thorvald's vote at the council of elders."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "To501h"
+        },
+        {
+          "type": "condition",
+          "text": "After completing the quest:",
+          "steps": [
+            {
+              "player": "I'd really rather not go back down there again, now that I have been accepted as a member of the Fremennik clan."
+            }
+          ],
+          "id": "N4sAN0"
         }
       ],
       "the-council-members-peer-the-seer-s-trial": [
@@ -1376596,6 +1377464,9 @@
       ],
       "the-council-members-swensen-s-trial-talking-to-swensen-again-2": [
         {
+          "player": "Hello!"
+        },
+        {
           "type": "line",
           "speaker": "Swensen the Navigator",
           "text": "Greetings again outerlander! I must say, I am still impressed with the way you moved through my maze!",
@@ -1376717,6 +1377588,57 @@
             }
           ],
           "id": "ZRRm5C"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has no votes:",
+          "steps": [
+            {
+              "player": "I don't have any votes yet."
+            },
+            {
+              "type": "line",
+              "speaker": "Brundt the Chieftain",
+              "text": "Go and speak to the twelve members of the council of elders who live in this village. I am sure at least a few will be prepared to vote for you.",
+              "speaker_ids": [
+                8048,
+                8145,
+                8153,
+                8161,
+                8169,
+                9263,
+                9265,
+                9266,
+                9267,
+                9268,
+                9278,
+                9279
+              ]
+            },
+            {
+              "type": "line",
+              "speaker": "Brundt the Chieftain",
+              "text": "If you need any help with your trials, I suggest you speak to Askeladden. He is currently doing his own trials of manhood to become a true Fremennik.",
+              "speaker_ids": [
+                8048,
+                8145,
+                8153,
+                8161,
+                8169,
+                9263,
+                9265,
+                9266,
+                9267,
+                9268,
+                9278,
+                9279
+              ]
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "61Mzn_"
         },
         {
           "type": "condition",
@@ -1377519,6 +1378441,276 @@
           ]
         }
       ],
+      "jump-23f8db956de8a129": [
+        {
+          "player": "Can you remind me about getting a blessing from Fossegrimen again?"
+        },
+        {
+          "type": "line",
+          "speaker": "Olaf the Bard",
+          "text": "Certainly outerlander! Fossegrimen is a lake spirit who lives in the lake just to the South-west of here. She will bless you so that you may play your lyre,",
+          "speaker_ids": [
+            802,
+            9274
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Olaf the Bard",
+          "text": "if you give her a worthy offering. She will only accept raw fish, so place a raw fish on her pedestal, and she will bless you. The better the offering, the longer",
+          "speaker_ids": [
+            802,
+            9274
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Olaf the Bard",
+          "text": "the amount of time you will be blessed for. You will not be able to perform on stage without the blessing of Fossegrimen.",
+          "speaker_ids": [
+            802,
+            9274
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Olaf the Bard",
+          "text": "Is that clear enough, outerlander? Would you like me to repeat anything?",
+          "speaker_ids": [
+            802,
+            9274
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Remind me about crafting a lyre",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "exWsSn",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-3827f8444dc6bfd2"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Remind me about playing on stage",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "oEptQ7",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-cc4b75361edf0f9c"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "I don't need another reminder",
+              "steps": [
+                {
+                  "player": "No thanks, I think that's all pretty straight forward. I'll go and make my lyre now."
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "jump-cc4b75361edf0f9c": [
+        {
+          "player": "Can you remind me about how to perform at the longhall again please?"
+        },
+        {
+          "type": "line",
+          "speaker": "Olaf the Bard",
+          "text": "Not a problem outerlander. When you have your lyre and have been blessed, you will be able to pass the bouncer at the stage entrance of the longhall.",
+          "speaker_ids": [
+            802,
+            9274
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Olaf the Bard",
+          "text": "He will not let you pass unless he believes you are ready to perform on stage. Simply go past him and onto the stage and use your lyre, and you will",
+          "speaker_ids": [
+            802,
+            9274
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Olaf the Bard",
+          "text": "begin to play to entertain the revellers. If all has gone well, you will feel the music come to your mind, unbidden, as you sing an epic of your exploits.",
+          "speaker_ids": [
+            802,
+            9274
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Olaf the Bard",
+          "text": "I will watch your performance from backstage, and also study how much the crowd likes you, and if I believe you have enough talent, then I will vote for you at the council.",
+          "speaker_ids": [
+            802,
+            9274
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Olaf the Bard",
+          "text": "Is that clear enough, outerlander? Would you like me to repeat anything?",
+          "speaker_ids": [
+            802,
+            9274
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Remind me about crafting a lyre",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "DqYxT0",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-3827f8444dc6bfd2"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Remind me about Fossegrimen",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "ixy8jR",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-23f8db956de8a129"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "I don't need a reminder",
+              "steps": [
+                {
+                  "player": "No thanks, I think that's all pretty straight forward. I'll go and make my lyre now."
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "jump-3827f8444dc6bfd2": [
+        {
+          "player": "Can you remind me about making a lyre again, please Olaf?"
+        },
+        {
+          "type": "line",
+          "speaker": "Olaf the Bard",
+          "text": "There are three parts to making the lyre; First you need to cut some special wood from the special musical tree which can be found just east of Rellekka.",
+          "speaker_ids": [
+            802,
+            9274
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Olaf the Bard",
+          "text": "When you have the wood, you will need to use a knife to craft it into a Lyre. When you have an unstrung lyre, you will need to string it before you can play it.",
+          "speaker_ids": [
+            802,
+            9274
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Olaf the Bard",
+          "text": "I would not use anything other than the golden string of Lalli, a troll who lives in a cave just to the South-east.",
+          "speaker_ids": [
+            802,
+            9274
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Olaf the Bard",
+          "text": "Is that clear enough, outerlander? Would you like me to repeat anything?",
+          "speaker_ids": [
+            802,
+            9274
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Remind me about Fossegrimen",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "UsugRl",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-23f8db956de8a129"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Remind me about playing on stage",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "i3acRA",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-cc4b75361edf0f9c"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "I don't need another reminder",
+              "steps": [
+                {
+                  "player": "No thanks, I think that's all pretty straight forward. I'll go and make my lyre now."
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            }
+          ]
+        }
+      ],
       "MIkTwL": [
         {
           "player": "I think I would enjoy the challenge of becoming an honorary Fremennik. Where and how do I start?"
@@ -1377586,9 +1378778,31 @@
           ]
         }
       ],
+      "-_cyaA": [
+        {
+          "player": "Hi. Are you a member of the council?"
+        },
+        {
+          "type": "line",
+          "speaker": "Sailor",
+          "text": "Nope. I'm just a sailor.",
+          "speaker_ids": [
+            3680,
+            3936
+          ]
+        },
+        {
+          "player": "Fair enough."
+        }
+      ],
       "WL61gt": [
         {
           "player": "Forget it! This all sounds like way too much work for a stupid vote at a meeting! I'll find someone else instead."
+        }
+      ],
+      "guoLd1": [
+        {
+          "player": "No thanks, I think that's all pretty straight forward. I'll go and make my lyre now."
         }
       ]
     }

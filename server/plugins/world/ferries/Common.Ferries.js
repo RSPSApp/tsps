@@ -78,6 +78,21 @@ function passes(player, gateName) {
   return gate.complete ? state.complete : state.started;
 }
 
+/**
+ * What a closed gate says: the first of its `refusals` whose quest is in the named state ("started"
+ * or "complete") and, with `npc`, whose ferryman this is; else its plain `refusal` variant. The Sailor
+ * mid-Trials and Mord and Maria between the Trials and the Isles (rsprox 1002313 t3630, t7989-t8014).
+ */
+function refusal(player, gateName, npcName) {
+  const gate = data.gates[gateName];
+  for (const entry of gate?.refusals ?? []) {
+    if (entry.npc && entry.npc !== npcName) continue;
+    const state = questState(player, entry.quest);
+    if (entry.state === "complete" ? state.complete : state.started) return { page: entry.page, variant: entry.variant };
+  }
+  return gate?.refusal;
+}
+
 /** The NPC's base gameval (which dock's ferryman it is). */
 function npcGameval(npc, npcId) {
   const id = npc?.getId?.() ?? npcId;
@@ -114,7 +129,7 @@ function conditionSteps(steps, text) {
 }
 
 module.exports = {
-  init, route, travelling, begin, end, arrived, toLocation, later, passes, npcGameval, locGameval, speaker, playTranscript,
+  init, route, travelling, begin, end, arrived, toLocation, later, passes, refusal, npcGameval, locGameval, speaker, playTranscript,
   conditionSteps, trips,
   get api() { return api; },
   get core() { return core; },

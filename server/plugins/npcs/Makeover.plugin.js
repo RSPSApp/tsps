@@ -334,11 +334,24 @@ function hairdresserCondition({ player, npcId, text }) {
   return null;
 }
 
+/**
+ * Yrsa's "I'd like to change my shoes" (Transcript:Yrsa, after The Fremennik Trials): the transcript's
+ * "catalogue" opens the makeover on shoes (rsprox 1002313 t8292: makeover_interface_type 6, interface 516).
+ */
+const YRSA_SHOES = "rAqrea";
+
+function isYrsa(npcId) {
+  return npcId === core.NpcIdentifiers.YRSA || npcId === core.NpcIdentifiers.YRSA_2;
+}
+
 function hairdresserAction(event) {
-  if (!isHairdresser(event.npcId)) return;
-  const type = HAIRDRESSER_ACTIONS.get(event.stepId);
+  const type = isHairdresser(event.npcId) ? HAIRDRESSER_ACTIONS.get(event.stepId)
+    : isYrsa(event.npcId) && event.stepId === YRSA_SHOES ? TYPE_SHOES : undefined;
   if (type === undefined) return;
   event.handled = true;
+  // Yrsa's record goes on after the catalogue ("After selecting shoe colour and style"); no capture
+  // shows a selection (1002313 closed it at t8296), so her talk ends with the makeover open.
+  if (isYrsa(event.npcId)) event.end = true;
   event.player.getPacketSender().sendInterfaceRemoval();
   openMakeover(event.player, type);
 }

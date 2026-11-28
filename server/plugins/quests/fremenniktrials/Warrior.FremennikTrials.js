@@ -8,8 +8,8 @@
  * - viking_warrior_ladder (4187) op2 Climb-down: seq 828 and the move to 2671,10098,2 on the
  *   same tick (t8388), then "Explore this battleground and find your foe..." 3 ticks later
  *   (t8391). Dropping in the arena: "You cannot drop items in this area." (1001646 t2291).
- * - Koschei comes once the player has stood still a while (242: 15 ticks after stopping, t8397
- *   -> t8412; 241: 9 ticks, t2322 -> t2331), on a tile next to the player (diagonal in both),
+ * - Koschei comes 24-55 ticks after the player enters, walking or not (242: 24, t8388 -> t8412;
+ *   241: 52; 243: 55, 1002313 t4728 -> t4783), on a free tile next to the player, facing south,
  *   with a random overhead, smokepuff 86 and area sound 1930 (range 10) on his tile, varbit
  *   current_hint_arrow 14192 = 7 and a hint arrow on him. He attacks first (t8415).
  * - One NPC through four forms: at 0 HP, next tick seq sanctuary 1057 and the transformation
@@ -81,9 +81,13 @@ module.exports = function attachFremennikTrialsWarrior(api, ctx) {
   const BUSY_VARBIT = 12393;
   const CHATLAUGH2 = 606;
 
-  /** Stationary ticks before Koschei comes: 9 (1001646 t2322-2331) to 15 (1002236 t8397-8412). */
-  const SPAWN_STILL_MIN = 9;
-  const SPAWN_STILL_MAX = 15;
+  /**
+   * Ticks in the arena before Koschei comes, walking or not: 24 (1002236 t8388 -> t8412), 52 (1001646
+   * t2279 -> t2331) and 55 (1002313 t4728 -> t4783, the player walking the whole time). Ours: any
+   * tick in that range.
+   */
+  const SPAWN_AFTER_MIN = 24;
+  const SPAWN_AFTER_MAX = 55;
   /**
    * Ticks after he appears that he starts his attack. Live's first slash shows 3 ticks after the spawn
    * (1002236 t8412 -> t8415); the engine swings on the combat tick after the attack starts.
@@ -100,9 +104,17 @@ module.exports = function attachFremennikTrialsWarrior(api, ctx) {
   const BALCONY_MOVE_TICKS = 1;
   /** "Explore this battleground..." 3 ticks after the move (t8388 -> t8391). */
   const ENTRY_MESSAGE_TICKS = 3;
-  /** Wiki: 10 minutes in his third/fourth form and he leaves (data ppj2xU). */
+  /**
+   * Wiki: 10 minutes in his third form and he leaves (data ppj2xU). Not the fourth: 1002313 fought
+   * form 4 for 1409 ticks (t5138 -> t6547) with no timeout.
+   */
   const TIMEOUT_TICKS = 1000;
   const TIMEOUT_FORM = 3;
+  /**
+   * Form 4 drains prayer every tick (data 8Ne7ZC "quickly depletes"); restores still work. Ours: a tenth
+   * of the current points, at least 1, fitted to 1002313 t5151-5188 (36, 32, 29, 26, 23, 21 ...).
+   */
+  const PRAYER_DRAIN_FRACTION = 10;
 
   const MSG_NO_DROP = "You cannot drop items in this area."; // 1001646 t2291
   /** Ours: the standard death line for the Wiki's safe death in forms 1-3 (no capture). */
@@ -142,11 +154,12 @@ module.exports = function attachFremennikTrialsWarrior(api, ctx) {
    * materials. Ours: the name patterns below stand in for the Wiki's item classes.
    */
   const JEWELLERY_SLOTS = new Set([Equipment.AMULET_SLOT, Equipment.RING_SLOT]);
-  const ALLOWED_WEARABLE = [/^(holy|unholy|damaged) book/i, /^book of (balance|law|war|darkness)/i, /^boots of lightness/i, /^ham (hood|shirt|robe|cloak|logo|gloves|boots)/i];
+  // A combat bracelet (hands slot) is jewellery too: 1002313 t4724 went in wearing one.
+  const ALLOWED_WEARABLE = [/bracelet/i, /^(holy|unholy|damaged) book/i, /^book of (balance|law|war|darkness)/i, /^boots of lightness/i, /^ham (hood|shirt|robe|cloak|logo|gloves|boots)/i];
   const RUNE = /\brunes?$/i;
   const FLETCHING = [/\blogs$/i, /arrowtips$/i, /^arrow shaft$/i, /^headless arrow$/i, /bolt tips$/i, /\(unf\)$/i, /\(u\)$/i];
 
-  /** player -> { npc, form, still, threshold, last, formTicks, transforming, lineShown, passing, gen }. */
+  /** player -> { npc, form, still (ticks in the arena), threshold, formTicks, transforming, lineShown, passing, gen }. */
   const fights = new WeakMap();
   /** Koschei -> his player. */
   const owners = new WeakMap();
@@ -236,8 +249,8 @@ module.exports = function attachFremennikTrialsWarrior(api, ctx) {
 
   function newFight(player) {
     const state = {
-      npc: null, form: 0, still: 0, last: player.getLocation().clone(),
-      threshold: SPAWN_STILL_MIN + Math.floor(Math.random() * (SPAWN_STILL_MAX - SPAWN_STILL_MIN + 1)),
+      npc: null, form: 0, still: 0,
+      threshold: SPAWN_AFTER_MIN + Math.floor(Math.random() * (SPAWN_AFTER_MAX - SPAWN_AFTER_MIN + 1)),
       formTicks: 0, transforming: false, lineShown: false, passing: false, longLine: false, gen: 0,
     };
     fights.set(player, state);
@@ -355,12 +368,6 @@ module.exports = function attachFremennikTrialsWarrior(api, ctx) {
       fightTick(player, state);
       return;
     }
-    const here = player.getLocation();
-    if (!here.equals(state.last)) {
-      state.last = here.clone();
-      state.still = 0;
-      return;
-    }
     if (++state.still >= state.threshold) spawnKoschei(player, state);
   }
 
@@ -370,26 +377,26 @@ module.exports = function attachFremennikTrialsWarrior(api, ctx) {
       if (state.lineShown && !player.getDialogueManager().isActive()) resume(player, state);
       return;
     }
-    // Wiki: through form 4 Koschei keeps the player's prayer at 0.
-    if (state.form === LAST_FORM && player.getSkillManager().getCurrentLevel(Skill.PRAYER) > 0) {
-      player.getSkillManager().setCurrentLevel(Skill.PRAYER, 0, true);
+    const skills = player.getSkillManager();
+    const prayer = skills.getCurrentLevel(Skill.PRAYER);
+    if (state.form === LAST_FORM && prayer > 0) {
+      skills.setCurrentLevel(Skill.PRAYER, prayer - Math.max(1, Math.round(prayer / PRAYER_DRAIN_FRACTION)), true);
     }
-    if (state.form >= TIMEOUT_FORM && ++state.formTicks >= TIMEOUT_TICKS) timeout(player, state);
+    if (state.form === TIMEOUT_FORM && ++state.formTicks >= TIMEOUT_TICKS) timeout(player, state);
   }
 
-  /** Wiki (data ppj2xU): too long in his third/fourth form and he leaves; the fight starts over. */
+  /** Wiki (data ppj2xU): too long in his third form and he leaves; the fight starts over. */
   function timeout(player, state) {
     say(player, V_FIGHT, STEP_TIMEOUT_A);
     say(player, V_FIGHT, STEP_TIMEOUT_B);
     endFight(player);
   }
 
-  /** A free tile next to the player, diagonals first (both captures). */
+  /** Any free tile next to the player: diagonal in 1002236 and 1001646, straight north in 1002313 t4783. */
   function spawnTile(player) {
     const here = player.getLocation();
     const area = player.getPrivateArea?.() ?? null;
-    const shuffle = (list) => list.sort(() => Math.random() - 0.5);
-    const sides = [...shuffle([[1, 1], [1, -1], [-1, 1], [-1, -1]]), ...shuffle([[0, 1], [0, -1], [1, 0], [-1, 0]])];
+    const sides = [[1, 1], [1, -1], [-1, 1], [-1, -1], [0, 1], [0, -1], [1, 0], [-1, 0]].sort(() => Math.random() - 0.5);
     for (const [dx, dy] of sides) {
       const tile = new Location(here.getX() + dx, here.getY() + dy, here.getZ());
       if (api.core.RegionManager.blocked(tile, area)) continue;
@@ -405,7 +412,8 @@ module.exports = function attachFremennikTrialsWarrior(api, ctx) {
     npc.__skipDefaultRespawn = true;
     owners.set(npc, player);
     Object.assign(state, { npc, form: 1, formTicks: 0, still: 0 });
-    npc.setPositionToFace(player.getLocation());
+    // He arrives facing south in all three captures, before he turns to attack.
+    npc.setPositionToFace(new Location(tile.getX(), tile.getY() - 1, tile.getZ()));
     const line = randomOverhead(player);
     if (line) npc.forceChat(line);
     const sender = player.getPacketSender();

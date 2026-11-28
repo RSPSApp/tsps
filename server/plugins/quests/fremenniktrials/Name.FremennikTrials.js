@@ -70,6 +70,8 @@ module.exports = function attachFremennikTrialsName(api, ctx) {
     const { player } = event;
     fremennikName(player);
     if (event.options?.scroll === false) return;
+    const naming = { played: false };
+    namings.set(player, naming);
     let waited = 0;
     const wait = () => {
       if (player.isRegistered?.() === false) return;
@@ -77,9 +79,27 @@ module.exports = function attachFremennikTrialsName(api, ctx) {
         ctx.later(player, 1, wait);
         return;
       }
+      naming.played = true;
       ctx.play(player, BRUNDT, NAMING_VARIANT);
     };
     ctx.later(player, 1, wait);
+  }
+
+  /** The reward's level-ups wait for the naming line to be continued (rsprox 1002313 t7538 -> t7546). */
+  const namings = new WeakMap();
+  function holdLevelUps(request) {
+    const naming = request?.player ? namings.get(request.player) : undefined;
+    if (!naming) return;
+    if (!naming.played || request.player.getDialogueManager?.()?.isActive?.()) request.hold = true;
+    else namings.delete(request.player);
+  }
+
+  /** Jarvald's "If the player's Fremennik name is also Jarvald:" (his after-the-Trials talk). */
+  const SAME_NAME = /^If the player's Fremennik name is also (\w+):$/;
+  function answerSameName({ player, text }) {
+    const match = SAME_NAME.exec(String(text ?? "").trim());
+    if (!match || !player) return null;
+    return fremennikName(player) === match[1];
   }
 
   ctx.fremennikName = fremennikName;
@@ -87,4 +107,6 @@ module.exports = function attachFremennikTrialsName(api, ctx) {
   api.onCustomEvent("fremennik-trials:name", answerName);
   api.onCustomEvent("npc-dialogue:line", fillName);
   api.onCustomEvent("quest:completed", nameAfterScroll);
+  api.onCustomEvent("skill-level-up:hold", holdLevelUps);
+  api.onNpcDialogueCondition(answerSameName);
 };

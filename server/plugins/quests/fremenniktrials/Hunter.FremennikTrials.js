@@ -123,7 +123,11 @@ module.exports = function attachFremennikTrialsHunter(api, ctx) {
     return sigliVariant(player, ctx.quest.getStage(player)) ?? V_OFFER;
   }
 
-  const hasTalisman = (player) => ctx.held(player, TALISMAN) || ctx.held(player, CHARGED_TALISMAN);
+  /**
+   * Sigli counts a banked talisman as kept: "Hmmm. Laziness is not a trait that I admire..." and no new
+   * one (rsprox 1002313 t1550, t1587); only one in neither place is lost (t1761).
+   */
+  const hasTalisman = (player) => [TALISMAN, CHARGED_TALISMAN].some((id) => ctx.held(player, id) || ctx.banked(player, id));
 
   function answerCondition({ player, npcId, value }) {
     if (!SIGLI.has(npcId)) return null;

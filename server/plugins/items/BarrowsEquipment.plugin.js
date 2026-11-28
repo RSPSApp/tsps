@@ -281,16 +281,17 @@ function breakOnDrop({ item }) {
   if (Barrows.isBarrowsItem(item?.getId?.())) setDurability(item, 0);
 }
 
+/** Repairs every damaged piece; returns false when it refuses (nothing to fix, or too few coins). */
 function repairAll(player, costMultiplier = 1, announce = true) {
   const items = barrowsItems(player);
   const cost = Math.floor(items.reduce((total, item) => total + repairCost(item), 0) * costMultiplier);
   if (cost <= 0) {
     player.sendMessage("You have no damaged Barrows equipment to repair.");
-    return;
+    return false;
   }
   if (player.getInventory().getAmount(995) < cost) {
     player.sendMessage(`You need ${cost.toLocaleString("en-US")} coins to repair your Barrows equipment.`);
-    return;
+    return false;
   }
   player.getInventory().deleteNumber(995, cost);
   let weaponChanged = false;
@@ -301,6 +302,7 @@ function repairAll(player, costMultiplier = 1, announce = true) {
   }
   refresh(player, weaponChanged);
   if (announce) player.sendMessage(`Your Barrows equipment has been repaired for ${cost.toLocaleString("en-US")} coins.`);
+  return true;
 }
 
 function toragDefence(entity, effectiveDefence) {
@@ -442,10 +444,15 @@ function blacksmithMenu(notice) {
   });
 }
 
-/** The repair row's steps are the Wiki's wording; the actual repair happens on the choice. */
+/**
+ * The repair row's steps are the Wiki's wording; the repair itself happens on the choice. The menu's
+ * figure is the fee the player agreed to, so charge only that: the price can change while the menu is
+ * open (a piece leaving or entering the bank) and a refused repair must not play the thank-you line.
+ */
 function blacksmithChoice(choice) {
   if (!isCivitasBlacksmith(choice.npcId) || !String(choice.option ?? "").startsWith("Repair that item:")) return;
-  repairAll(choice.player, 1, false);
+  const quoted = Number(String(choice.option).replace(/\D/g, ""));
+  if (blacksmithCost(choice.player) !== quoted || !repairAll(choice.player, 1, false)) choice.end = true;
 }
 
 /** The right-click Repair option, only on the Civitas blacksmith. */

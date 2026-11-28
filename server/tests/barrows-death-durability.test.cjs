@@ -11,6 +11,7 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
+const { ClientConnection } = require("../dist/net/NetworkBuilder");
 const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
 let core, I, L;
 before(async () => { await CachePipeline.initialize(path.resolve(__dirname, "..")); PM.loadFromDirectory(path.resolve(__dirname, "../plugins")); core = PM.getCoreApi(); I = core.ItemIdentifiers; L = require("../plugins/items/LootKeys.plugin"); PM.emitServerStartup({}); });
@@ -232,4 +233,151 @@ test('another genuine swing before the next task cannot postpone the first outgo
   handCast(caster, target);
   core.TaskManager.process();
   assert.equal(wear(caster), 999, 'later outgoing activity cannot starve first-use wear');
+});
+
+test('the Civitas blacksmith repairs Barrows gear for coins, only at NPC 13332', (t) => {
+  const B = Barrows();
+  const p = stand(wp(t));
+  const helm = new core.Item(I.GUTHANS_HELM, 1);
+  B._test.setDurability(helm, 250); // 25% remaining: 750 points x 60 = 45,000 coins
+  p.getInventory().setItem(0, helm);
+  p.getInventory().adds(I.COINS, 100000);
+
+  assert.equal(B._test.blacksmithCost(p), 45000);
+  assert.equal(B._test.blacksmithCondition({ player: p, npcId: 13332, text: 'If the player has enough coins:' }), true);
+  assert.equal(B._test.blacksmithCondition({ player: p, npcId: 13332, text: 'If the player has no repairable equipment:' }), false);
+
+  const line = { player: p, npcId: 13332, text: "I'll need [x] coins to repair that." };
+  B._test.blacksmithLine(line);
+  assert.equal(line.text, "I'll need 45,000 coins to repair that.");
+
+  const notice = { player: p, npcId: 13332, options: [{ text: 'Repair that item: [x] coins.' }, { text: 'Cancel.' }] };
+  B._test.blacksmithMenu(notice);
+  assert.equal(notice.options[0].text, 'Repair that item: 45,000 coins.');
+  assert.equal(notice.options[1].text, 'Cancel.');
+
+  B._test.blacksmithChoice({ player: p, npcId: 13332, option: 'Repair that item: 45,000 coins.' });
+  assert.equal(p.getInventory().getAmount(I.COINS), 55000);
+  assert.equal(helm.getId(), I.GUTHANS_HELM);
+  assert.equal(B._test.durability(helm), 1000);
+
+  // The other blacksmiths share the cache name; the handlers answer only the Civitas one.
+  assert.equal(B._test.civitasRepair({ player: p, npcId: 13038, clickType: 3, option: 'Repair' }), false);
+  assert.equal(B._test.blacksmithCondition({ player: p, npcId: 13038, text: 'If the player has enough coins:' }), null);
+});
+
+// --- The real transcript, driven by native dialogue_continue packets -------------------------------
+// The repair row is drawn with a fee; the repair runs when it is chosen. A refused repair must not play
+// the NPC's thank-you line, and a fee that changed while the menu stayed open must not be charged.
+
+async function continueDialogue(f, choice) {
+  const group = f.p.getPacketSender().getChatboxGroupId();
+  const widgetId = choice == null ? (group << 16) | ([231, 217].includes(group) ? 5 : 0) : core.OptionDialogue.OPTIONS_WIDGET_ID;
+  await f.c.dispatch([{ type: 'dialogue_continue', widgetId, childIndex: choice ?? -1 }]);
+  f.c.processTurnPackets();
+}
+
+async function nextPrompt(f) {
+  for (let i = 0; i < 40; i++) {
+    const pending = core.MultiChatboxPrompt.getPending(f.p);
+    if (pending) return pending.options;
+    if (!f.p.getDialogueManager().getCurrent()) return [];
+    await continueDialogue(f);
+  }
+  return [];
+}
+
+async function drain(f) {
+  for (let i = 0; i < 10 && f.p.getDialogueManager().getCurrent(); i++) await continueDialogue(f);
+}
+
+function blacksmithActor(t, name) {
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel));
+  p.setIndex(9600 + name.length); p.setUsername(name); p.setRegistered(true); p.setAttribute('bot-skip-persistence', true);
+  p.needsPlacement = false;
+  p.setLocation(new core.Location(1657, 3142, 0)); // Civitas illa Fortis
+  const c = new ClientConnection(channel); c.player = p;
+  t.after(() => p.setRegistered(false));
+  const messages = [];
+  p.sendMessage = (text) => { messages.push(String(text)); };
+  const lines = [];
+  const send = core.NpcDialogue.prototype.send;
+  t.mock.method(core.NpcDialogue.prototype, 'send', function (player) { lines.push(this.getText()); return send.call(this, player); });
+  const npc = core.NPC.create(13332, p.getLocation());
+  PM.emitCustomEvent('npc-dialogue:start', { player: p, npc, npcId: 13332, handled: false });
+  return { p, c, messages, lines };
+}
+
+async function repairMenu(f) {
+  const opts = await nextPrompt(f);
+  const question = opts.findIndex((option) => /^Can you repair something for me\?/.test(String(option)));
+  assert.ok(question >= 0, 'the blacksmith offers to repair something');
+  await continueDialogue(f, question + 1);
+  return nextPrompt(f);
+}
+
+const repairRow = (opts, fee = '45,000') => opts.findIndex((option) => String(option) === `Repair that item: ${fee} coins.`);
+
+test('the Civitas blacksmith repairs on the transcript menu and says his thank-you line', async (t) => {
+  const f = blacksmithActor(t, 'bshappy');
+  const helm = new core.Item(I.GUTHANS_HELM, 1);
+  Barrows()._test.setDurability(helm, 250);
+  f.p.getInventory().setItem(0, helm);
+  f.p.getInventory().adds(I.COINS, 100000);
+
+  const opts = await repairMenu(f);
+  const row = repairRow(opts);
+  assert.ok(row >= 0, `the menu quotes 45,000 coins: ${JSON.stringify(opts)}`);
+  await continueDialogue(f, row + 1);
+  await drain(f);
+
+  assert.equal(f.p.getInventory().getAmount(I.COINS), 55000, 'charged the quoted 45,000');
+  assert.equal(helm.getId(), I.GUTHANS_HELM);
+  assert.ok(f.lines.includes('There you go, happy doing business with you!'), f.lines.join(' | '));
+});
+
+test('a repair refused at the choice ends the chat without the thank-you line', async (t) => {
+  const f = blacksmithActor(t, 'bsshort');
+  const helm = new core.Item(I.GUTHANS_HELM, 1);
+  Barrows()._test.setDurability(helm, 250);
+  f.p.getInventory().setItem(0, helm);
+  f.p.getInventory().adds(I.COINS, 100000);
+
+  const opts = await repairMenu(f);
+  const row = repairRow(opts);
+  assert.ok(row >= 0);
+  // The menu stayed open; the coins left the inventory before the row was chosen.
+  f.p.getInventory().deleteNumber(I.COINS, 90000);
+  await continueDialogue(f, row + 1);
+  await drain(f);
+
+  assert.equal(f.p.getInventory().getAmount(I.COINS), 10000, 'nothing was charged');
+  assert.equal(helm.getId(), I.GUTHANS_HELM_25, 'the helm is still damaged');
+  assert.ok(f.messages.some((message) => /You need 45,000 coins/.test(message)), f.messages.join(' | '));
+  assert.ok(!f.lines.includes('There you go, happy doing business with you!'), f.lines.join(' | '));
+});
+
+test('a fee that changed while the menu stayed open is not charged', async (t) => {
+  const f = blacksmithActor(t, 'bsstale');
+  const helm = new core.Item(I.GUTHANS_HELM, 1);
+  Barrows()._test.setDurability(helm, 250);
+  f.p.getInventory().setItem(0, helm);
+  f.p.getInventory().adds(I.COINS, 100000);
+
+  const opts = await repairMenu(f);
+  const row = repairRow(opts);
+  assert.ok(row >= 0, 'the menu quoted the helm alone');
+  // A broken platebody enters the inventory while the menu is open: the total is now 135,000.
+  const body = new core.Item(I.GUTHANS_PLATEBODY, 1);
+  Barrows()._test.setDurability(body, 0);
+  f.p.getInventory().setItem(5, body);
+  assert.equal(Barrows()._test.blacksmithCost(f.p), 135000);
+  await continueDialogue(f, row + 1);
+  await drain(f);
+
+  assert.equal(f.p.getInventory().getAmount(I.COINS), 100000, 'the stale 45,000 quote charges nothing');
+  assert.equal(helm.getId(), I.GUTHANS_HELM_25, 'the helm is still damaged');
+  assert.equal(body.getId(), I.GUTHANS_PLATEBODY_0, 'the platebody is still broken');
+  assert.ok(!f.lines.includes('There you go, happy doing business with you!'), f.lines.join(' | '));
 });

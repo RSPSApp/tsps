@@ -19,6 +19,8 @@ const TICKS_PER_DEGRADE = 90;
 const WORN_OPTION_PARAM = 451;
 const FIRST_WORN_OPTION_CLICK = 2;
 const REPAIR_COSTS = [60, 100, 90, 80]; // helm, weapon, body, legs
+/** NpcIdentifiers.BLACKSMITH_3: the Civitas illa Fortis blacksmith other blacksmiths share the name with. */
+const CIVITAS_BLACKSMITH = 13332;
 const BARROWS_WEAPONS = new Set([4710, 4718, 4726, 4734, 4747, 4755]);
 /** Each brother's full set in the equipment effects panel (enum 3047); with the amulet of the damned, 2000 higher. */
 const SET_TEXTS = { ahrims: 1, dharoks: 2, guthans: 3, karils: 4, torags: 5, veracs: 6 };
@@ -279,16 +281,17 @@ function breakOnDrop({ item }) {
   if (Barrows.isBarrowsItem(item?.getId?.())) setDurability(item, 0);
 }
 
-function repairAll(player, costMultiplier = 1) {
+/** Repairs every damaged piece; returns false when it refuses (nothing to fix, or too few coins). */
+function repairAll(player, costMultiplier = 1, announce = true) {
   const items = barrowsItems(player);
   const cost = Math.floor(items.reduce((total, item) => total + repairCost(item), 0) * costMultiplier);
   if (cost <= 0) {
     player.sendMessage("You have no damaged Barrows equipment to repair.");
-    return;
+    return false;
   }
   if (player.getInventory().getAmount(995) < cost) {
     player.sendMessage(`You need ${cost.toLocaleString("en-US")} coins to repair your Barrows equipment.`);
-    return;
+    return false;
   }
   player.getInventory().deleteNumber(995, cost);
   let weaponChanged = false;
@@ -298,7 +301,8 @@ function repairAll(player, costMultiplier = 1) {
     item.setId(base).setMetaValue(META_KEY, undefined);
   }
   refresh(player, weaponChanged);
-  player.sendMessage(`Your Barrows equipment has been repaired for ${cost.toLocaleString("en-US")} coins.`);
+  if (announce) player.sendMessage(`Your Barrows equipment has been repaired for ${cost.toLocaleString("en-US")} coins.`);
+  return true;
 }
 
 function toragDefence(entity, effectiveDefence) {
@@ -399,11 +403,70 @@ function repairEquipment(event) {
   return true;
 }
 
+/**
+ * The Civitas illa Fortis blacksmith (NPC 13332) repairs Barrows gear for coins; the same name
+ * belongs to other blacksmiths, so this answers only that NPC. Wiki (Transcript:Blacksmith):
+ * "Can you repair something for me?", with the fee filled into the transcript's "[x]".
+ */
+function blacksmithCost(player) {
+  return barrowsItems(player).reduce((total, item) => total + repairCost(item), 0);
+}
+
+function isCivitasBlacksmith(npcId) {
+  return npcId === CIVITAS_BLACKSMITH;
+}
+
+function blacksmithCondition({ player, npcId, text }) {
+  if (!isCivitasBlacksmith(npcId)) return null;
+  const cost = blacksmithCost(player);
+  const coins = player.getInventory().getAmount(995);
+  const value = String(text ?? "").toLowerCase();
+  if (value.includes("no repairable equipment")) return cost <= 0;
+  if (value.includes("has repairable equipment")) return cost > 0;
+  if (value.includes("doesn't have enough coins")) return cost > 0 && coins < cost;
+  if (value.includes("has enough coins")) return cost > 0 && coins >= cost;
+  return null;
+}
+
+function blacksmithLine(request) {
+  if (!isCivitasBlacksmith(request.npcId)) return;
+  const text = String(request.text ?? "");
+  if (!text.includes("[x]")) return;
+  request.text = text.replace(/\[x\]/g, blacksmithCost(request.player).toLocaleString("en-US"));
+}
+
+function blacksmithMenu(notice) {
+  if (!isCivitasBlacksmith(notice.npcId) || !Array.isArray(notice.options)) return;
+  const cost = blacksmithCost(notice.player).toLocaleString("en-US");
+  notice.options = notice.options.map((option) => {
+    const text = String(option.text ?? "");
+    return text.includes("[x]") ? { ...option, text: text.replace(/\[x\]/g, cost) } : option;
+  });
+}
+
+/**
+ * The repair row's steps are the Wiki's wording; the repair itself happens on the choice. The menu's
+ * figure is the fee the player agreed to, so charge only that: the price can change while the menu is
+ * open (a piece leaving or entering the bank) and a refused repair must not play the thank-you line.
+ */
+function blacksmithChoice(choice) {
+  if (!isCivitasBlacksmith(choice.npcId) || !String(choice.option ?? "").startsWith("Repair that item:")) return;
+  const quoted = Number(String(choice.option).replace(/\D/g, ""));
+  if (blacksmithCost(choice.player) !== quoted || !repairAll(choice.player, 1, false)) choice.end = true;
+}
+
+/** The right-click Repair option, only on the Civitas blacksmith. */
+function civitasRepair(event) {
+  if (!isCivitasBlacksmith(event.npcId)) return false;
+  return repairEquipment(event);
+}
+
 module.exports = {
   name: "BarrowsEquipment",
   description: "Barrows armour and weapons: durability that degrades over time, repairs, and the Dharok, Guthan, Verac, Torag and Karil set-effect combat modifiers.",
   members: true,
-  _test: { addSetTexts, durability, setDurability, stageFor, degradeEquipment, repairAll, refresh, placeholderIdentity, dropWarning, breakOnDrop, swingStarted, pieceName, DROP_WARNING_TEXT },
+  _test: { addSetTexts, durability, setDurability, stageFor, degradeEquipment, repairAll, refresh, placeholderIdentity, dropWarning, breakOnDrop, swingStarted, pieceName, DROP_WARNING_TEXT,
+    blacksmithCost, blacksmithCondition, blacksmithLine, blacksmithMenu, blacksmithChoice, civitasRepair },
   register(api) {
     pluginApi = api;
     BonusManager = api.getBonusManager();
@@ -503,6 +566,11 @@ module.exports = {
     api.onNpcInteraction("Aneirin", { Repair: repairEquipment });
     api.onNpcInteraction("Dunstan", { "Talk-to": repairEquipment });
     api.onNpcInteraction("Tindel Marchant", { "Talk-to": repairEquipment });
+    api.onNpcInteraction("Blacksmith", { Repair: civitasRepair });
+    api.onNpcDialogueCondition(blacksmithCondition);
+    api.onCustomEvent("npc-dialogue:line", blacksmithLine);
+    api.onCustomEvent("npc-dialogue:menu", blacksmithMenu);
+    api.onCustomEvent("npc-dialogue:choice", blacksmithChoice);
     api.onCustomEvent("barrows:repair", repairElsewhere);
     api.onCustomEvent("equipment:effects", addSetTexts);
     api.onCustomEvent(api.core.Bank.PLACEHOLDER_IDENTITY_EVENT, placeholderIdentity);

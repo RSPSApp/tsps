@@ -58,9 +58,9 @@ function readWorldEditorResource(core, query, segments) {
  * /api/world/object-spawns supplies the canonical JSON document for editing and
  * downloading locally. `/api/world/npc-spawns` serves the persisted NPC
  * spawns the editor renders, and `/api/world/npc-spawns-custom` serves the editor's
- * existing spawn patch (empty when none has been exported yet). All endpoints are read-only
- * and registered only in development, never in production. Browser-host editors
- * continue receiving world data through host messaging instead of this endpoint.
+ * existing spawn patch (empty when none has been exported yet). World-data endpoints are
+ * development-only; browser hosts provide world data through host messaging.
+ * Public travel inspection uses /api/editor-travel over HTTP or WebRTC in every build.
  */
 module.exports = {
   name: "EditModeApi",

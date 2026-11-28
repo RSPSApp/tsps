@@ -490,4 +490,3 @@ export class RspsiEditorLayout {
     };
 
 }
-

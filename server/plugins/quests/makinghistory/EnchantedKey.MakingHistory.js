@@ -39,6 +39,10 @@ const JOURNAL_STORY = [
 const JOURNAL_PROMPT = "<col=000080>I should see what else I can find with the help of the key.";
 const JOURNAL_DONE = ["<str>The key doesn't seem to do anything anymore.", "", "<col=ff0000>MINIQUEST COMPLETE!"];
 const LAST_DISTANCE = new WeakMap();
+/** busy: set while the last treasure's box is up (local 1002311 ticks 2111-2115). */
+const BUSY_VARBIT = 12393;
+/** Players whose last treasure's box is open. */
+const DISSOLVE_BOX = new WeakSet();
 let api;
 let core;
 let quest;
@@ -173,20 +177,28 @@ function dig({ player }) {
   inventory.refreshItems();
   player.sendMessage("You found some treasure.");
   if (last) {
-    // local 1002311 tick 2111: enchantedkey reaches 2 with the dig; the miniquest count moves on
-    // when the box is continued (tick 2115), so the quest list is refreshed there.
+    // local 1002311 tick 2111: enchantedkey reaches 2 with the dig and busy is set with the box; the
+    // miniquest count moves on and busy clears when the box is continued (tick 2115). A box closed
+    // any other way finishes the same.
     const manager = player.getDialogueManager();
     manager.startDialogues(new core.DialogueChainBuilder()
       .add(new core.ItemStatementDialogue(0, core.ItemIdentifiers.ENCHANTED_KEY,
         "You find some items, but the key dissolves in your<br>hand."))
       .add(new core.ActionDialogue(1, { execute: () => {
-        QuestRuntime.refreshQuestList(player);
+        finishDissolveBox(player);
         manager.advance();
       } }))
       .add(new core.EndDialogue(2)));
+    DISSOLVE_BOX.add(player);
+    player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
   }
 }
-function resetComparison({ player }) { LAST_DISTANCE.delete(player); }
+function finishDissolveBox(player) {
+  if (!DISSOLVE_BOX.delete(player)) return;
+  player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
+  QuestRuntime.refreshQuestList(player);
+}
+function resetComparison({ player }) { LAST_DISTANCE.delete(player); DISSOLVE_BOX.delete(player); }
 /** Making History finished (or reset): the miniquest's row starts (or goes back) at once, not at the next login. */
 function parentStageChanged({ player, key }) {
   if (key !== quest.key || !player) return;
@@ -271,6 +283,7 @@ module.exports = function attach(pluginApi, makingHistory) {
   api.onCustomEvent("enchanted-key:is-complete", queryComplete);
   api.onCustomEvent("enchanted-key:sync", sync);
   api.onCustomEvent("quest:stage-changed", parentStageChanged);
+  api.onCustomEvent("interface:closed", ({ player }) => { if (player) finishDissolveBox(player); });
   api.onPlayerLogin(resetComparison);
   api.onPlayerLogout(resetComparison);
 };

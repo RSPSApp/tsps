@@ -340,7 +340,9 @@ test("the last treasure completes the miniquest: enchantedkey at the dig, the co
   assert.equal(varbit(f, STATUS), 2);
   assert.deepEqual(h.shown(f), { who: "ItemStatementDialogue", text: "You find some items, but the key dissolves in your hand.", npcId: undefined });
   assert.equal(varbit(f, MINIQUESTS), before, "the count waits for the continue");
+  assert.equal(varbit(f, 12393), 1, "busy with the box (tick 2111)");
   await h.continueLine(f);
+  assert.equal(varbit(f, 12393), 0, "busy clears on the continue (tick 2115)");
   // Tick 2115: the box closes and the miniquest counts.
   assert.equal(h.shown(f), null);
   assert.equal(varbit(f, MINIQUESTS), before + 1);
@@ -423,4 +425,16 @@ test("finishing Making History starts the miniquest's row at once, without a rel
   assert.deepEqual((await readJournal(f)).lines, [...STORY, PROMPT]);
   h.quest().setStage(f.player, 0);
   assert.equal(varbit(f, STATUS), 0);
+});
+
+test("closing the last treasure's box without its continue still counts the miniquest and clears busy", async (t) => {
+  const f = actor(t, { at: [3303, 3345, 0], attributes: { [ORDER]: ROUTE, [FOUND]: 10 } });
+  moveTo(f, 3303, 3345);
+  const before = varbit(f, MINIQUESTS);
+  await itemOption(f, SPADE, "Dig");
+  assert.equal(varbit(f, 12393), 1);
+  await h.dispatch(f, { type: "interface_close" });
+  assert.equal(h.shown(f), null);
+  assert.equal(varbit(f, 12393), 0);
+  assert.equal(varbit(f, MINIQUESTS), before + 1);
 });

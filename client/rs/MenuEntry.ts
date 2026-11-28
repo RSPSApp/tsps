@@ -33,6 +33,8 @@ export interface SpellCastMetadata {
 export interface OsrsMenuEntry extends MenuEntry {
     // Optional native mouse event to allow screen-position-based effects (click cross, etc.)
     onClick?: (entry?: MenuEntry, e?: MouseEvent, ctx?: unknown) => void;
+    /** Rows of this option's sub-menu (a loc's cache sub-ops, e.g. a fairy ring's favourites). */
+    subEntries?: OsrsMenuEntry[];
     // Optional coordinates captured when building the entry
     tile?: { tileX: number; tileY: number; plane?: number };
     /** The scene's own left-click choice (a helm's "Set heading" over the sea). */

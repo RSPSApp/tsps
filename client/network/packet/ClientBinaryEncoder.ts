@@ -304,6 +304,7 @@ export class ClientBinaryEncoder {
         level?: number,
         action?: string,
         opNum?: number,
+        subOpId?: number,
     ): Uint8Array {
         this.buffer.reset();
         this.buffer.writeShort(id);
@@ -312,6 +313,7 @@ export class ClientBinaryEncoder {
         this.buffer.writeByte(level ?? 0);
         this.buffer.writeString(action ?? "");
         this.buffer.writeByte(opNum ?? 0);
+        this.buffer.writeByte(subOpId ?? 0);
         return this.buffer.toPacket(ClientPacketId.LOC_INTERACT);
     }
 
@@ -689,6 +691,7 @@ export function encodeClientMessage(msg: { type: string; payload: any }): Uint8A
                 payload.level,
                 payload.action,
                 payload.opNum,
+                payload.subOpId,
             );
 
         case "ground_item_action":

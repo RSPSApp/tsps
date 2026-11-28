@@ -226,7 +226,7 @@ export function worldEntriesToSimple(
     if (register && opts.resetMenuState !== false) {
         opts.menuState?.reset();
     }
-    const intermediate: SimpleMenuEntry[] = filterMinimenuEntries(source || [], opts.blockModes).map((e) => {
+    const toSimple = (e: OsrsMenuEntry): SimpleMenuEntry => {
         const action = e.spellCast ? MenuAction.Cast : inferMenuAction(e.option, e.targetType);
         // osrsTargetLabel already includes the level text for NPCs/players
         const label = osrsTargetLabel(e, opts.label) || undefined;
@@ -252,6 +252,8 @@ export function worldEntriesToSimple(
                 typeof e.playerServerId === "number"
                     ? e.playerServerId
                     : ((e.spellCast?.playerServerId as number | undefined) ?? undefined),
+            // A loc's cache sub-ops (a fairy ring's favourites) open a nested menu.
+            subEntries: e.subEntries?.map(toSimple),
             onClick: (gx?: number, gy?: number, ctx?: MenuClickContext) => {
                 const evt = typeof toEvt === "function" ? toEvt(gx, gy) : undefined;
                 try {
@@ -261,7 +263,8 @@ export function worldEntriesToSimple(
                 }
             },
         };
-    });
+    };
+    const intermediate: SimpleMenuEntry[] = filterMinimenuEntries(source || [], opts.blockModes).map(toSimple);
     // Client plugins (e.g. the menu entry swapper) reorder the sorted menu before it is used.
     const context = {
         surface: "world",

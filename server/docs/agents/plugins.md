@@ -130,6 +130,10 @@ An item option with a submenu (Rub > Xeric's Glade) reaches the handler as that 
 the entry when it is set: a handler that only reads `event.option` reopens the option's own menu
 ([docs/item-submenus.md](../../../docs/item-submenus.md)).
 
+An object option can carry cache sub-ops too (a fairy ring's Favourites, one row per saved
+slot). The client opens them as a nested menu, and the chosen 1-based row reaches the handler
+as `event.subOpId`; the row has no label on the server, so answer it from its slot index.
+
 `onNpcsInteraction` is the many-names-one-handler form: it registers the same actions for
 each exact, case-sensitive name, so a family of NPCs that share a transcript needs one line.
 

@@ -15,6 +15,7 @@ import { vec3 } from "gl-matrix";
 import { closeOpenModal, hasOpenModal } from "./widgets/input/widgetKeyboardInput";
 import { getNpcMenuActions } from "./menu/WorldMenuBuilder";
 import { handleCommandShortcut } from "./chat/commandShortcuts";
+import { CHAT_LINE_REDRAW_SCRIPT } from "./input/WasdCamera";
 
 import { directionToDelta } from "../common/Direction";
 import { ChatMessageType } from "../common/chat/ChatMessageType";
@@ -3472,6 +3473,35 @@ export class OsrsClient {
         // Subscribe to server-side GFX (spot) messages and forward to renderer
         try {
             const unsubVisual=subscribePluginMessages(message => {
+                if (
+                    message?.channel === "account:chat-icons" &&
+                    Array.isArray((message.data as any)?.chatIcons)
+                ) {
+                    const nextChatIcons = (message.data as any).chatIcons
+                        .map((icon: unknown) => Number(icon))
+                        .filter((icon: number) => Number.isFinite(icon) && icon >= 0 && icon <= 255)
+                        .map((icon: number) => icon | 0);
+                    const changed =
+                        nextChatIcons.length !== this.localChatNameIcons.length ||
+                        nextChatIcons.some(
+                            (icon: number, idx: number) => icon !== this.localChatNameIcons[idx],
+                        );
+                    this.localChatNameIcons = nextChatIcons;
+                    try {
+                        const canvas = document.querySelector("canvas") as HTMLCanvasElement | null;
+                        if (canvas) {
+                            const ui: any = ((canvas as any).__ui = (canvas as any).__ui || {});
+                            ui.chatbox = ui.chatbox || {};
+                            ui.chatbox.defaultIcons = nextChatIcons.slice();
+                        }
+                    } catch {}
+                    if (changed) {
+                        markChatTransmit();
+                        const chatbox = this.widgetManager?.findWidget(162, 0);
+                        if (chatbox) this.executeScriptListener(chatbox, [CHAT_LINE_REDRAW_SCRIPT]);
+                    }
+                    return;
+                }
                 const renderer=this.renderer as any;
                 receiveActorVisual(message,renderer?.gfxManager??renderer?.actors?.getActorGfxManager?.());
             });
@@ -3998,6 +4028,8 @@ export class OsrsClient {
                         this.localChatNamePrefix = nextChatPrefix;
                         if (chatIdentityChanged) {
                             markChatTransmit();
+                            const chatbox = this.widgetManager?.findWidget(162, 0);
+                            if (chatbox) this.executeScriptListener(chatbox, [CHAT_LINE_REDRAW_SCRIPT]);
                         }
                         this.localPlayerIsAdmin =
                             typeof isAdmin === "boolean"

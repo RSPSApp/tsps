@@ -169,3 +169,17 @@ test("a floors paste keeps the upper planes' storey and roof gaps, but no ground
   await t.call("paste_template", { name: "storeys", x: 50, y: 50 });
   assert.deepEqual(t.edits.filter((e) => e.kind === "height").map((e) => [e.plane, e.locId]), [[1, 37], [3, 12]]);
 });
+
+test("the default agent template library uses the editor's canonical bundled assets", () => {
+  const previous = process.env.AGENT_MCP_TEMPLATES_DIR;
+  delete process.env.AGENT_MCP_TEMPLATES_DIR;
+  try {
+    const { templatesDir, listTemplates, readTemplate } = require("../plugins/agent/mcp/MapTemplateFiles");
+    assert.match(templatesDir(), /client[/\\]game[/\\]plugins[/\\]editmode[/\\]generation[/\\]templates$/);
+    assert.deepEqual(listTemplates().map(({ name }) => name), ["varrock-house-a", "varrock-house-west", "varrock-tent"]);
+    assert.equal(readTemplate("varrock-house-a").width, 8);
+  } finally {
+    if (previous === undefined) delete process.env.AGENT_MCP_TEMPLATES_DIR;
+    else process.env.AGENT_MCP_TEMPLATES_DIR = previous;
+  }
+});

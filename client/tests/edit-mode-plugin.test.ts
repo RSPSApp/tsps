@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { createBrowserEditModePluginPersistence } from "../game/plugins/editmode/BrowserEditModePluginPersistence";
 import { EditModePlugin } from "../game/plugins/editmode/EditModePlugin";
 import { buildingWallKey, detectRectangularBuilding } from "../game/plugins/editmode/BuildingDetector";
-import { generateBuildingEdits } from "../game/plugins/editmode/BuildingGenerator";
 import {
     parseBrowserHostWorldDefinition,
     parseBrowserHostWorldSpawn,
@@ -157,53 +156,6 @@ type Call = [string, ...unknown[]];
     assert.deepEqual(muted, [false, true, false], "leaving Edit Mode restores audio");
 }
 
-{
-    assert.deepEqual(generateBuildingEdits({ minX: 1, maxX: 2, minY: 1, maxY: 3, plane: 0 }, "Varrock", 1), []);
-    const building = generateBuildingEdits(
-        { minX: 10, maxX: 12, minY: 20, maxY: 22, plane: 0 },
-        "Classic",
-        1,
-        { tileX: 11, tileY: 15, plane: 0 },
-    );
-    assert.ok(building.some((edit) => edit.kind === "place" && edit.locId === 1535 && edit.tileY === 19), "door faces the camera");
-    assert.ok(building.some((edit) => edit.kind === "place" && edit.locId === 1640 && edit.plane === 1 && edit.shape === 17), "roof fills the top plane");
-    assert.equal(building.filter((edit) => edit.kind === "flag" && edit.plane === 0).length, 9);
-    const diagonal = generateBuildingEdits(
-        { minX: 10, maxX: 14, minY: 20, maxY: 24, plane: 0 }, "Classic", 2, undefined, undefined, "Diagonal",
-    );
-    assert.equal(diagonal.filter((edit) => edit.kind === "place" && edit.locId === 1902 && edit.shape === 1).length, 16);
-    assert.ok(diagonal.some((edit) => edit.kind === "place" && edit.locId === 1902 && edit.shape === 9));
-    assert.ok(diagonal.some((edit) => edit.kind === "place" && edit.locId === 1793 && edit.shape === 19));
-    assert.ok(diagonal.some((edit) => edit.kind === "place" && edit.locId === 1933 && edit.shape === 13));
-    assert.ok(diagonal.some((edit) => edit.kind === "place" && edit.locId === 16683 && edit.plane === 0 && edit.tileX === 12 && edit.tileY === 22));
-    assert.ok(diagonal.some((edit) => edit.kind === "place" && edit.locId === 16679 && edit.plane === 1 && edit.tileX === 12 && edit.tileY === 22));
-    assert.ok(diagonal.some((edit) => edit.kind === "terrain" && edit.locId === 0 && edit.plane === 1 && edit.tileX === 12 && edit.tileY === 22));
-    for (const [tileX, tileY, rotation] of [[10, 20, 2], [10, 24, 3], [14, 20, 1], [14, 24, 0]]) {
-        assert.ok(diagonal.some((edit) => edit.kind === "terrain" && edit.plane === 1 && edit.tileX === tileX && edit.tileY === tileY && edit.shape === 1 && edit.rotation === rotation));
-    }
-    assert.ok(diagonal.some((edit) => edit.kind === "terrain" && edit.plane === 1 && edit.tileX === 12 && edit.tileY === 22 && edit.shape === 0));
-    const threeFloors = generateBuildingEdits(
-        { minX: 10, maxX: 14, minY: 20, maxY: 24, plane: 0 }, "Classic", 3,
-    );
-    assert.ok(threeFloors.some((edit) => edit.kind === "place" && edit.locId === 16684 && edit.plane === 1));
-    for (const plane of [1, 2]) {
-        const ladderTerrain = threeFloors.filter((edit) => edit.kind === "terrain" && edit.plane === plane && edit.tileX === 12 && edit.tileY === 22);
-        assert.deepEqual(ladderTerrain.map((edit) => edit.locId), [0]);
-    }
-    const levelled = generateBuildingEdits(
-        { minX: 10, maxX: 12, minY: 20, maxY: 22, plane: 0 }, "Classic", 1, undefined,
-        () => -2,
-    ).filter((edit) => edit.kind === "height" && edit.plane === 0);
-    assert.equal(Math.min(...levelled.map((edit) => edit.tileX)), 9);
-    assert.equal(Math.max(...levelled.map((edit) => edit.tileX)), 14);
-    assert.equal(Math.min(...levelled.map((edit) => edit.tileY)), 19);
-    assert.equal(Math.max(...levelled.map((edit) => edit.tileY)), 24);
-    const fallbackLevelled = generateBuildingEdits(
-        { minX: 10, maxX: 12, minY: 20, maxY: 22, plane: 0 }, "Classic", 1, undefined,
-        (tile) => tile.tileX === 11 && tile.tileY === 21 ? -2 : undefined,
-    ).filter((edit) => edit.kind === "height" && edit.plane === 0);
-    assert.ok(fallbackLevelled.length > 0, "flatten from loaded selection tiles when the outer ring is unavailable");
-}
 
 {
     const entries = new Map<string, string>();
@@ -735,7 +687,7 @@ assert.equal(plugin.undo(), false);
 calls.length = 0;
 plugin.setConfig({ tool: "delete" });
 plugin.applyAtPointer();
-assert.deepEqual(calls, [["del", { x: 3222, y: 3218 }, 0, 22, 3]]);
+assert.deepEqual(calls, [["del", { x: 3222, y: 3218 }, 0, 22, 2]], "D_O deletes the hovered object using its actual shape and rotation");
 assert.equal(saved?.edits[0].locId, 0);
 
 plugin.clearEdits();
@@ -807,17 +759,6 @@ assert.deepEqual(calls, [
 ]);
 
 // Building generation clears the selected area before placing anything new.
-plugin.clearEdits();
-(plugin as any).selection = { kind: "ground", tileX: 3222, tileY: 3218, tileEndX: 3224, tileEndY: 3220, plane: 0, locId: -1, locName: "" };
-calls.length = 0;
-rebuiltRegions.length = 0;
-plugin.generateBuilding("Classic", 1, "Rectangle");
-assert.equal(plugin.getConfig().edits[0]?.kind, "clear");
-assert.equal(plugin.getConfig().edits.slice(0, 25).every((edit) => edit.kind === "clear"), true);
-assert.ok(plugin.getConfig().edits.slice(25).some((edit) => edit.kind === "place"));
-assert.deepEqual(calls, [], "generated buildings wait for the rebuilt terrain region");
-assert.deepEqual(rebuiltRegions, [[((3222 >> 6) << 8) | (3218 >> 6)]]);
-
 // Path tool needs two clicks: the first only records the start.
 plugin.clearEdits();
 calls.length = 0;
@@ -1272,6 +1213,11 @@ sceneFrameCallback?.();
 assert.equal(previewCalls.at(-1)?.[0], "selectBuilding");
 assert.equal(previewPlugin.getState().selection?.kind, "building");
 assert.equal(previewPlugin.getState().selection?.buildingTileCount, 40);
+previewPlugin.setSelectionMode("ground");
+emitWindow("mousemove", { target: fakeCanvas, clientX: 24, clientY: 17, shiftKey: false });
+assert.deepEqual(previewCalls.at(-1), ["previewPointer", previewPointer], "S_T previews the hovered tile before a selection is made");
+emitWindow("mousemove", { target: {}, clientX: 25, clientY: 18 });
+assert.equal(previewCalls.at(-1)?.[0], "clearPointerPreview", "S_T clears its tile preview over editor controls");
 previewPlugin.setSelectionMode("building");
 hasGroundUnderPointer = false;
 emitWindow("mousemove", { target: fakeCanvas, clientX: 24, clientY: 17, shiftKey: false });
@@ -1305,12 +1251,12 @@ async function searchTests(): Promise<void> {
     assert.equal(await capturePlugin.captureSelectionImage(), undefined);
 
     const worldPlugin = new EditModePlugin();
-    worldPlugin.attach({ loadWorldDefinition: async () => parsedWorld } as any);
+    worldPlugin.attach({ loadWorldDefinition: async () => parsedWorld, getPointerTile: () => undefined } as any);
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(worldPlugin.getState().world.definition?.zones.length, 1);
-    (worldPlugin as any).selection = { tileX: 3200, tileY: 3210, plane: 1, locId: -1, locName: "" };
-    worldPlugin.setSpawnPoint();
-    assert.deepEqual(worldPlugin.getWorldDefinitionForSave()?.spawn, { x: 3200, y: 3210, z: 1 });
+    worldPlugin.addWorldZone({ minX: 3200, maxX: 3201, minY: 3210, maxY: 3211 });
+    assert.equal(worldPlugin.getWorldDefinitionForSave()?.zones.length, 2);
+    assert.deepEqual(Object.keys(worldPlugin.worldOverridesForSave()), ["zones"], "the map editor never exports spawn changes");
     worldPlugin.markWorldDefinitionSaved();
     assert.equal(worldPlugin.getWorldDefinitionForSave(), undefined);
 

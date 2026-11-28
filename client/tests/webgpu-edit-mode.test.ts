@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { JSDOM } from "jsdom";
+import { Ray } from "../game/math/Raycast";
 import { Camera } from "../game/Camera";
 import { TileHighlightManager } from "../game/highlights/TileHighlightManager";
 import { ClientPluginManager } from "../game/plugins/ClientPluginManager";
@@ -65,6 +66,33 @@ async function main() {
     assert.equal(plugin.getConfig().renderAllHeightLevels, true, "returning to ground restores all floors by default");
     plugin.setConfig({ heightLevel: 2 });
     assert.equal(plugin.getConfig().renderAllHeightLevels, false, "upper floors default to hiding floors above them");
+    plugin.setConfig({ heightLevel: 0 });
+    const interaction = renderer.interactionHost;
+    const originalScreenToRay = interaction.screenToRay;
+    interaction.screenToRay = () => new Ray([3090.5, -10, 3520.5], [0, 1, 0]);
+    renderer.mapManager.visibleMaps = [{
+        heightMapData: new Int16Array(36), heightMapSize: 3, borderSize: 0,
+        getRenderBaseWorldX: () => 3090, getRenderBaseWorldY: () => 3520, getLocalTileSpan: () => 2,
+    }];
+    renderer.mapManager.visibleMapCount = 1;
+    let underRoof = true;
+    interaction.getTileRenderFlagAt = () => underRoof ? 4 : 0;
+    client.inputManager.mouseX = client.inputManager.mouseY = 100;
+    for (const floorView of [undefined, "all", "one-above", "up-to"] as const) {
+        plugin.setConfig({ floorView, renderAllHeightLevels: true });
+        interaction.currentFrameCount++;
+        assert.equal(interaction.getRoofPlaneLimit(), 0, `hover cutaway works with ${floorView ?? "automatic"} floor visibility`);
+    }
+    underRoof = false;
+    plugin.setConfig({ floorView: "all" });
+    interaction.currentFrameCount++;
+    assert.equal(interaction.getRoofPlaneLimit(), 3, "leaving a building restores all visible levels");
+    client.inputManager.mouseX = client.inputManager.mouseY = -1;
+    interaction.screenToRay = originalScreenToRay;
+    renderer.mapManager.visibleMaps = [];
+    renderer.mapManager.visibleMapCount = 0;
+    plugin.setConfig({ floorView: undefined, heightLevel: 2 });
+
     const host = (plugin as any).host;
     const tile = { tileX: 3090, tileY: 3520, plane: 2 };
     host.setTerrainOverlay(tile, 5, 0, 1);

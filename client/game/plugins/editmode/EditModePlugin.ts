@@ -7,7 +7,6 @@ import { waterArea, generateIslandEdits } from "./IslandGenerator";
 import { buildPathCorners, createPathTiles } from "./PathGenerator";
 import { DEFAULT_WALL_BRUSH, planWallRun, type WallBrush } from "./EditorWallBrush";
 import { fillOverlay, MAX_FILL_TILES, type OverlayFillResult } from "./OverlayFill";
-import { generateBuildingEdits, type BuildingShape, type BuildingStyle } from "./BuildingGenerator";
 import { parseEditorLocation, regionBounds, regionIdOf, WORLD_COORD_MAX } from "./EditorCoordinates";
 import { adjustHeightBytes, cornerVertex, heightToByte, levelFoundation, type TileCorner } from "./TerrainHeight";
 import { MAX_SCATTER_DENSITY, MIN_SCATTER_DENSITY, scatterBrushPasses, type ScatterPass } from "./ScatterBrush";
@@ -57,6 +56,11 @@ const DEFAULT_CONFIG: EditModePluginConfig = Object.freeze({
     heightLevel: 0,
     renderAllHeightLevels: true,
     showMapIcons: false,
+    showUnwalkableFlags: false,
+    showBridgeFlags: false,
+    showRemoveRoofFlags: false,
+    showLowerZFlags: false,
+    showDisableRenderFlags: false,
     saveObjectSpawns: false,
     showPvpZones: false,
     showDuelZones: false,
@@ -176,15 +180,6 @@ function clearAreaEdits(range: TileRange): EditModeEdit[] {
     return edits;
 }
 
-function expandTileRange(range: TileRange, tiles: number): TileRange {
-    return {
-        ...range,
-        minX: range.minX - tiles,
-        maxX: range.maxX + tiles,
-        minY: range.minY - tiles,
-        maxY: range.maxY + tiles,
-    };
-}
 
 export class EditModePlugin {
     private readonly listeners = new Set<EditModePluginListener>();
@@ -207,9 +202,7 @@ export class EditModePlugin {
     private scatter?: { assets: readonly { id: number; shape: number }[]; radius: number; density: number };
     private scatterPreviewFrame?: number;
     private scatterPreviewKey = "";
-    private blockedRegionVisible = true;
-    private blockedRegionKey = "";
-    private blockedRegionCount = 0;
+    private tileFlagRegionKey = "";
     private selectionMode: "entity" | "ground" | "building" = "entity";
     private search: EditModePluginState["search"] = {
         kind: "loc",
@@ -313,31 +306,6 @@ export class EditModePlugin {
         return this.host?.getOverlayTexture?.(textureId);
     }
 
-    /** Updates the world spawn from one selected tile; Save persists it to world.json. */
-    setSpawnPoint(): void {
-        const selection = this.selection;
-        const definition = this.world.definition;
-        if (
-            !selection ||
-            selection.kind === "loc" ||
-            selection.kind === "npc" ||
-            !definition ||
-            (selection.tileEndX !== undefined && selection.tileEndX !== selection.tileX) ||
-            (selection.tileEndY !== undefined && selection.tileEndY !== selection.tileY)
-        ) {
-            return;
-        }
-        this.world = {
-            ...this.world,
-            definition: {
-                ...definition,
-                spawn: { x: selection.tileX, y: selection.tileY, z: selection.plane },
-            },
-        };
-        this.worldDefinitionDirty = true;
-        this.commit();
-    }
-
     getWorldDefinitionForSave(): EditModeWorldDefinition | undefined {
         return Object.keys(this.worldOverridesForSave()).length ? this.world.definition : undefined;
     }
@@ -347,18 +315,14 @@ export class EditModePlugin {
         this.worldDefinitionDirty = false;
     }
 
-    getLoadedWorldSetting(key: "spawn" | "zones"): unknown {
+    getLoadedWorldSetting(key: "zones"): unknown {
         return this.savedWorldDefinition?.[key];
     }
 
     worldOverridesForSave(): Record<string, unknown> {
-        const changes: Record<string, unknown> = {};
         const definition = this.worldDefinitionDirty ? this.world.definition : undefined;
-        if (!definition) return changes;
-        for (const key of ["spawn", "zones"] as const) {
-            if (JSON.stringify(definition[key]) !== JSON.stringify(this.savedWorldDefinition?.[key])) changes[key] = definition[key];
-        }
-        return changes;
+        return definition && JSON.stringify(definition.zones) !== JSON.stringify(this.savedWorldDefinition?.zones)
+            ? { zones: definition.zones } : {};
     }
 
     resizeWorldZone(index: number, bounds: Pick<EditModeBoundedWorldZone, "minX" | "maxX" | "minY" | "maxY">): void {
@@ -1002,7 +966,7 @@ export class EditModePlugin {
             (selection.tileEndX ?? selection.tileX) !== selection.tileX ||
             (selection.tileEndY ?? selection.tileY) !== selection.tileY) return undefined;
         const overlay = this.host?.getTerrainOverlay?.(selection);
-        return overlay !== undefined && overlay > 0 ? overlay : undefined;
+        return overlay !== undefined && overlay >= 0 ? overlay : undefined;
     }
 
     useSelectionOverlay(): void {
@@ -1041,27 +1005,36 @@ export class EditModePlugin {
         return JSON.stringify({ ...JSON.parse(contents), npcs });
     }
 
+    landscapeData(part = ""): Promise<any> {
+        if (!this.host?.landscapeData) return Promise.reject(new Error("Landscape generation needs the editor cache to be loaded"));
+        return this.host.landscapeData(part);
+    }
+
     loadTemplateCatalog() {
         return this.host?.loadTemplateCatalog?.() ?? Promise.resolve([]);
     }
 
     loadTemplate(name: string): Promise<unknown> {
-        if (!this.host?.loadTemplate) return Promise.reject(new Error("Connect to a development world to open its templates"));
+        if (!this.host?.loadTemplate) return Promise.reject(new Error("The editor template library is unavailable"));
         return this.host.loadTemplate(name);
     }
 
     loadMapPlans() {
-        if (!this.host?.loadMapPlans) return Promise.reject(new Error("Construction presets need a development server"));
+        if (!this.host?.loadMapPlans) return Promise.reject(new Error("Construction generation needs the editor cache to be loaded"));
         return this.host.loadMapPlans();
     }
 
     previewMapPlan(query: URLSearchParams): Promise<unknown> {
-        if (!this.host?.previewMapPlan) return Promise.reject(new Error("Construction presets need a development server"));
+        if (!this.host?.previewMapPlan) return Promise.reject(new Error("Construction generation needs the editor cache to be loaded"));
         return this.host.previewMapPlan(query);
     }
 
     loadTravel(kind: "game-warps" | "map-warps"): Promise<unknown> {
         return this.host?.loadTravel?.(kind) ?? Promise.resolve([]);
+    }
+
+    loadObjectTravel(object: EditModeSelection): Promise<unknown> {
+        return this.host?.loadObjectTravel?.(object) ?? Promise.resolve([]);
     }
 
     getLocActions(id: number): readonly (string | undefined)[] {
@@ -1371,6 +1344,9 @@ export class EditModePlugin {
         const plan = planAreaStamp(stamp.area, tile, stamp.options, (id) =>
             this.host?.getStampObjectInfo?.(id),
         );
+        // Clear existing grass before placing the template's own floor decorations.
+        plan.edits.unshift(...plan.edits.filter(edit => edit.kind === "terrain" && edit.locId > 0)
+            .flatMap(edit => this.groundDecorationDeletes(edit)));
         const [width, depth] = stampSize(stamp.area, stamp.options.turns);
         const mapped = new Map<number, boolean>();
         const isMapped = ({ tileX, tileY }: EditModeTile): boolean => {
@@ -1433,6 +1409,7 @@ export class EditModePlugin {
             radius: toInt(brush.radius, this.terrainBrush.radius, 0, 10),
             step: toInt(brush.step, this.terrainBrush.step, 1, 64),
             blend: toInt(brush.blend, this.terrainBrush.blend, 1, 100),
+            flagMask: toInt(brush.flagMask, this.terrainBrush.flagMask ?? 1, 0, 31),
         };
         if (this.config.tool === "terrain") {
             this.refreshPlacementPreview();
@@ -1499,29 +1476,32 @@ export class EditModePlugin {
         return edits.length;
     }
 
-    showBlockedRegion(show: boolean): number {
-        this.blockedRegionVisible = show;
-        return this.refreshBlockedRegion(true);
+    clearTileFlagOverlays(): void {
+        for (const flag of [1, 2, 4, 8, 16]) this.host?.showTileFlagTiles?.(flag, []);
+        this.tileFlagRegionKey = "";
     }
 
-    private get isWalkabilityBrush(): boolean {
+    private get isFlagBrush(): boolean {
         return this.config.tool === "terrain" &&
             (this.terrainBrush.action === "block" || this.terrainBrush.action === "unblock");
     }
 
-    private refreshBlockedRegion(force = false): number {
+    refreshTileFlagOverlays(force = false): void {
         const host = this.host;
-        if (!host?.showBlockedTiles) return 0;
-        const tile = this.blockedRegionVisible && this.config.active && this.isWalkabilityBrush
-            ? host.getPointerTile() ?? host.getCameraTile?.() ?? this.selection
-            : undefined;
-        const id = tile && regionIdOf(tile.tileX, tile.tileY);
-        const key = id === undefined ? "" : `${id}:${this.config.heightLevel}`;
-        if (!force && this.blockedRegionKey === key) return this.blockedRegionCount;
-        if (!key && !this.blockedRegionKey) return 0;
-        this.blockedRegionKey = key;
-        const tiles: EditModeTile[] = [];
-        if (id !== undefined) {
+        if (!host?.showTileFlagTiles) return;
+        const visible = [this.config.showUnwalkableFlags, this.config.showBridgeFlags,
+            this.config.showRemoveRoofFlags, this.config.showLowerZFlags, this.config.showDisableRenderFlags];
+        const mask = visible.reduce((mask, show, index) => mask | (show ? 1 << index : 0), 0);
+        const tile = mask && this.config.active
+            ? host.getPointerTile() ?? host.getCameraTile?.() ?? this.selection : undefined;
+        const visibleRegions = host.getVisibleRegionIds?.();
+        const regions = tile ? visibleRegions?.length ? visibleRegions : [regionIdOf(tile.tileX, tile.tileY)] : [];
+        const key = regions.length ? `${regions.join(",")}:${this.config.heightLevel}:${mask}` : "";
+        if (!force && this.tileFlagRegionKey === key) return;
+        if (!key && !this.tileFlagRegionKey) return;
+        this.tileFlagRegionKey = key;
+        const tilesByFlag = [1, 2, 4, 8, 16].map(() => [] as EditModeTile[]);
+        for (const id of regions) {
             const region = regionBounds(id);
             const plane = this.config.heightLevel;
             const base = host.getBaseRegionFlags?.(id);
@@ -1533,13 +1513,13 @@ export class EditModePlugin {
                     const tile = { tileX, tileY, plane };
                     const flags = pending.get(tileX * 16384 + tileY) ??
                         base?.[(plane * 64 + (tileX & 63)) * 64 + (tileY & 63)] ?? host.getTerrainFlags?.(tile) ?? 0;
-                    if (flags & 1) tiles.push(tile);
+                    for (let index = 0; index < visible.length; index++) {
+                        if (flags & mask & (1 << index)) tilesByFlag[index].push(tile);
+                    }
                 }
             }
         }
-        host.showBlockedTiles(tiles);
-        this.blockedRegionCount = tiles.length;
-        return this.blockedRegionCount;
+        tilesByFlag.forEach((tiles, index) => host.showTileFlagTiles!(1 << index, tiles));
     }
 
     validateMapEdits(): { message: string; regionId?: number; tile?: EditModeTile }[] {
@@ -1631,7 +1611,7 @@ export class EditModePlugin {
             return this.sculptStrokeEdits(path, first, readHeight, stroke);
         }
         const pendingFlags = new Map<number, number>();
-        if (this.isWalkabilityBrush) {
+        if (this.isFlagBrush) {
             for (const edit of this.config.edits) {
                 if (edit.plane === first.plane && edit.kind === "flag") pendingFlags.set(brushTileKey(edit), edit.locId);
             }
@@ -1650,9 +1630,10 @@ export class EditModePlugin {
             if (brush.action === "overlay") edits.push(this.paintEdit(tile));
             else if (brush.action === "underlay" && brush.underlay !== undefined) add("underlay", brush.underlay);
             else if (brush.action === "block" || brush.action === "unblock") {
-                const flags = pendingFlags.get(brushTileKey(tile)) ?? this.host?.getTerrainFlags?.(tile);
+                const flags = pendingFlags.get(brushTileKey(tile)) ?? this.getBaseTileFlags(tile);
                 if (flags !== undefined) {
-                    const next = brush.action === "block" ? flags | 1 : flags & ~1;
+                    const mask = brush.flagMask ?? 1;
+                    const next = brush.action === "block" ? flags | mask : flags & ~mask;
                     if (next !== flags && next <= 32) add("flag", next);
                 }
             } else if (readHeight) {
@@ -1734,7 +1715,8 @@ export class EditModePlugin {
         this.commitEdits(edits, edits.every(isTileEdit));
     }
 
-    private placeStamp(tile: EditModeTile): void {
+    /** Place the armed stamp at the pointer or a captured Build here area origin. */
+    placeStamp(tile: EditModeTile, onPlaced?: () => void): void {
         const stamp = this.stamp;
         if (!stamp || this.stampPlacementPending) return;
         const reportError = (error: unknown) => this.noticeListener?.(error instanceof Error ? error.message : String(error));
@@ -1747,7 +1729,7 @@ export class EditModePlugin {
             const commit = () => {
                 if (this.stamp !== stamp || stamp.options !== options || !this.handlesCanvasInput()) return;
                 if (this.config.edits !== priorEdits) {
-                    this.placeStamp(tile);
+                    this.placeStamp(tile, onPlaced);
                     return;
                 }
                 const items = plan.items.length ? this.stampItemHistory?.(plan.items) : undefined;
@@ -1761,6 +1743,7 @@ export class EditModePlugin {
                     }
                     items.redo();
                 }
+                onPlaced?.();
                 this.noticeListener?.(`Stamped ${stamp.area.name}${plan.skipped ? ` (${plan.skipped} objects skipped)` : ""}`);
             };
             const regions = new Set(plan.edits.map((edit) => regionIdOf(edit.tileX, edit.tileY)));
@@ -1904,6 +1887,42 @@ export class EditModePlugin {
         })));
     }
 
+    loadMinimap(): Promise<Blob | undefined> {
+        const tile = this.getCameraTile() ?? this.selection;
+        return tile ? this.host?.loadMinimap?.(tile) ?? Promise.resolve(undefined) : Promise.resolve(undefined);
+    }
+
+    private getBaseTileFlags(tile: EditModeTile): number | undefined {
+        const base = this.host?.getBaseRegionFlags?.(regionIdOf(tile.tileX, tile.tileY));
+        return base?.[(tile.plane * 64 + (tile.tileX & 63)) * 64 + (tile.tileY & 63)] ?? this.host?.getTerrainFlags?.(tile);
+    }
+
+    /** RSPSi's Tile Height SET control edits the selected vertices in one undo step. */
+    setSelectedTileHeight(height: number, absolute: boolean): void {
+        const tile = this.isGroundSelection() || this.selection?.kind === "loc" ? this.selection : undefined;
+        if (!tile || !Number.isInteger(height) || height < 0 || height > 255) return;
+        this.finishActiveBrush();
+        const range = this.getSelectionRange();
+        const minX = range?.minX ?? tile.tileX;
+        const maxX = (range?.maxX ?? tile.tileX) + 1;
+        const minY = range?.minY ?? tile.tileY;
+        const maxY = (range?.maxY ?? tile.tileY) + 1;
+        const pending = new Map(this.config.edits.filter(edit => edit.kind === "height" && edit.plane === tile.plane)
+            .map(edit => [`${edit.tileX}:${edit.tileY}`, edit.locId]));
+        const edits: EditModeEdit[] = [];
+        for (let tileX = minX; tileX <= maxX; tileX++) for (let tileY = minY; tileY <= maxY; tileY++) {
+            const at = { tileX, tileY, plane: tile.plane };
+            const current = this.host?.getTerrainHeight?.(at);
+            const below = at.plane === 0 ? 0 : this.host?.getTerrainHeight?.({ ...at, plane: at.plane - 1 });
+            if (current === undefined || below === undefined) continue;
+            const previous = pending.get(`${tileX}:${tileY}`) ?? heightToByte(current, below);
+            const requested = absolute ? height : Math.min(255, height + previous);
+            const value = requested === 1 ? 2 : requested;
+            edits.push({ ...at, kind: "height", locId: value, shape: 0, rotation: 0 });
+        }
+        if (edits.length) this.commitEdits(edits);
+    }
+
     /** Selects the whole map region the selection (or else the camera) is in. */
     selectRegion(): void {
         const tile = this.selection ?? this.host?.getCameraTile?.();
@@ -1921,7 +1940,7 @@ export class EditModePlugin {
         const location = parseEditorLocation(text);
         if (!location) return false;
         this.finishActiveBrush();
-        if (this.config.ghostUi) this.cancelLineStart();
+        this.cancelLineStart();
         this.jumpToTile(location.tileX, location.tileY, location.plane ?? this.config.heightLevel);
         // A selection left behind would otherwise still be what Select region acts on.
         this.selection = undefined;
@@ -1970,16 +1989,6 @@ export class EditModePlugin {
             "same-overlay": "This area already has the chosen overlay",
             "too-large": `Too big to fill: the area is over ${MAX_FILL_TILES.toLocaleString()} tiles`,
         }[fill.error]);
-    }
-
-    generateBuilding(style: BuildingStyle, floors: number, shape: BuildingShape): void {
-        const range = this.getSelectionRange();
-        if (!range || range.maxX - range.minX < 2 || range.maxY - range.minY < 2) return;
-        this.commitEdits([
-            // Walls and roof edges occupy the one-tile perimeter around the selection.
-            ...clearAreaEdits(expandTileRange(range, 1)),
-            ...generateBuildingEdits(range, style, floors, this.host?.getCameraTile?.(), this.host?.getTerrainHeight, shape),
-        ], false);
     }
 
     refreshMap(): void {
@@ -2205,6 +2214,19 @@ export class EditModePlugin {
                 host.selectPointer?.(tile) ??
                 (loc ? { ...tile, ...loc } : { ...tile, locId: -1, locName: "" });
             this.commit();
+            return;
+        }
+
+        if (this.config.tool === "delete" && host.selectPointer) {
+            const selected = host.selectPointer(tile, true);
+            if (selected?.kind === "loc") {
+                this.selection = selected;
+                this.deleteSelection();
+            } else {
+                this.selection = undefined;
+                host.clearSelectionHighlight?.();
+                this.commit();
+            }
             return;
         }
 
@@ -2752,7 +2774,7 @@ export class EditModePlugin {
             } else {
                 const tile = this.host?.getPointerTile();
                 this.pointerTileListener?.(tile);
-                this.refreshBlockedRegion();
+                this.refreshTileFlagOverlays();
                 this.extendBrushStroke(tile);
                 this.refreshPlacementPreview();
                 this.refreshPointerPreview();
@@ -2855,7 +2877,7 @@ export class EditModePlugin {
             return;
         }
         // Leave native arrow navigation and other actions on form controls.
-        if (target?.closest?.('input, select, [data-map-editor="ghost-tool-finder"], [data-map-editor="jump-to-location"], [data-map-editor="ghost-help"]')) {
+        if (target?.closest?.('input, select, [data-map-editor="tool-finder"], [data-map-editor="jump-to-location"], [data-map-editor="editor-help"]')) {
             if (plainKey && event.key === "Shift") this.cameraKeys.add(event.code);
             return;
         }
@@ -3109,7 +3131,7 @@ export class EditModePlugin {
                 host?.clearTerrainPreview?.();
                 return;
             }
-            const color = this.isWalkabilityBrush ? (this.terrainBrush.action === "block" ? 0xf87171 : 0x4ade80) : undefined;
+            const color = this.isFlagBrush ? (this.terrainBrush.action === "block" ? 0xf87171 : 0x4ade80) : undefined;
             const brush = this.brushPreviewSettings();
             const footprint = stroke?.preview ? [...stroke.preview.values()] :
                 stroke && !stroke.live ? brushFootprint([stroke.path[0], stroke.path[stroke.path.length - 1]], brush) :
@@ -3213,11 +3235,7 @@ export class EditModePlugin {
             host.previewBuilding(tile);
             return;
         }
-        if (this.config.tool === "select" && tile && this.selectionMode === "ground") {
-            host?.clearPointerPreview?.();
-            return;
-        }
-        if (!host?.previewPointer || (this.config.tool !== "select" && this.config.tool !== "pick") || !tile) {
+        if (!host?.previewPointer || (this.config.tool !== "select" && this.config.tool !== "pick" && this.config.tool !== "delete") || !tile) {
             host?.clearPointerPreview?.();
             return;
         }
@@ -3257,10 +3275,14 @@ export class EditModePlugin {
                 input?.renderAllHeightLevels ?? DEFAULT_CONFIG.renderAllHeightLevels,
             floorView: input?.floorView === "up-to" || input?.floorView === "one-above" || input?.floorView === "all"
                 ? input.floorView : undefined,
-            ghostUi: input?.ghostUi === true,
             brushTiming: input?.brushTiming === "live" ? "live" : undefined,
             renderDistance: input?.renderDistance === undefined ? undefined : toInt(input.renderDistance, 25, 25, 160),
             showMapIcons: input?.showMapIcons ?? DEFAULT_CONFIG.showMapIcons,
+            showUnwalkableFlags: input?.showUnwalkableFlags ?? DEFAULT_CONFIG.showUnwalkableFlags,
+            showBridgeFlags: input?.showBridgeFlags ?? DEFAULT_CONFIG.showBridgeFlags,
+            showRemoveRoofFlags: input?.showRemoveRoofFlags ?? DEFAULT_CONFIG.showRemoveRoofFlags,
+            showLowerZFlags: input?.showLowerZFlags ?? DEFAULT_CONFIG.showLowerZFlags,
+            showDisableRenderFlags: input?.showDisableRenderFlags ?? DEFAULT_CONFIG.showDisableRenderFlags,
             saveObjectSpawns: input?.saveObjectSpawns === true,
             showPvpZones: input?.showPvpZones ?? DEFAULT_CONFIG.showPvpZones,
             showDuelZones: input?.showDuelZones ?? DEFAULT_CONFIG.showDuelZones,
@@ -3307,7 +3329,7 @@ export class EditModePlugin {
 
     private commit(persist = true): void {
         this.version++;
-        this.refreshBlockedRegion(true);
+        this.refreshTileFlagOverlays(true);
         this.state = {
             config: this.config,
             selection: this.selection,

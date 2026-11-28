@@ -249,8 +249,28 @@ function bottomFloorOption(event) {
   return claimedElsewhere(event) || climbDown(event, true);
 }
 
+/** Read-only editor inspection, using the same map resolver as the climb handlers. */
+function travelDestinations(object, action) {
+  const name = ObjectDefinition.forId(object.getId())?.getName();
+  const label = action.toLowerCase();
+  if (name === "Gangplank" && label === "cross") {
+    const at = ClimbLinks.crossDestination(object);
+    return at ? [{ label: action, to: [at.getX(), at.getY(), at.getZ()] }] : [];
+  }
+  if (!CLIMBABLE_NAMES.includes(name)) return [];
+  const directions = label === "climb" ? [1, -1]
+    : [...UP_OPTIONS, ...TOP_FLOOR_OPTIONS].some(option => option.toLowerCase() === label) ? [1]
+    : [...DOWN_OPTIONS, ...BOTTOM_FLOOR_OPTIONS].some(option => option.toLowerCase() === label) ? [-1] : [];
+  return directions.flatMap(direction => {
+    const toEnd = [...TOP_FLOOR_OPTIONS, ...BOTTOM_FLOOR_OPTIONS].some(option => option.toLowerCase() === label);
+    const at = ClimbLinks.destination(object, direction, object.getLocation(), null, toEnd);
+    return at ? [{ label: direction > 0 ? "Climb up" : "Climb down", to: [at.getX(), at.getY(), at.getZ()] }] : [];
+  });
+}
+
 module.exports = {
   name: "Ladders",
+  travelDestinations,
   description: "Climbing for ladders, staircases, trapdoors, ropes and similar scenery, moving the player a level up or down: ladders with the climb animation, staircases walked with none.",
   register(api) {
     pluginApi = api;

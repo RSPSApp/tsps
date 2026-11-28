@@ -29,7 +29,7 @@
     "typescript": "^5.7.3"
   },
   "scripts": {
-    "build": "node ../scripts/client-version.mjs && tsc --build",
+    "build": "node ../scripts/client-version.mjs && node scripts/prepare-editor-generation.cjs && tsc --build",
     "start": "node ../scripts/run-with-env.mjs - ./dist/Server.js",
     "start:prod": "BOT_RUNTIME_EVENT_LOGGING=0 BOT_RUNTIME_TELEMETRY_ENABLED=0 BOT_TASK_PROFILER_ENABLED=0 TASK_SLOW_WARN_ENABLED=0 PROJECTILE_DEBUG=0 MAGIC_CAST_DEBUG=0 node ../scripts/run-with-env.mjs - --max-old-space-size=8192 --max-semi-space-size=16 ./dist/Server.js",
     "dev": "node ../scripts/client-version.mjs && node ../scripts/run-with-env.mjs - ./node_modules/nodemon/bin/nodemon.js --ext ts,json,js ./src/main/typescript/elvarg/Server.ts 0",

@@ -97,7 +97,9 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         selectPointer: () => selectedObject,
         jumpCameraToTile: (target) => { cameraTarget = target; },
         levelCamera: () => { cameraResets++; },
-        getLocActions: (id) => id === 50 || id === 51 ? [] : ["Inspect", "Climb"],
+        getLocActions: (id) => id === 52 ? ["Climb-up", "Search"] : id === 50 || id === 51 ? [] : ["Inspect", "Climb"],
+        loadObjectTravel: async (object) => object.locId === 52 ? [{ id: 52, op: 1, from: [3200, 3200, 0],
+            actionLabel: "Climb-up", mapDerived: true, destinations: [{ label: "Climb up", to: [3201, 3200, 1] }] }] : [],
         getLocName: (id) => id === 51 ? "Cave exit" : "null",
         loadTravel: async (kind) => kind === "map-warps" ? [] : [
             { id: 42, op: 2, name: "Cellar ladder", from: [3200, 3200, 0], destinations: [{ label: "Cellar", to: [3210, 9600, 1] }] },
@@ -105,9 +107,13 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         ],
         getTerrainHeight: ({ tileX }) => readHeight(tileX),
         getTerrainFlags: () => 0,
+        setTerrainOverlay: noop,
+        clearTerrainOverride: noop,
+        getTerrainOverlay: () => plugin.getConfig().edits.findLast(edit => edit.kind === "terrain")?.locId ?? 3,
+        getOverlaySwatches: () => [{ id: 3, name: "Stone", colorRgb: 0x777777 }, { id: 7, name: "Grass", colorRgb: 0x306820 }],
         getUnderlaySwatches: () => [{ id: 7, name: "Grass", colorRgb: 0x306820 }],
         refreshEditedRegions: (regions) => rebuilds.push([...regions]),
-        getCameraTile: () => tile,
+        getCameraTile: () => cameraTarget ?? tile,
         selectTileRange: (start, end) => ({
             ...start, tileEndX: end.tileX, tileEndY: end.tileY, kind: "ground", locId: -1, locName: "",
         }),
@@ -119,7 +125,7 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         },
         loadObjectThumbnail: async (id) => { thumbnailRequests.push(id); return "data:image/png;base64,AA=="; },
         loadItemThumbnail: async (id) => { itemThumbnails.push(id); return "data:image/png;base64,AQ=="; },
-        loadMapPlans: async () => require("../../server/plugins/world/MapPlans").catalog(),
+        loadMapPlans: async () => require("../game/plugins/editmode/generation/buildings/MapPlans").catalog(),
         previewMapPlan: async (query) => { structureRequests.push(query); return JSON.parse(area); },
         getStampObjectInfo: (id) => ({ sizeX: id === 9 ? 2 : 1, sizeY: 1, interactive: true }),
         getLocPlacementShape: () => 10,
@@ -134,7 +140,10 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         assert.ok(element, selector);
         return element;
     };
-    const click = (label: string) => find<HTMLButtonElement>(`button[aria-label="${label}"]`).click();
+    const click = (label: string) => {
+        const aliases: Record<string,string> = {"Terrain brush settings":"Modify Height", "Objects":"Place objects", "NPCs":"Place NPCs", "Ground items":"Place ground items", "Choose overlay":"Paint Overlays", "World map":"World map", "Build":"Generate structure", "Refresh map":"Refresh world data", "Select the whole 64 x 64 region":"Select map square", "Choose new map squares on the world map":"Create new map"};
+        find<HTMLButtonElement>(`button[aria-label="${aliases[label] ?? label}"]`).click();
+    };
     const escape = (target: HTMLElement) => target.dispatchEvent(new browser.KeyboardEvent("keydown", {
         key: "Escape", bubbles: true, cancelable: true,
     }));
@@ -157,6 +166,39 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         selection.dispatchEvent(new browser.Event("change"));
         assert.equal(plugin.getConfig().tool, "select");
         assert.equal(document.querySelector(panel("terrain-brush")), null);
+        plugin.setConfig({ overlayId: 7 });
+        plugin.applyAtPointer();
+        const currentOverlay = find(panel("current-overlay"));
+        assert.ok(currentOverlay.querySelector('svg[aria-label="Current overlay #3"]'), "current overlay preview comes from the selected tile");
+        assert.equal(currentOverlay.querySelectorAll("button").length, 1, "only Use is a button in the current-overlay row");
+        click("Use current tile overlay");
+        assert.equal(plugin.getConfig().overlayId, 3, "Use copies the tile material into the paint selection");
+        assert.equal(plugin.getConfig().edits.length, 0, "Use samples without painting the map");
+        plugin.setConfig({ overlayId: 7 });
+        click("Use overlay");
+        const tileOverlays = find(panel("overlay-dropdown"));
+        assert.equal(tileOverlays.hidden, false, "Use overlay expands an inline swatch dropdown");
+        assert.equal(find<HTMLButtonElement>(`${panel("overlay-dropdown")} button[aria-label="Grass #7"]`).getAttribute("aria-pressed"), "true", "picker previews the paint overlay, not the tile’s existing Stone overlay");
+        const overlaySearch = find<HTMLInputElement>('input[aria-label="Search overlays"]');
+        overlaySearch.value = "Grass";
+        overlaySearch.dispatchEvent(new browser.Event("input"));
+        assert.equal(find<HTMLButtonElement>(`${panel("overlay-dropdown")} button[aria-label="Stone #3"]`).hidden, true);
+        find<HTMLButtonElement>(`${panel("overlay-dropdown")} button[aria-label="Grass #7"]`).click();
+        assert.equal(plugin.getConfig().tool, "select", "changing a tile overlay keeps selection mode");
+        assert.ok(plugin.getConfig().edits.some(edit => edit.kind === "terrain" && edit.locId === 7 && edit.tileX === tile.tileX && edit.tileY === tile.tileY));
+        assert.equal(find(panel("overlay-dropdown")).hidden, true, "choosing an overlay closes the dropdown");
+        click("Use overlay");
+        find<HTMLButtonElement>(`${panel("overlay-dropdown")} button[aria-label="Clear #0"]`).click();
+        assert.equal(plugin.getConfig().edits.findLast(edit => edit.kind === "terrain")?.locId, 0, "an untextured tile can clear its overlay");
+        plugin.setConfig({ overlayId: 3 });
+        click("Use current tile overlay");
+        assert.equal(plugin.getConfig().overlayId, 0, "Use can sample a tile with no overlay");
+        assert.match(find(panel("current-overlay")).textContent!, /None/);
+
+        plugin.undo();
+        plugin.undo();
+        escape(canvas);
+
 
         click("Objects");
         click("Place scenery with a brush");
@@ -229,9 +271,9 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         escape(canvas);
         assert.equal(plugin.getState().wallStart, undefined);
         assert.equal(plugin.getConfig().tool, "wall");
-        const goTo = find<HTMLInputElement>('input[aria-label="Go to coordinates or region"]');
-        goTo.focus();
-        escape(goTo);
+        const brushControl = find<HTMLInputElement>('input[aria-label="Brush size"]');
+        brushControl.focus();
+        escape(brushControl);
         assert.equal(document.querySelector(panel("draw-wall")), null);
 
         click("Build");
@@ -243,6 +285,12 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
             return element.querySelector("select")!;
         };
         const structure = field("Structure"), materialStyle = field("Material style");
+        const initialPlace = find<HTMLButtonElement>(`${panel("build-presets")} button[aria-label="Place this design on the map"]`);
+        assert.equal(initialPlace.disabled, false, "placement can generate its own preview in one click");
+        const roll = find<HTMLButtonElement>('button[aria-label="Generate another repeatable design"]');
+        assert.ok(roll.querySelector("svg"), "reroll uses an icon");
+        assert.equal(roll.textContent, "");
+        assert.equal(roll.previousElementSibling?.tagName, "INPUT", "reroll sits beside the design seed input");
         choose(structure, "tavern");
         choose(materialStyle, "warriors-stone");
         choose(structure, "ruins");
@@ -258,11 +306,14 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         await new Promise<void>((resolve) => setImmediate(resolve));
         const planWidth = find<HTMLInputElement>(`${panel("build-presets")} input[type="number"]`);
         const validWidth = planWidth.value;
-        assert.ok(planPanel.querySelector('button[aria-label="Position this design on the map"]'));
+        assert.ok(planPanel.querySelector('button[aria-label="Place this design on the map"]'));
         planWidth.value = "";
         planWidth.dispatchEvent(new browser.Event("input"));
-        assert.equal(planPanel.querySelector('button[aria-label="Position this design on the map"]'), null,
-            "editing a dimension clears the old preview immediately");
+        assert.equal(find<HTMLButtonElement>(`${panel("build-presets")} button[aria-label="Place this design on the map"]`).disabled, false,
+            "changing settings keeps one-click placement available");
+        initialPlace.click();
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        assert.equal(plugin.getConfig().edits.length, 0, "invalid dimensions cannot place a stale preview");
         choose(planWidth, "");
         click("Preview this structure before placing it");
         assert.equal(structureRequests.length, 2);
@@ -273,11 +324,44 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         await Promise.resolve();
         assert.equal(find<HTMLInputElement>(`${panel("build-presets")} input[type="number"]`).value, validWidth,
             "reopening restores the last valid width");
+        click("Preview this structure before placing it");
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        click("Place this design on the map");
+        plugin.applyAtPointer();
+        assert.ok(plugin.getConfig().edits.length > 0, "a settlement piece was placed");
+        assert.equal(find('[role="tab"][aria-selected="true"]').textContent, "Settlements");
         escape(canvas);
+        await Promise.resolve();
+        assert.match(find(panel("swatches")).textContent!, /Generate structure.*Stamp area.*Draw walls/,
+            "finishing a settlement piece restores useful tab content");
+        click("Delete Object");
+        assert.equal(find('[role="tab"][aria-selected="true"]').textContent, "Objects");
+        assert.match(find(panel("swatches")).textContent!, /Show Object View/);
+        assert.equal(plugin.undo(), true);
+        assert.equal(plugin.getConfig().edits.length, 0);
 
         click("Select the whole 64 x 64 region");
         const initialSelection = plugin.getState().selection;
         assert.ok(find(`${panel("selection-details")} details`).textContent?.includes("Region edges"));
+        assert.equal(document.querySelector('button[aria-label="Generate building"]'), null, "Build here replaces the legacy generator controls");
+        click("Build here");
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        const placeArea = find<HTMLButtonElement>(`${panel("build-presets")} button[aria-label="Place this design in the selected area"]`);
+        assert.equal(placeArea.textContent, "Place on area");
+        assert.equal(placeArea.disabled, false, "area placement is available without a separate preview");
+        const requestsBeforePlace = structureRequests.length;
+        hovered = {...tile, tileX: tile.tileX + 20, tileY: tile.tileY + 20};
+        placeArea.click();
+        assert.equal(placeArea.disabled, true, "the placement button is busy while generating");
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        assert.equal(structureRequests.length, requestsBeforePlace + 1, "one click generates and places the structure");
+        assert.ok(plugin.getConfig().edits.some(edit => edit.kind === "place" && edit.tileX === tile.tileX && edit.tileY === tile.tileY),
+            "Place on area uses the captured selection origin, not the current pointer");
+        assert.equal(plugin.getConfig().tool, "select", "area placement returns to selection instead of attaching another copy to the cursor");
+        assert.equal(plugin.getStamp(), undefined, "area placement disarms the stamp");
+        assert.equal(document.querySelector(panel("area-stamps")), null, "area placement closes the stamp inspector");
+        assert.equal(plugin.undo(), true, "direct area placement is one undo step");
+        hovered = tile;
         click("Duplicate area");
         assert.equal(plugin.getConfig().tool, "stamp");
         assert.equal(plugin.getStamp()?.area.width, 2);
@@ -290,12 +374,9 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         assert.equal(find(panel("selection-details")).style.display, "block");
         assert.equal(plugin.getConfig().edits.length, 0);
 
-        click("World map");
+        click("Create map square");
+        click("Pick a map square visually");
         const worldMapPanel = find(panel("world-map"));
-        const create = [...worldMapPanel.querySelectorAll("button")].find((button) => button.textContent === "New region");
-        assert.ok(create);
-        create.click();
-        assert.equal(create.getAttribute("aria-pressed"), "true");
         const map = find<HTMLCanvasElement>(`${panel("world-map")} canvas`);
         for (const event of ["pointerdown", "pointerup"]) {
             const pointer = new browser.MouseEvent(event, {
@@ -309,26 +390,22 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         const region = find<HTMLInputElement>('input[aria-label="New map square region ID"]');
         assert.equal(region.value, String(51 * 256 + 50), "empty square uses the map area's world-coordinate offset");
 
-        plugin.setConfig({ ghostUi: true });
-        const ghostBar = panel("ghost-top-bar");
-        assert.equal(find(`${panel("top-bar")}`).style.display, "none", "Classic controls yield the top bar");
-        assert.equal(find(`${panel("ghost-floor-controls")}`).style.display, "flex");
-        find<HTMLButtonElement>(`${ghostBar} button[aria-label="Terrain"]`).click();
-        assert.match(find(panel("ghost-navigation")).textContent!, /Sculpt heights/);
-        assert.equal(plugin.getConfig().tool, "select", "browsing a workspace does not arm a tool");
+        const menuBar = panel("menu-bar");
+        assert.equal(document.querySelector('[data-map-editor="toolbar"]'), null, "the old toolbar is removed");
+        assert.ok(find(panel("swatch-dock")));
 
         const pressKey = (target: HTMLElement, key: string, ctrlKey = false) =>
             target.dispatchEvent(new browser.KeyboardEvent("keydown", { key, ctrlKey, bubbles: true, cancelable: true }));
         pressKey(canvas, "k", true);
-        const finder = find(panel("ghost-tool-finder"));
+        const finder = find(panel("tool-finder"));
         assert.equal(finder.hidden, false);
-        const toolQuery = find<HTMLInputElement>(`${panel("ghost-tool-finder")} input`);
+        const toolQuery = find<HTMLInputElement>(`${panel("tool-finder")} input`);
         toolQuery.value = "raise hill";
         toolQuery.dispatchEvent(new browser.Event("input"));
         pressKey(toolQuery, "Enter");
         assert.equal(finder.hidden, true);
         assert.equal(plugin.getTerrainBrush().action, "raise");
-        assert.equal(find(`${panel("ghost-navigation")} button[aria-label="Raise land"]`).getAttribute("aria-current"), "true");
+        assert.equal(find(`${panel("tool-rail")} button[aria-label="Modify Height"]`).getAttribute("aria-pressed"), "true");
 
         const mouse = (type: string, dx: number) => {
             hovered = { ...tile, tileX: tile.tileX + dx };
@@ -391,28 +468,26 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         plugin.undo();
 
         click("Paint base ground");
-        const baseGround = [...find(panel("terrain-brush")).querySelectorAll("select")]
-            .find((control) => control.options[0]?.text === "Choose a material")!;
-        assert.equal(baseGround.value, "");
+        assert.equal(plugin.getTerrainBrush().underlay, undefined);
         mouse("mousedown", 0);
         mouse("mouseup", 0);
         assert.deepEqual(plugin.getConfig().edits, [], "the default base ground brush cannot erase terrain");
         assert.match(document.body.textContent!, /Choose a base ground material before painting/);
-        choose(baseGround, "7");
+        find<HTMLButtonElement>('[data-material="7"]').click();
         mouse("mousedown", 0);
         mouse("mouseup", 0);
         assert.equal(plugin.getConfig().edits[0]?.locId, 7);
         plugin.undo();
-        choose(baseGround, "0");
+        find<HTMLButtonElement>('[data-material="0"]').click();
         mouse("mousedown", 0);
         mouse("mouseup", 0);
         assert.equal(plugin.getConfig().edits[0]?.locId, 0, "clearing base ground is an explicit choice");
         plugin.undo();
         escape(canvas);
-        assert.equal(plugin.getConfig().tool, "select", "Escape stops the idle GhostUI brush");
+        assert.equal(plugin.getConfig().tool, "select", "Escape stops the idle brush");
         assert.equal(document.querySelector(panel("terrain-brush")), null);
 
-        click("Block walking");
+        click("Set flags");
         mouse("mousedown", 0);
         assert.equal(plugin.getConfig().edits[0].kind, "flag");
         mouse("mousemove", 2);
@@ -421,41 +496,33 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         pressKey(canvas, "]");
         assert.equal(plugin.getTerrainBrush().radius, 1, "the radius shortcut works on the canvas");
         assert.match(find(panel("terrain-brush")).textContent!, /Brush radius: 1 tile/);
-        find<HTMLButtonElement>(`${ghostBar} button[aria-label="Review changes"]`).click();
+        find<HTMLButtonElement>(`${menuBar} button[aria-label="Review changes"]`).click();
         assert.match(find(panel("review-changes")).textContent!, /Region 12850.*3 edited ground points/);
-        find<HTMLButtonElement>(`${ghostBar} button[aria-label="Undo"]`).click();
+        find<HTMLButtonElement>(`${menuBar} button[aria-label="Undo"]`).click();
         assert.match(find(panel("review-changes")).textContent!, /No unsaved changes/);
-        find<HTMLButtonElement>(`${ghostBar} button[aria-label="Redo"]`).click();
+        find<HTMLButtonElement>(`${menuBar} button[aria-label="Redo"]`).click();
         assert.equal(plugin.getConfig().edits.length, 3);
         click("Jump to changes at 3201, 3200, 0");
         assert.deepEqual(cameraTarget, { ...tile, tileX: 3201 }, "review jumps to an actual edited tile, even off-centre");
 
-        const workspace = (label: string) => find<HTMLButtonElement>(`${ghostBar} button[aria-label="${label}"]`).click();
-        const task = (label: string) => find<HTMLButtonElement>(`${panel("ghost-navigation")} button[aria-label="${label}"]`).click();
-        workspace("Terrain");
+        const task = (label: string) => find<HTMLButtonElement>(`${menuBar} button[aria-label="${label === "Select objects and NPCs" ? "Select" : label}"]`).click();
         task("Paint overlay");
-        click("Choose an overlay and tile shape");
-        const material = find(`${panel("terrain-brush")} ${panel("overlay-palette")}`);
-        assert.equal(material.previousElementSibling?.getAttribute("aria-expanded"), "true", "material picker sits beneath its trigger");
-        escape(find(`${panel("overlay-palette")} input`));
-        assert.equal(document.querySelector(panel("overlay-palette")), null);
+        assert.equal(find<HTMLButtonElement>('[role="tab"][aria-label="Overlays"]').getAttribute("aria-selected"), "true");
+        assert.ok(document.querySelector(panel("swatches")));
         assert.equal(plugin.getConfig().tool, "terrain");
 
         task("Draw path");
         assert.ok(document.querySelector(panel("terrain-line-tool")));
-        workspace("Build & Place");
+
         task("Place objects");
         assert.equal(document.querySelector(panel("terrain-line-tool")), null, "switching to placement closes the path inspector");
 
         task("Select objects and NPCs");
-        assert.equal(find(`${panel("ghost-navigation")} button[aria-label="Select objects and NPCs"]`).getAttribute("aria-current"), "true");
+        assert.equal(plugin.getSelectionMode(), "entity");
         selectedObject = { ...tile, kind: "loc", locId: 50, locName: "Decorative rock", shape: 22, rotation: 3 };
         plugin.applyAtPointer();
-        const objectActions = find(panel("object-actions"));
-        assert.equal(objectActions.style.visibility, "visible");
-        assert.equal(objectActions.style.top, "248px", "actions sit below the projected object");
-        assert.deepEqual([...objectActions.querySelectorAll("button")].map(({ textContent }) => textContent),
-            ["Move", "Duplicate", "Rotate", "Delete"]);
+        assert.equal(document.querySelector(panel("object-actions")), null, "object actions only appear in the sidebar");
+        const objectActions = find(panel("selection-details"));
         const clipboardEvent = (name: "cut" | "copy" | "paste", text = "", target: HTMLElement = canvas) => {
             const event = new browser.Event(name, { bubbles: true, cancelable: true });
             Object.defineProperty(event, "clipboardData", { value: { getData: () => text } });
@@ -467,7 +534,7 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         assert.equal(plugin.getConfig().tool, "select");
         assert.equal(plugin.getState().selection, selectedObject);
         const editsBeforeObjectPlacement = plugin.getConfig().edits;
-        click("Duplicate selected object");
+        click("Duplicate object");
         assert.equal(plugin.getConfig().tool, "place");
         assert.equal(plugin.getConfig().shape, 22);
         assert.equal(plugin.getConfig().rotation, 3);
@@ -478,7 +545,7 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         assert.deepEqual(plugin.getConfig().edits.at(-1), { ...hovered, kind: "place", locId: 50, shape: 22, rotation: 3 });
         plugin.undo();
         task("Select objects and NPCs");
-        click("Move selected object");
+        click("Move object");
         assert.equal(plugin.getConfig().tool, "place");
         assert.deepEqual(plugin.getConfig().edits, editsBeforeObjectPlacement, "Move waits for a destination");
         plugin.applyAtPointer();
@@ -509,32 +576,58 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         escape(canvas);
         hovered = tile;
         selectedObject = undefined;
-        workspace("Select");
-        task("Ground and areas");
+
+        task("Tiles only");
         plugin.applyAtPointer();
         assert.equal(find(panel("selection-details")).style.display, "block");
         task("Buildings");
         assert.equal(find(panel("selection-details")).style.display, "none", "ground inspector closes when switching to building selection");
-        task("Objects and NPCs");
+        task("Select");
         selectedObject = { ...tile, kind: "loc", locId: 42, locName: "Cellar ladder" };
         plugin.applyAtPointer();
         await Promise.resolve();
         await Promise.resolve();
         await new Promise<void>((resolve) => setImmediate(resolve));
-        assert.equal(find(`${ghostBar} button[aria-label="Travel & Warps"]`).getAttribute("aria-pressed"), "true");
-        click("Action");
+        assert.ok(find(panel("travel-links")));
+        assert.ok(find(panel("travel-links")).textContent!.includes("3210, 9600, 1"), "object overview shows the current destination");
+        assert.equal(find('[data-map-editor="travel-nearby"]').hidden, true, "nearby links hide while inspecting an object");
+        click("Change destination for Climb");
+        click("Back to action");
         assert.equal(find<HTMLSelectElement>(`${panel("travel-links")} select[aria-label="Source object option"]`).value, "2");
         click("Review");
         click("Move the camera to this arrival tile");
         assert.deepEqual(cameraTarget, { tileX: 3210, tileY: 9600, plane: 1 });
-        assert.match(find(panel("ghost-navigation")).textContent!, /Return ladder/);
+        click("Return to the travel link list");
+        assert.equal(find('[data-map-editor="travel-nearby"]').hidden, false, "browsing restores nearby links");
         click("Go to Return ladder at 3210, 9600, 1");
         assert.match(find(panel("travel-links")).textContent!, /Return ladder/);
 
         task("Pick source object");
+        selectedObject = { ...tile, kind: "loc", locId: 52, locName: "Ladder" };
+        plugin.applyAtPointer();
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        assert.match(find(panel("travel-links")).textContent!, /Climb-up.*3201, 3200, 1/,
+            "map-derived ladder routes appear alongside the object's other actions");
+        assert.equal(find('[data-map-editor="travel-nearby"]').hidden, true);
+        click("Change destination for Climb-up");
+        const destinationInput = [...document.querySelectorAll<HTMLLabelElement>(`${panel("travel-links")} label`)]
+            .find(label => label.textContent === "Destination 1 coordinates")!.querySelector("input")!;
+        destinationInput.value = "3202, 3200, 1";
+        destinationInput.dispatchEvent(new browser.Event("input", { bubbles: true }));
+        click("Continue to return link");
+        click("Continue to review");
+        assert.match(find(panel("travel-links")).textContent!, /Climb-up.*3202, 3200, 1/,
+            "changing the destination preserves the existing action");
+        click("Back to object actions");
+        click("Add a travel action to this object");
+        assert.equal(find<HTMLSelectElement>(`${panel("travel-links")} select[aria-label="Source object option"]`).value, "3",
+            "adding an action uses an empty slot instead of overwriting Climb-up or Search");
+        task("Pick source object");
         selectedObject = { ...tile, kind: "loc", locId: 50, locName: "null" };
         plugin.applyAtPointer();
         assert.match(find(panel("travel-links")).textContent!, /Scenery #50/);
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        click("Add a travel action to this object");
         click("Use action text Climb down");
         click("Continue to destination");
         click("Pick an arrival object");
@@ -546,6 +639,8 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         click("Continue to review");
         assert.match(find(panel("travel-links")).textContent!, /Climb down.*Two-way.*Climb up/);
         click("Include this link in the next map save");
+        click("Go to return object");
+        click("Return to the travel link list");
         click("Go to Cave exit at 3205, 3200, 0");
         assert.match(find(panel("travel-links")).textContent!, /Climb up.*Two-way.*Climb down/);
         click("Return");
@@ -556,9 +651,9 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         assert.equal(document.querySelector('button[aria-label="Go to Object 50 at 3200, 3200, 0"]'), null, "the paired entrance is removed");
         hovered = tile;
 
-        const dock = panel("ghost-floor-controls");
-        assert.equal(document.querySelector(`${ghostBar} button[aria-label="Navigate"]`), null);
-        const mapButton = find<HTMLButtonElement>(`${dock} button[aria-label="Open world map"]`);
+        const dock = panel("menu-bar");
+        assert.equal(document.querySelector(`${menuBar} button[aria-label="Navigate"]`), null);
+        const mapButton = find<HTMLButtonElement>(`${dock} button[aria-label="World map"]`);
         mapButton.focus();
         mapButton.click();
         assert.equal(mapButton.getAttribute("aria-pressed"), "true");
@@ -575,15 +670,22 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         assert.equal(mapState.currentArea, mainArea);
         assert.deepEqual([mapState.displayX, mapState.displayY, mapState.zoomPercentage, mapState.targetX, mapState.targetY],
             [0, 0, 75, 20, 30], "closing named areas restores the regular world map");
+        click("Jump to location");
+        click("Choose on world map");
+        assert.equal(document.querySelector(panel("jump-to-location")), null, "choosing visually closes the coordinate form");
+        const navigationMap = find<HTMLCanvasElement>(`${panel("world-map")} canvas`);
+        mapTarget = undefined;
+        pressKey(navigationMap, "Enter");
+        assert.ok(mapTarget, "choosing a world map location navigates the editor camera");
+        assert.equal(document.querySelector(panel("world-map")), null, "choosing a location closes the map");
         find<HTMLButtonElement>(`${dock} button[aria-label="Reset camera angle"]`).click();
         assert.equal(cameraResets, 1);
 
-        workspace("Terrain");
         task("Draw path");
         plugin.applyAtPointer();
         assert.deepEqual(plugin.getState().pathStart, tile);
         pressKey(canvas, "k", true);
-        const navigationSearch = find<HTMLInputElement>(`${panel("ghost-tool-finder")} input`);
+        const navigationSearch = find<HTMLInputElement>(`${panel("tool-finder")} input`);
         navigationSearch.value = "world map";
         navigationSearch.dispatchEvent(new browser.Event("input"));
         pressKey(navigationSearch, "Enter");
@@ -604,8 +706,7 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         navigationSearch.value = "jump";
         navigationSearch.dispatchEvent(new browser.Event("input"));
         pressKey(navigationSearch, "Enter");
-        assert.equal(find(`${ghostBar} button[aria-label="Terrain"]`).getAttribute("aria-pressed"), "true");
-        const jump = find<HTMLInputElement>(`${dock} ${panel("jump-to-location")} input`);
+        const jump = find<HTMLInputElement>(`${panel("jump-to-location")} input`);
         const jumpForm = jump.form!;
         jump.value = "invalid";
         jumpForm.dispatchEvent(new browser.Event("submit", { cancelable: true }));
@@ -614,14 +715,13 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         jump.value = "3202, 3203, 2";
         jumpForm.dispatchEvent(new browser.Event("submit", { cancelable: true }));
         assert.deepEqual(cameraTarget, { tileX: 3202, tileY: 3203, plane: 2 });
-        assert.equal(find<HTMLSelectElement>(`${dock} select`).value, "2");
+        assert.equal(find<HTMLInputElement>('input[aria-label="Height/Level"]').value, "2");
         assert.equal(plugin.getConfig().tool, "path");
         assert.equal(plugin.getState().pathStart, undefined, "jumping clears the old path endpoint");
         assert.equal(document.querySelector(panel("jump-to-location")), null);
         plugin.setConfig({ heightLevel: 0 });
 
-        workspace("Maps");
-        assert.ok(document.querySelector(`${panel("ghost-navigation")} button[aria-label="Refresh world data"]`));
+        assert.ok(document.querySelector(`${menuBar} button[aria-label="Refresh world data"]`));
         task("Create new map");
         const picker = find(panel("world-map"));
         const pickCanvas = find<HTMLCanvasElement>(`${panel("world-map")} canvas`);
@@ -629,7 +729,7 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         const chooseTerrain = [...picker.querySelectorAll("button")].find(({ textContent }) => textContent === "Choose terrain")!;
         assert.ok(chooseTerrain.disabled, "pending edits make a square unavailable for generation");
         pressKey(pickCanvas, "Escape");
-        workspace("Build & Place");
+
         task("Place ground items");
         const itemSearch = find<HTMLInputElement>(`${panel("search")} input[aria-label="Search cache"]`);
         itemSearch.value = "Pickaxe";
@@ -642,12 +742,9 @@ test("map tools use the rail and inspector, with cancellable previews", async ()
         assert.deepEqual(itemThumbnails, [1]);
         assert.equal(icon.src, "data:image/png;base64,AQ==");
 
-        plugin.setConfig({ ghostUi: false, heightLevel: 0 });
-        assert.equal(plugin.getBrushTiming(), "live", "the shared brush preference survives layout switching");
-        assert.equal(find(panel("top-bar")).style.display, "flex");
-        assert.equal(find(dock).style.display, "none");
-        assert.equal(find(ghostBar).hidden, true);
-        assert.equal(plugin.getConfig().edits.length, 3, "switching layout keeps the pending world edits");
+        plugin.setConfig({ heightLevel: 0 });
+        assert.equal(plugin.getBrushTiming(), "live");
+        assert.equal(plugin.getConfig().edits.length, 3, "navigation preserves pending world edits");
 
         plugin.clearEdits();
         plugin.armScatter([9], 0, 0.6);
@@ -708,7 +805,7 @@ test("landscape drafts can be rerolled, loaded in game, and edited again after s
         getWorldMapImageTile: () => undefined,
     }, () => {}, () => undefined, () => {}, () => {}, () => {}, () => {});
     browser.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
-    const land = require("../../server/plugins/world/LandscapePlans");
+    const land = require("../game/plugins/editmode/generation/landscapes/LandscapePlans");
     const id = 19765;
     const tile = { tileX: (id >> 8) * 64, tileY: (id & 255) * 64, plane: 0 };
     const originalFetch = globalThis.fetch;
@@ -722,19 +819,20 @@ test("landscape drafts can be rerolled, loaded in game, and edited again after s
     let scenePreview: Uint8Array | undefined;
     const framed: EditModeTile[] = [];
     connection.lastUrl = "ws://localhost:3000";
-    globalThis.fetch = async (input) => {
-        const { pathname, searchParams } = new URL(String(input));
+    globalThis.fetch = async () => { throw new Error("landscape UI must not use HTTP"); };
+    const landscapeData = async (part = "") => {
+        const { pathname, searchParams } = new URL(part || "/", "https://editor.invalid");
         const seed = Number(searchParams.get("seed"));
-        if (pathname.endsWith("/occupied")) return Response.json([]);
-        if (pathname.endsWith("/scene")) {
+        if (pathname === "/occupied") return [];
+        if (pathname === "/scene") {
             assert.equal(searchParams.get("squares"), String(id));
             seenSeeds.push(seed);
-            return Response.json({ width: 64, height: 64, regions: [id], occupied: [], sceneryCount: 0,
+            return { width: 64, height: 64, regions: [id], occupied: [], sceneryCount: 0,
                 preview: { columns: 1, rows: 1, pixels: "AAAA", colours: ["#000000"] },
-                packs: [{ regionId: id, data: Buffer.from(createRegionPack(id, true, 7 + seenSeeds.length, false)).toString("base64") }] });
+                packs: [{ regionId: id, data: createRegionPack(id, true, 7 + seenSeeds.length, false) }] };
         }
-        assert.equal(pathname, "/api/world/landscapes");
-        return Response.json(land.catalog());
+        assert.equal(pathname, "/");
+        return land.catalog();
     };
     EditorMapFiles.supported = () => true;
     EditorMapFiles.open = async () => ({
@@ -752,6 +850,7 @@ test("landscape drafts can be rerolled, loaded in game, and edited again after s
         toggleWorldMap: (actions) => worldMap.toggle({ ...tile, tileX: tile.tileX + 32, tileY: tile.tileY + 32 }, actions),
         closeEditorWorldMap: () => worldMap.close(),
         isEditorModalOpen: () => worldMap.isOpen(),
+        landscapeData,
         levelCamera: noop, jumpCameraToTile: noop, setFreeCamera: noop,
         isRegionOccupied: () => !!visible,
         showLandscapePreview: (packs) => { scenePreview = packs[0]?.data; },
@@ -765,7 +864,7 @@ test("landscape drafts can be rerolled, loaded in game, and edited again after s
             return { regionId: id, data: buildRegionPack(id, -1, -1, base.objectData, base.terrainData, edits, true, true, true) };
         },
     } as EditModeHost);
-    plugin.setConfig({ enabled: true, active: true, ghostUi: true });
+    plugin.setConfig({ enabled: true, active: true });
     const { mountEditorUi } = require("../game/plugins/editmode/EditorUi");
     const unmount = mountEditorUi(plugin);
     const fileSaver = require("file-saver");
@@ -823,7 +922,6 @@ test("landscape drafts can be rerolled, loaded in game, and edited again after s
         [...document.querySelectorAll<HTMLButtonElement>('[data-map-editor="world-map"] button')]
             .find(({ textContent }) => textContent === "Choose terrain")!.click();
         assert.deepEqual(picked, [id, id + 256, id + 257], "the picker preserves an L-shaped extension");
-        click("Maps");
         click("Create new map");
         await settled();
         const picker = document.querySelector('[data-map-editor="world-map"]')!;
@@ -877,11 +975,11 @@ test("landscape drafts can be rerolled, loaded in game, and edited again after s
         assert.notEqual(seenSeeds[0], seenSeeds.at(-1));
         assert.notDeepEqual(visible, original);
         click("Help");
-        const helpSearch = document.querySelector<HTMLInputElement>('[data-map-editor="ghost-help"] input')!;
+        const helpSearch = document.querySelector<HTMLInputElement>('[data-map-editor="editor-help"] input')!;
         assert.equal(cameraKey(helpSearch), false, "typing in help does not move the camera");
         helpSearch.value = "warp";
         helpSearch.dispatchEvent(new browser.Event("input"));
-        const help = document.querySelector('[data-map-editor="ghost-help"]')!;
+        const help = document.querySelector('[data-map-editor="editor-help"]')!;
         assert.match(help.textContent ?? "", /Connect places with travel links/);
         assert.doesNotMatch(help.textContent ?? "", /Check where players can walk/);
         helpSearch.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));

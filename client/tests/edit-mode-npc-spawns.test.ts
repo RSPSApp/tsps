@@ -443,7 +443,7 @@ FileSaver.saveAs = (blob: Blob, name: string) => {
     savedFiles.push({ name, contents: blob });
 };
 const removeUi = mountEditorUi(plugin);
-document.querySelector<HTMLButtonElement>('button[aria-label="Review and save pending map changes"]')!.click();
+document.querySelector<HTMLButtonElement>('[data-map-editor="menu-bar"] button[aria-label="Review changes"]')!.click();
 const download = document.querySelector<HTMLButtonElement>('[data-map-editor="review-changes"] button[aria-label="Download map overrides as a ZIP"]')!;
 assert.ok(download, "standalone editors have the download action");
 const savedNpcPatch = async (): Promise<string> => {

@@ -1,4 +1,4 @@
-import { diagonalWallFace, diagonalWallJoin } from "../../../../server/plugins/agent/mcp/DiagonalWall.AgentMcp.js";
+import { diagonalWallFace, diagonalWallJoin } from "./generation/buildings/DiagonalWall.js";
 import { WORLD_COORD_MAX } from "./EditorCoordinates";
 import type { EditModeEdit, EditModeTile } from "./types";
 

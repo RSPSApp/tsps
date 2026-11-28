@@ -44,7 +44,7 @@ Element-by-element placement is fine for a door and wrong for a city. These tool
 | Tool | Purpose |
 | --- | --- |
 | `build_shape` | One material, one shape: `line`, `ring`, `box`, `tower`, `repeated`, `avenue`, `column` |
-| `build_preset` | A named structure from `plugins/agent/data/edit-presets.json` |
+| `build_preset` | A named structure from `client/game/plugins/editmode/generation/buildings/data/edit-presets.json` |
 | `plan_build` | Dry run: counts, bounds, object mix — changes nothing |
 | `list_presets` | Presets, their parameters, and the material names |
 
@@ -70,7 +70,7 @@ build_preset { "preset": "tiered_city", "x": 3090, "y": 3485 }
 
 #### Adding a preset or a material
 
-Presets and materials are data, not code — edit `plugins/agent/data/edit-presets.json`. A
+Presets and materials are data, not code — edit `client/game/plugins/editmode/generation/buildings/data/edit-presets.json`. A
 material is `{ "name": { "id": <cache id>, "about": "..." } }`; a preset is a list of parts:
 
 ```json
@@ -98,7 +98,7 @@ and paste it anywhere instead of designing from scratch:
 | --- | --- |
 | `find_buildings` | Roofed buildings in an area (up to 256×256), each with a capture rectangle |
 | `capture_template` | Save every loc (all planes) and the terrain in a rectangle as a template |
-| `list_templates` | Templates in `plugins/agent/data/templates/` |
+| `list_templates` | Templates in `client/game/plugins/editmode/generation/templates/` |
 | `paste_template` | Place one at a tile, rotated 0/90/180/270; `dryRun` reports first |
 
 ```jsonc
@@ -126,7 +126,7 @@ drawn in its look:
 
 | Tool | Purpose |
 | --- | --- |
-| `capture_style` | Read a building's pieces into `plugins/agent/data/edit-styles.json`: wall, corner, post, diagonal, door, gate, floor (most common wins; `roles` overrides) |
+| `capture_style` | Read a building's pieces into `client/game/plugins/editmode/generation/buildings/data/edit-styles.json`: wall, corner, post, diagonal, door, gate, floor (most common wins; `roles` overrides) |
 | `list_styles` | Captured styles, with the variants (windows, decorated walls) left to assign by hand |
 | `build_wall` | A wall in a style along a path of tile corners: city walls, palisades, enclosures |
 
@@ -350,21 +350,21 @@ hills. Use the editor or MCP for shaped shores and saved multi-square maps.
 
 ## Editor integration
 
-Open `/?edit=1`. The selection control switches between objects and NPCs, ground and
-areas, and whole buildings. The rail switches editing tools, the inspector shows
-the selected object or tool controls, and the top bar groups validation and saving.
+Open `/?edit=1`. The editor has one layout: a menu bar, icon tool rail,
+resizable right-hand inspector and swatch tabs. Select picks tiles, objects and NPCs;
+the selection filter also supports ground-only and whole buildings.
 
-- Select an area and choose **Duplicate area** to place a rotated copy, or **Build
-  here** to prefill the structure's dimensions. **Build** on the rail opens Wall,
-  Structure and Stamp. Use Stamp to open an exported area or a server template saved
-  with `capture_template`. Structure uses the planners behind the MCP building tools.
-- **Terrain brush settings** beside the pencil group Paint, Sculpt and Walkability.
-  The brush can paint base ground and overlays, raise or lower land, smooth
-  bumps, flatten an area, grade a ramp, and set the ground blocking flag. Its map-edge
-  controls appear in the inspector after **Select region** and show steep steps on
-  the selected region and level. **Align** edits the selected region. The MCP
-  equivalent for ground blocking is `set_walkability`. Walkability shows blocked
-  tiles in red as you paint. The unblock brush previews in green.
+- Select an area and choose **Build here** to prefill its dimensions. **Place on
+  area** generates and stamps the design directly into that selection; **Place on
+  map** arms a stamp for pointer placement. Structure and landscape generation run
+  locally from the editor cache, using the same canonical planners as the MCP tools.
+  Built-in templates, imported areas and browser presets use the stamp inspector.
+- **Settings → Brush settings** groups Paint, Sculpt and Flags. Flags chooses which
+  tile bits **Set flags** or **Clear flags** paints, preserving every unchecked bit.
+  The flag icon opens these controls directly. **View** independently toggles
+  unwalkable, bridge, roof-removal, lower-level and disabled-render highlights.
+  Terrain controls can paint underlays and overlays, sculpt heights and grade ramps.
+  Region-edge controls appear after selecting a map square; **Align** edits its edge.
 - Switch the **Objects** palette from Single to Scatter to brush scenery onto the
   map. Scatter arms as soon as you choose it. Pick one of the biome sets or a
   search result, adjust radius and density, and click or drag. Escape stops the
@@ -372,19 +372,21 @@ the selected object or tool controls, and the top bar groups validation and savi
 - To make your own scatter set, use **New set** in the Scatter controls. Name the
   set, click the objects in search results, and save it to your browser profile.
   Search renders model thumbnails as the rows come into view.
-- **Editor settings** offers Classic and GhostUI layouts. GhostUI groups Select,
-  Terrain, Build & Place, Travel & Warps, and Maps in the top bar.
-  World map, Go to, and Reset camera sit beside the floor controls. Both layouts
-  offer an editor-only render distance of 25 to 160 tiles.
-- **Build & Place → Select objects** opens the object action bar. Move and
-  Duplicate preview the new position before a click places the object.
-  Ctrl+V pastes exported map areas.
-- In **Travel & Warps**, pick any scenery object or choose an existing link.
-  Set its in-game action text and pick an arrival tile or object. Open the world
-  map within the wizard to reach another area. For object arrivals the server
-  picks a clear tile beside the object. Multiple destinations open an in-game
-  choice. A return action can use the arrival object or another object.
-  Removing a paired link restores both original menu slots.
+- **Settings → Editor settings** controls visible floors and editor render distance.
+  **File → Jump to location** accepts coordinates or a region ID, or opens the world
+  map to choose a location. Roofs also hide automatically while hovering inside or
+  along a building's walls. Spawn configuration belongs to `/host`, not this editor.
+- Select an object to move, duplicate, rotate or delete it through the inspector.
+  Move and Duplicate preview the new position before a click places it. Ctrl+V
+  pastes exported map areas. Objects can be added to reusable object swatches.
+- **Tools → Pick source object** shows that object's actions and available game or
+  custom destinations. Ordinary ladders use the game's map-derived climb resolver;
+  the landing can vary with the approach. **Change destination** keeps the action's
+  menu slot; **Add travel action** uses an empty slot. Nearby links hide while editing.
+  Choose an arrival tile or object, optionally add a return action, then stage the
+  link for the next Save. Object arrivals resolve a clear tile beside the object.
+  Multiple destinations open an in-game choice; game requirements remain in force.
+  Public travel inspection uses the HTTP/WebRTC content API, including browser hosts.
 - **MCP:** `list_map_warps` returns saved links, and `set_map_warp` adds or updates one.
   Use `actionLabel` to name a menu action, `destinations[].beside: { id, at: [x,y,z] }`
   for object arrivals, and `returnFrom: { id, op, from, actionLabel }` to set a return.
@@ -393,7 +395,7 @@ the selected object or tool controls, and the top bar groups validation and savi
 - Choose a result in **Ground items** to place a stack with a quantity and respawn
   interval. The editor and `set_map_ground_item`, `remove_map_ground_item` and
   `list_map_ground_items` share `data/definitions/ground-items-custom.json`.
-- In GhostUI, **Maps → Create new map** opens the world map. Drag across empty map
+- **File → Create new map** opens the world map. Drag across empty map
   squares or use **Add or remove squares** for shapes such as an L. Choose the landform
   and biome, then adjust height variation, foliage and lakes. The camera moves to the
   selected squares for a 3D preview. Reroll in place or choose **Keep this terrain** to
@@ -402,8 +404,8 @@ the selected object or tool controls, and the top bar groups validation and savi
   terrain. **Match nearby terrain** borrows ground and natural objects along that edge.
   **Edge blend** sets how far the ground and height transition reaches into the new squares.
 - **Reroll map draft** reopens the active generated map before saving. Undo can restore
-  the previous generated layout or remove the draft. Classic still offers **Create map square**
-  for a single surface, cave or copied square.
+  the previous generated layout or remove the draft. **File → Create map square**
+  also offers a single surface, cave or copied square.
 - Building stamps level their foundation before placing the building. The
   foundation includes the outer north and east vertices and blends into nearby
   land. The stamp inspector can turn leveling off. **Objects and all terrain**

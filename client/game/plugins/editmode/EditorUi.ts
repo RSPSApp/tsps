@@ -15,40 +15,28 @@ import { attachLandscapeEditor, loadOccupiedMapSquares, loadBiomeScenery, type L
 import { attachEditorHelp } from "./EditorHelp";
 import type { MapFootprint } from "./EditorWorldMap";
 import { EditorGroundItems } from "./EditorGroundItems";
+import { EditorObjectSwatches, type ObjectSwatch } from "./EditorObjectSwatches";
 import { EditorPalette, type PaletteMode } from "./EditorPalette";
-import { GhostEditorNavigation } from "./GhostEditorNavigation";
+import { RspsiEditorLayout } from "./RspsiEditorLayout";
 import { editorChangeAreas } from "./EditorChangeAreas";
 import { readScatterSets, writeScatterSets, type EditorScatterSet } from "./EditorScatterSets";
 import { MAX_SCATTER_DENSITY, MIN_SCATTER_DENSITY } from "./ScatterBrush";
 import {
     createCameraIcon,
-    createBrushSettingsIcon,
-    createConfigIcon,
-    EditorToolbar,
     EDITOR_TOP_BAR_CLEARANCE,
-    EDITOR_TOP_BAR_HEIGHT,
-    showEditorTooltip,
-    type EditorTool,
-    createCloseIcon,
+    createEditorCloseButton,
     createDuplicateIcon,
     createMoveIcon,
     createLayersIcon,
+    createHammerIcon,
     createOverlayIcon,
-    createPathIcon,
-    createFillIcon,
     createPaintIcon,
-    createPointerIcon,
     createRotateIcon,
     createRefreshIcon,
-    createNpcIcon,
-    createObjectIcon,
     createSaveIcon,
-    createSpawnIcon,
     createTrashIcon,
-    createWorldMapIcon,
     createOverlayShapeIcon,
     createRedoIcon,
-    createSearchIcon,
     createReviewIcon,
     createUndoIcon,
 } from "./EditorToolbar";
@@ -68,7 +56,6 @@ import type {
     EditModeSelection,
     EditModeTile,
 } from "./types";
-import { BUILDING_SHAPES, BUILDING_STYLES, type BuildingShape, type BuildingStyle } from "./BuildingGenerator";
 
 const PANEL_STYLE: Partial<CSSStyleDeclaration> = {
     position: "fixed",
@@ -99,10 +86,9 @@ const INPUT_STYLE: Partial<CSSStyleDeclaration> = {
 const TERRAIN_LABELS: Record<TerrainBrushAction, string> = {
     overlay: "Paint overlay", underlay: "Paint base ground", raise: "Raise land", lower: "Lower land",
     smooth: "Smooth bumps", flatten: "Flatten to start height", ramp: "Grade ramp", natural: "Reset height",
-    block: "Block walking", unblock: "Unblock walking",
+    block: "Set flags", unblock: "Clear flags",
 };
 
-const TOP_BAR_HEIGHT = EDITOR_TOP_BAR_HEIGHT;
 /** Gap below the top bar where floating panels and toasts start. */
 const TOP_BAR_CLEARANCE = EDITOR_TOP_BAR_CLEARANCE;
 /** The saved spawn patch only needs importing once per page, not per UI mount. */
@@ -117,6 +103,7 @@ function stopClientInput(element: HTMLElement): void {
 function createPanel(name: string, width = "360px"): HTMLDivElement {
     const panel = document.createElement("div");
     panel.dataset.mapEditor = name;
+    panel.dataset.rspsiPanel = "";
     Object.assign(panel.style, PANEL_STYLE, { left: "var(--map-editor-panel-left, 62px)", top: "112px", width });
     stopClientInput(panel);
     document.body.appendChild(panel);
@@ -133,23 +120,7 @@ function createHeader(titleText: string, onClose: () => void): HTMLDivElement {
     });
     const title = document.createElement("strong");
     title.textContent = titleText;
-    const close = document.createElement("button");
-    close.type = "button";
-    close.title = `Close ${titleText.toLowerCase()}`;
-    close.setAttribute("aria-label", close.title);
-    close.appendChild(createCloseIcon());
-    Object.assign(close.style, {
-        width: "24px",
-        height: "24px",
-        display: "grid",
-        placeItems: "center",
-        padding: "0",
-        border: "0",
-        color: "#aeb8c8",
-        background: "transparent",
-        cursor: "pointer",
-    });
-    close.addEventListener("click", onClose);
+    const close = createEditorCloseButton(`Close ${titleText.toLowerCase()}`, onClose);
     header.append(title, close);
     return header;
 }
@@ -257,7 +228,7 @@ function isNpcEdit(edit: { kind: string }): boolean {
 function npcSpawnsKey(plugin: EditModePlugin): string {
     return JSON.stringify(plugin.getConfig().edits.filter(isNpcEdit)
         .map((edit) => [edit.kind, edit.locId, edit.tileX, edit.tileY, edit.plane, edit.rotation,
-            edit.wanderRadius, edit.leashRadius, edit.direction]));
+        edit.wanderRadius, edit.leashRadius, edit.direction]));
 }
 
 function changedNpcTiles(current: string, saved: string): EditModeTile[] {
@@ -274,26 +245,18 @@ function changedNpcTiles(current: string, saved: string): EditModeTile[] {
 }
 
 class EditorChrome {
-    private readonly toolbar: EditorToolbar;
-    private readonly ghostNavigation: GhostEditorNavigation;
-    private readonly editorLayout: HTMLSelectElement;
+    private readonly layout: RspsiEditorLayout;
     private readonly renderDistanceInput: HTMLInputElement;
     private readonly renderDistanceLabel: HTMLOutputElement;
     private readonly selectionModeInput: HTMLSelectElement;
     private readonly palette: EditorPalette;
+    private readonly objectSwatches: EditorObjectSwatches;
+    private swatchSelection?: EditModeSelection;
     private readonly selectionDetails: HTMLDivElement;
-    private readonly objectActions: HTMLDivElement;
-    private objectActionFrame?: number;
-    private readonly topBar: HTMLDivElement;
-    private readonly placeVisibilityControls: (ghost: boolean) => void;
-    private visibilityLayout?: boolean;
-    private readonly ghostViewportControls: HTMLDivElement;
-    private readonly ghostFloorInput: HTMLSelectElement;
-    private readonly ghostFloorVisibility: HTMLSelectElement;
-    private readonly ghostMapButton: HTMLButtonElement;
-    private readonly ghostJumpButton: HTMLButtonElement;
-    private ghostJumpPanel?: HTMLDivElement;
-    private ghostWorldMapMode?: "navigate" | "zones";
+    private readonly mapButton: HTMLButtonElement;
+    private readonly jumpButton: HTMLButtonElement;
+    private jumpPanel?: HTMLDivElement;
+    private worldMapMode?: "navigate" | "zones";
     private review?: {
         body: HTMLElement;
         save: HTMLButtonElement;
@@ -307,35 +270,28 @@ class EditorChrome {
         extra?: string;
         changed?: boolean;
     };
+    private swatchRequest = 0;
+    private minimapUrl?: string;
+    private syncSwatches?: () => void;
     private syncBrushInputs?: () => void;
     private syncScatterInputs?: () => void;
     private readonly heightInput: HTMLInputElement;
     private readonly renderAllInput: HTMLInputElement;
     private readonly floorViewInput: HTMLSelectElement;
-    private readonly mapIconsInput: HTMLInputElement;
     private readonly saveObjectSpawnsInput: HTMLInputElement;
     private readonly settingsContent: HTMLDivElement;
     private settingsDrawer?: HTMLElement;
-    private readonly pvpZonesInput: HTMLInputElement;
-    private readonly duelZonesInput: HTMLInputElement;
-    private readonly safeZonesInput: HTMLInputElement;
-    private readonly f2pZonesInput: HTMLInputElement;
-    private readonly multiCombatZonesInput: HTMLInputElement;
     private readonly unsubscribe: () => void;
     private readonly canvasShell?: HTMLElement;
-    private readonly previousCanvasTop: string;
+    private readonly previousCanvasStyle: string | null;
     private detailPanel?: HTMLElement;
-    private overlayPalette?: HTMLElement;
-    private overlayTrigger?: HTMLButtonElement;
     private areaPanel?: HTMLElement;
     private brushPanel?: HTMLElement;
     private landscapePanel?: HTMLElement;
-    private walkabilityOverlay = true;
-    private lastBrushActions: Record<"Paint" | "Sculpt" | "Walkability", TerrainBrushAction> = {
-        Paint: "overlay", Sculpt: "raise", Walkability: "block",
+    private lastBrushActions: Record<"Paint" | "Sculpt" | "Flags", TerrainBrushAction> = {
+        Paint: "overlay", Sculpt: "raise", Flags: "block",
     };
     private travelPanel?: HTMLElement;
-    private travelNearby?: HTMLElement;
     private travelSelection?: EditModeSelection;
     private regionPanel?: HTMLElement;
     private filesPanel?: HTMLElement;
@@ -359,15 +315,10 @@ class EditorChrome {
     private areaSummary?: HTMLElement;
     private areaOptions: AreaStampOptions = { terrain: "floors", turns: 0, interactive: false };
     private saveButton?: HTMLButtonElement;
-    private saveTooltip?: HTMLDivElement;
     private overlaySwatches: readonly EditModeOverlaySwatch[] = [];
     private selectionImage?: { key: string; dataUrl: string; loading: boolean };
-    private buildingStyle: BuildingStyle = "Varrock";
-    private buildingShape: BuildingShape = "Rectangle";
     private heightStep = 4;
     private heightSmoothing = 2;
-    private overlayShapePicker?: HTMLElement;
-    private buildingFloors = 1;
     private lastVersion = -1;
 
     constructor(private readonly plugin: EditModePlugin) {
@@ -383,206 +334,187 @@ class EditorChrome {
             onPick: (id) => this.pickSearchResult(id),
             onClose: () => this.dismissToolPanel(),
             onInspect: (id) => this.showDefinition(this.currentSearchMode(), id),
+            onAddSwatch: (id, name) => {
+                const shapes = this.plugin.getLocPlacementShapes(id);
+                this.objectSwatches.add({ id, name, type: shapes.includes(10) ? 10 : shapes[0] ?? 10, turn: 0 });
+            },
             loadThumbnail: (kind, id) => this.plugin.loadAssetThumbnail(kind, id),
+        });
+        this.objectSwatches = new EditorObjectSwatches({
+            pick: (swatch) => {
+                this.dismissToolPanel(true);
+                this.plugin.setConfig({ tool: "place", placeKind: "loc", locId: swatch.id, shape: swatch.type, rotation: swatch.turn });
+            },
+            selected: () => this.selectedObjectSwatch(),
+            browse: () => this.toggleSearch("loc", true),
+            thumbnail: (id) => this.plugin.loadAssetThumbnail("loc", id),
+            notify: (message) => this.toast(message),
         });
         this.updateObjectControls();
 
-        const tools: EditorTool[] = [
-            { id: "select", label: "Selection tool", icon: createPointerIcon },
-            {
-                id: "search-npcs",
-                label: "NPCs",
-                icon: createNpcIcon,
-                action: () => this.toggleSearch("npc"),
-            },
-            {
-                id: "search-objects",
-                label: "Objects",
-                icon: createObjectIcon,
-                action: () => this.toggleSearch("loc"),
-            },
-            {
-                id: "search-items",
-                label: "Ground items",
-                icon: createSpawnIcon,
-                action: () => this.toggleSearch("item"),
-            },
-            {
-                id: "overlay",
-                label: "Choose overlay",
-                icon: () => this.createOverlaySwatchIcon(plugin.getConfig().overlayId),
-                action: () => this.toggleOverlayPalette(),
-            },
-            { id: "terrain", label: "Paint terrain", icon: createPaintIcon, action: () => this.selectPaintTool() },
-            { id: "terrain-settings", label: "Terrain brush settings", icon: createBrushSettingsIcon, action: () => this.toggleBrushPanel() },
-            { id: "path", label: "Draw path", icon: createPathIcon },
-            {
-                id: "fill",
-                label: "Fill: repaint a whole connected overlay, keeping tile shapes",
-                icon: createFillIcon,
-            },
-            {
-                id: "undo",
-                dividerBefore: true,
-                label: "Undo (Ctrl+Z)",
-                icon: createUndoIcon,
-                action: () => {
-                    if (!this.plugin.undo()) this.toast("Nothing to undo");
-                },
-            },
-            {
-                id: "redo",
-                label: "Redo (Ctrl+Y)",
-                icon: createRedoIcon,
-                action: () => {
-                    if (!this.plugin.redo()) this.toast("Nothing to redo");
-                },
-            },
-            {
-                id: "world-map",
-                label: "World map",
-                icon: createWorldMapIcon,
-                action: () => this.toggleWorldMap(),
-            },
-            {
-                id: "refresh-map",
-                label: "Refresh map",
-                icon: createRefreshIcon,
-                action: () => {
-                    this.plugin.refreshMap();
-                    this.toast("Refreshing map...");
-                },
-            },
-            {
-                id: "settings",
-                label: "Editor settings",
-                icon: createConfigIcon,
-                action: () => this.toggleSettings(),
-            },
-        ];
-        tools.splice(tools.findIndex(({ id }) => id === "undo"), 0, {
-            id: "build",
-            label: "Build",
-            icon: createLayersIcon,
-            action: () => this.toggleBuildPanel(),
-        });
-        this.toolbar = new EditorToolbar(
-            tools,
-            "select",
-            (toolId) => {
-                this.dismissToolPanel();
-                this.plugin.setConfig({ tool: toolId === "path" || toolId === "fill" ? toolId : "select" });
-            },
-        );
         const selectionMode = (mode: ReturnType<EditModePlugin["getSelectionMode"]>) => {
             this.dismissToolPanel();
+            this.swatchSelection = undefined;
+            this.layout.activatePalette(mode === "ground" ? "Misc" : mode === "building" ? "Settlements" : "Objects");
             this.plugin.setSelectionMode(mode);
         };
         const groundTool = (tool: "path" | "fill") => {
             this.dismissToolPanel();
             this.plugin.setConfig({ tool });
         };
-        const brushTask = (group: "Paint" | "Sculpt" | "Walkability", action: TerrainBrushAction, description: string, keywords?: string) =>
-            ({ id: action, label: TERRAIN_LABELS[action], description, keywords, run: () => this.toggleBrushPanel(group, action) });
+        const brushTask = (group: "Paint" | "Sculpt" | "Flags", action: TerrainBrushAction, description: string, keywords?: string) =>
+        ({
+            id: action, label: TERRAIN_LABELS[action], description, keywords, run: () => {
+                if (action === "overlay" || action === "underlay") {
+                    this.dismissToolPanel();
+                    this.layout.selectPalette(action === "overlay" ? "Overlays" : "Underlays");
+                } else this.toggleBrushPanel(group, action);
+            }
+        });
         const worldMapTask = { id: "world-map", label: "World map", description: "Browse the overworld, dungeons and named map areas.", keywords: "open caves surface", run: () => this.toggleWorldMap() };
         const jumpTask = { id: "jump", label: "Jump to location", description: "Go directly to coordinates or a region ID.", keywords: "teleport go to", run: () => this.showJumpToLocation() };
         const cameraTask = { id: "camera", label: "Reset camera angle", description: "Face north at the default editor angle.", run: () => this.plugin.levelCamera() };
-        this.ghostNavigation = new GhostEditorNavigation([
-            { label: "Select", icon: createPointerIcon, groups: [
-                { label: "Select on the map", tasks: [
-                    { id: "select-entity", label: "Objects and NPCs", description: "Inspect, move, duplicate or delete an object or NPC.", run: () => selectionMode("entity") },
-                    { id: "select-ground", label: "Ground and areas", description: "Click a tile or drag a rectangle across the map.", run: () => selectionMode("ground") },
-                    { id: "select-building", label: "Buildings", description: "Select a whole building with one click.", run: () => selectionMode("building") },
-                    { id: "region", label: "Select map square", description: "Select the entire 64 × 64 map square.", keywords: "region", run: () => {
-                        selectionMode("ground");
-                        this.plugin.selectRegion();
-                    } },
-                ] },
-            ] },
-            { label: "Terrain", icon: createPaintIcon, groups: [
-                { label: "Paint ground", tasks: [
-                    brushTask("Paint", "overlay", "Paint roads, floors, and water with a shaped overlay.", "material"),
-                    brushTask("Paint", "underlay", "Choose a base ground material and paint beneath overlays.", "grass sand dirt"),
-                    { id: "path", label: "Draw path", description: "Connect two points with the selected overlay.", keywords: "road", run: () => this.openTerrainLineTool("path") },
-                    { id: "fill", label: "Fill connected overlay", description: "Repaint a connected surface and keep its shape.", run: () => this.openTerrainLineTool("fill") },
-                ] },
-                { label: "Sculpt heights", tasks: [
-                    brushTask("Sculpt", "raise", "Build up hills and ridges.", "height hill elevation"),
-                    brushTask("Sculpt", "lower", "Carve valleys and depressions.", "height elevation"),
-                    brushTask("Sculpt", "smooth", "Blend bumps with nearby heights.", "soften"),
-                    brushTask("Sculpt", "flatten", "Level the surface to the height where the drag starts.", "height foundation"),
-                    brushTask("Sculpt", "ramp", "Drag between two tiles to blend their heights into a slope.", "grade stairs elevation"),
-                    brushTask("Sculpt", "natural", "Restore the map format’s procedural terrain heights.", "reset height"),
-                ] },
-                { label: "Walkability", tasks: [
-                    brushTask("Walkability", "block", "Mark ground as unwalkable.", "collision pathing"),
-                    brushTask("Walkability", "unblock", "Clear the terrain’s walking block.", "collision pathing"),
-                ] },
-            ] },
-            { label: "Build & Place", icon: createLayersIcon, groups: [
-                { label: "Construction", tasks: [
-                    { id: "wall", label: "Draw walls", description: "Connect two tiles with a wall or fence and choose the material or opening.", run: () => this.openWallPanel() },
-                    { id: "structure", label: "Generate structure", description: "Build houses, guilds, ruins, farms and settlements.", keywords: "building house", run: () => this.openBuildPanel() },
-                    { id: "stamp", label: "Stamp area", description: "Copy an existing area or place a saved template.", keywords: "duplicate paste prefab", run: () => this.openAreaPanel() },
-                ] },
-                { label: "Populate the map", tasks: [
-                    { id: "build-select-entity", label: "Select objects and NPCs", description: "Click an existing object or NPC to inspect, move or duplicate it.", run: () => selectionMode("entity") },
-                    { id: "place-object", label: "Place objects", description: "Search and preview cache models before placing them.", run: () => { this.updateScatterAsset?.(); this.toggleSearch("loc", true); } },
-                    { id: "scatter", label: "Scatter scenery", description: "Paint a preset or your own mix of scenery.", keywords: "trees rocks plants brush set", run: () => {
-                        this.toggleSearch("loc", true);
-                        this.activateScatter?.();
-                    } },
-                    { id: "place-npc", label: "Place NPCs", description: "Find a creature or character and choose a spawn tile.", keywords: "spawn monsters", run: () => this.toggleSearch("npc", true) },
-                    { id: "place-item", label: "Place ground items", description: "Choose items and set how they spawn.", keywords: "drops loot", run: () => this.toggleSearch("item", true) },
-                ] },
-            ] },
-            { label: "Travel & Warps", icon: createMoveIcon, open: () => this.openTravelPanel(), groups: [
-                { label: "Travel and warps", tasks: [
-                    { id: "travel", label: "Browse nearby links", description: "Find portals, stairs, ladders and other travel objects near the editor camera.", keywords: "warp teleport destination", run: () => {
-                        this.openTravelPanel();
-                        this.travel.browse();
-                    } },
-                    { id: "travel-source", label: "Pick source object", description: "Click any scenery object to give it a travel action.", run: () => {
-                        this.openTravelPanel();
-                        this.travel.pickSource();
-                    } },
-                ] },
-            ] },
-            { label: "Maps", icon: createWorldMapIcon, groups: [
-                { label: "Expand the world", tasks: [
-                    { id: "new-region", label: "Create new map", description: "Select empty map squares, then preview and generate their terrain.", keywords: "landscape generator island new region expand world", run: () => this.openNewMapWizard() },
-                    { id: "expand-region", label: "Expand map portion", description: "Generate more terrain beside an existing map and blend the shared edges.", run: () => this.openNewMapWizard(true) },
-                    { id: "edit-draft", label: "Reroll map draft", description: "Adjust the terrain of a generated draft before saving it.", run: () => this.openCurrentLandscapeDraft() },
-                ] },
-                { label: "Gameplay zones", tasks: [
-                    { id: "zones", label: "Edit gameplay zones", description: "Draw, resize or change the type of PvP, multi-combat and other gameplay zones.", keywords: "create zone pvp safe duel", run: () => this.toggleWorldMap("zones") },
-                ] },
-                { label: "World data", tasks: [
-                    { id: "refresh", label: "Refresh world data", description: "Load map updates saved by the server or an agent.", run: () => {
-                        this.plugin.refreshMap();
-                        this.travel.refresh();
-                        this.groundItems.refresh();
-                        this.toast("Refreshing map…");
-                    } },
-                ] },
-                { label: "Map files", tasks: [
-                    ...(!browserHostWindow() ? [{ id: "map-files", label: "Manage map files", description: "Connect the server folder, manage backups or download edits.",
-                        keywords: "save export import", run: () => this.toggleFilesPanel() }] : []),
-                    { id: "validate", label: "Validate map edits", description: "Check edited regions for errors before saving.", run: () => this.showValidation() },
-                ] },
-            ] },
+        this.layout = new RspsiEditorLayout([
+            {
+                label: "Select", groups: [
+                    {
+                        tasks: [
+                            { id: "select-entity", label: "Select", description: "Click a tile, object or NPC, or drag to select an area.", run: () => selectionMode("entity") },
+                            { id: "select-ground", label: "Tiles only", description: "Click a tile or drag a rectangle across the map.", run: () => selectionMode("ground") },
+                            { id: "select-building", label: "Buildings", description: "Select a whole building with one click.", run: () => selectionMode("building") },
+                            {
+                                id: "region", label: "Select map square", description: "Select the entire 64 × 64 map square.", keywords: "region", run: () => {
+                                    selectionMode("ground");
+                                    this.plugin.selectRegion();
+                                }
+                            },
+                        ]
+                    },
+                ]
+            },
+            {
+                label: "Terrain", groups: [
+                    {
+                        tasks: [
+                            brushTask("Paint", "overlay", "Paint roads, floors, and water with a shaped overlay.", "material"),
+                            brushTask("Paint", "underlay", "Choose a base ground material and paint beneath overlays.", "grass sand dirt"),
+                            { id: "path", label: "Draw path", description: "Connect two points with the selected overlay.", keywords: "road", run: () => this.openTerrainLineTool("path") },
+                            { id: "fill", label: "Fill connected overlay", description: "Repaint a connected surface and keep its shape.", run: () => this.openTerrainLineTool("fill") },
+                        ]
+                    },
+                    {
+                        tasks: [
+                            brushTask("Sculpt", "raise", "Build up hills and ridges.", "height hill elevation"),
+                            brushTask("Sculpt", "lower", "Carve valleys and depressions.", "height elevation"),
+                            brushTask("Sculpt", "smooth", "Blend bumps with nearby heights.", "soften"),
+                            brushTask("Sculpt", "flatten", "Level the surface to the height where the drag starts.", "height foundation"),
+                            brushTask("Sculpt", "ramp", "Drag between two tiles to blend their heights into a slope.", "grade stairs elevation"),
+                            brushTask("Sculpt", "natural", "Restore the map format’s procedural terrain heights.", "reset height"),
+                        ]
+                    },
+                    {
+                        tasks: [
+                            brushTask("Flags", "block", "Paint the checked tile flags.", "collision pathing bridge roof"),
+                            brushTask("Flags", "unblock", "Clear the checked tile flags.", "collision pathing bridge roof"),
+                        ]
+                    },
+                ]
+            },
+            {
+                label: "Build & Place", groups: [
+                    {
+                        tasks: [
+                            { id: "wall", label: "Draw walls", description: "Connect two tiles with a wall or fence and choose the material or opening.", run: () => this.openWallPanel() },
+                            { id: "structure", label: "Generate structure", description: "Build houses, guilds, ruins, farms and settlements.", keywords: "building house", run: () => this.openBuildPanel() },
+                            { id: "stamp", label: "Stamp area", description: "Copy an existing area or place a saved template.", keywords: "duplicate paste prefab", run: () => this.openAreaPanel() },
+                        ]
+                    },
+                    {
+                        tasks: [
+                            { id: "build-select-entity", label: "Select objects and NPCs", description: "Click an existing object or NPC to inspect, move or duplicate it.", run: () => selectionMode("entity") },
+                            { id: "place-object", label: "Place objects", description: "Search and preview cache models before placing them.", run: () => { this.updateScatterAsset?.(); this.toggleSearch("loc", true); } },
+                            {
+                                id: "scatter", label: "Scatter scenery", description: "Paint a preset or your own mix of scenery.", keywords: "trees rocks plants brush set", run: () => {
+                                    this.toggleSearch("loc", true);
+                                    this.activateScatter?.();
+                                }
+                            },
+                            { id: "place-npc", label: "Place NPCs", description: "Find a creature or character and choose a spawn tile.", keywords: "spawn monsters", run: () => this.toggleSearch("npc", true) },
+                            { id: "place-item", label: "Place ground items", description: "Choose items and set how they spawn.", keywords: "drops loot", run: () => this.toggleSearch("item", true) },
+                        ]
+                    },
+                ]
+            },
+            {
+                label: "Travel & Warps", groups: [
+                    {
+                        tasks: [
+                            {
+                                id: "travel", label: "Browse nearby links", description: "Find portals, stairs, ladders and other travel objects near the editor camera.", keywords: "warp teleport destination", run: () => {
+                                    this.openTravelPanel();
+                                    this.travel.browse();
+                                }
+                            },
+                            {
+                                id: "travel-source", label: "Pick source object", description: "Inspect an object’s actions and destinations, or add a travel action.", run: () => {
+                                    this.openTravelPanel();
+                                    this.travel.pickSource();
+                                }
+                            },
+                        ]
+                    },
+                ]
+            },
+            {
+                label: "Maps", groups: [
+                    {
+                        tasks: [
+                            { id: "new-square", label: "Create map square", description: "Create one square from coordinates, base ground or copied terrain.", run: () => this.openRegionPanel() },
+                            { id: "new-region", label: "Create new map", description: "Select empty map squares, then preview and generate their terrain.", keywords: "landscape generator island new region expand world", run: () => this.openNewMapWizard() },
+                            { id: "expand-region", label: "Expand map portion", description: "Generate more terrain beside an existing map and blend the shared edges.", run: () => this.openNewMapWizard(true) },
+                            { id: "edit-draft", label: "Reroll map draft", description: "Adjust the terrain of a generated draft before saving it.", run: () => this.openCurrentLandscapeDraft() },
+                        ]
+                    },
+                    {
+                        tasks: [
+                            { id: "zones", label: "Edit gameplay zones", description: "Draw, resize or change the type of PvP, multi-combat and other gameplay zones.", keywords: "create zone pvp safe duel", run: () => this.toggleWorldMap("zones") },
+                        ]
+                    },
+                    {
+                        tasks: [
+                            {
+                                id: "refresh", label: "Refresh world data", description: "Load map updates saved by the server or an agent.", run: () => {
+                                    this.plugin.refreshMap();
+                                    this.travel.refresh();
+                                    this.groundItems.refresh();
+                                    this.toast("Refreshing map…");
+                                }
+                            },
+                        ]
+                    },
+                    {
+                        tasks: [
+                            ...(!browserHostWindow() ? [{
+                                id: "map-files", label: "Manage map files", description: "Connect the server folder, manage backups or download edits.",
+                                keywords: "save export import", run: () => this.toggleFilesPanel()
+                            }] : []),
+                            { id: "validate", label: "Validate map edits", description: "Check edited regions for errors before saving.", run: () => this.showValidation() },
+                        ]
+                    },
+                ]
+            },
         ], { label: "Undo", run: () => { if (!plugin.undo()) this.toast("Nothing to undo"); } },
-        { label: "Redo", run: () => { if (!plugin.redo()) this.toast("Nothing to redo"); } },
-        { label: "Editor settings", run: () => this.toggleSettings() },
-        { label: "Review changes", run: () => this.showReview() },
-        { label: "Help", run: () => this.openEditorHelp() },
-        { undo: createUndoIcon, redo: createRedoIcon, settings: createConfigIcon, search: createSearchIcon, review: createReviewIcon },
-        () => {
-            this.plugin.closeWorldMap();
-            this.dismissToolPanel();
-            this.syncToolCue();
-            this.renderSelection();
-        }, [worldMapTask, jumpTask, cameraTask]);
+            { label: "Redo", run: () => { if (!plugin.redo()) this.toast("Nothing to redo"); } },
+            { label: "Editor settings", run: () => this.toggleSettings() },
+            { label: "Review changes", run: () => this.showReview() },
+            { label: "Help", run: () => this.openEditorHelp() },
+            { undo: createUndoIcon, redo: createRedoIcon, review: createReviewIcon },
+            () => {
+                this.plugin.closeWorldMap();
+                this.dismissToolPanel();
+                this.syncToolCue();
+                this.renderSelection();
+            }, [worldMapTask, jumpTask, cameraTask, { id: "brush-settings", label: "Brush settings", description: "Adjust brush action, strength, timing and edges.", run: () => this.toggleBrushPanel() }], plugin);
 
         this.selectionDetails = document.createElement("div");
         this.selectionDetails.dataset.mapEditor = "selection-details";
@@ -600,48 +532,6 @@ class EditorChrome {
         stopClientInput(this.selectionDetails);
         document.body.appendChild(this.selectionDetails);
 
-        this.objectActions = document.createElement("div");
-        this.objectActions.dataset.mapEditor = "object-actions";
-        this.objectActions.setAttribute("role", "group");
-        this.objectActions.setAttribute("aria-label", "Selected object actions");
-        Object.assign(this.objectActions.style, PANEL_STYLE, {
-            display: "none", alignItems: "center", gap: "3px", padding: "3px", whiteSpace: "nowrap",
-        });
-        this.objectActions.append(
-            createCompactButton("Move", "Move selected object", () => this.plugin.moveSelection()),
-            createCompactButton("Duplicate", "Duplicate selected object", () => this.plugin.duplicateSelection()),
-            createCompactButton("Rotate", "Rotate selected object", () => this.plugin.rotateSelection()),
-            createCompactButton("Delete", "Delete selected object", () => this.plugin.deleteSelection()),
-        );
-        stopClientInput(this.objectActions);
-        document.body.appendChild(this.objectActions);
-
-        this.topBar = document.createElement("div");
-        this.topBar.dataset.mapEditor = "top-bar";
-        Object.assign(this.topBar.style, {
-            position: "absolute",
-            left: "0",
-            right: "0",
-            top: "0",
-            height: `${TOP_BAR_HEIGHT}px`,
-            zIndex: "10001",
-            boxSizing: "border-box",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            overflowX: "auto",
-            padding: "10px 12px",
-            borderBottom: "1px solid rgba(255,255,255,0.16)",
-            color: "#eef4ff",
-            background: "#121418",
-            font: "13px sans-serif",
-        });
-        stopClientInput(this.topBar);
-
-        const heightLabel = document.createElement("span");
-        heightLabel.textContent = "HL:";
-        heightLabel.title = "Height/Level";
-        const decrement = this.createHeightButton("−", -1);
         this.heightInput = document.createElement("input");
         this.heightInput.type = "number";
         this.heightInput.min = "0";
@@ -658,11 +548,10 @@ class EditorChrome {
         this.heightInput.addEventListener("change", () =>
             this.setHeightLevel(Number(this.heightInput.value)),
         );
-        const increment = this.createHeightButton("+", 1);
         const selectMode = this.selectionModeInput = document.createElement("select");
         selectMode.setAttribute("aria-label", "Selection target");
         Object.assign(selectMode.style, INPUT_STYLE, { width: "auto", height: "28px", padding: "3px 5px" });
-        for (const [value, label] of [["entity", "Objects and NPCs"], ["ground", "Ground and areas"], ["building", "Buildings"]]) {
+        for (const [value, label] of [["entity", "All"], ["ground", "Tiles only"], ["building", "Buildings"]]) {
             selectMode.add(new window.Option(label, value));
         }
         selectMode.value = plugin.getSelectionMode();
@@ -673,59 +562,13 @@ class EditorChrome {
         const coordinates = document.createElement("span");
         coordinates.title = "Tile under the pointer: x, y, level, and its map region";
         Object.assign(coordinates.style, { minWidth: "170px", marginLeft: "8px", color: "#cbd5e1", whiteSpace: "nowrap" });
-        this.ghostViewportControls = document.createElement("div");
-        this.ghostViewportControls.dataset.mapEditor = "ghost-floor-controls";
-        this.ghostViewportControls.setAttribute("role", "group");
-        this.ghostViewportControls.setAttribute("aria-label", "Map navigation");
-        Object.assign(this.ghostViewportControls.style, PANEL_STYLE, {
-            bottom: "12px", left: "12px", display: "flex", flexDirection: "column", gap: "4px",
-            padding: "5px 7px", maxWidth: "calc(100vw - 24px)",
-        });
-        const navigation = document.createElement("div");
-        Object.assign(navigation.style, { display: "flex", alignItems: "center", flexWrap: "wrap", gap: "4px" });
-        const ghostFloor = this.ghostFloorInput = document.createElement("select");
-        ghostFloor.setAttribute("aria-label", "Editing floor");
-        const editFloorLabel = document.createElement("label");
-        Object.assign(editFloorLabel.style, { display: "inline-flex", alignItems: "center", gap: "4px" });
-        editFloorLabel.append("Edit floor", ghostFloor);
-        ghostFloor.title = "Choose which floor the brushes and placement tools edit";
-        Object.assign(ghostFloor.style, INPUT_STYLE, { width: "auto", height: "26px", padding: "2px 4px" });
-        for (const floor of [0, 1, 2, 3]) ghostFloor.add(new window.Option(floor === 0 ? "Ground floor" : `Floor ${floor}`, String(floor)));
-        ghostFloor.onchange = () => {
-            this.setHeightLevel(Number(ghostFloor.value));
-            ghostFloor.blur();
-        };
-        const ghostCoordinates = document.createElement("span");
-        ghostCoordinates.title = "Tile coordinates and region under the pointer";
-        Object.assign(ghostCoordinates.style, { minHeight: "1.4em", color: "#cbd5e1", fontVariantNumeric: "tabular-nums" });
-        this.ghostMapButton = createCompactButton(worldMapTask.label, "Open world map", worldMapTask.run);
-        this.ghostMapButton.setAttribute("aria-pressed", "false");
-        this.ghostJumpButton = createCompactButton("Go to…", jumpTask.label, () => {
-            if (this.ghostJumpPanel) this.closeJumpToLocation();
-            else jumpTask.run();
-        });
-        this.ghostJumpButton.setAttribute("aria-expanded", "false");
-        navigation.append(editFloorLabel, this.ghostMapButton, this.ghostJumpButton,
-            createCompactButton("Reset camera", cameraTask.label, cameraTask.run));
-        this.ghostViewportControls.append(ghostCoordinates, navigation);
-        stopClientInput(this.ghostViewportControls);
-        document.body.append(this.ghostViewportControls);
+        this.mapButton = this.layout.getTaskButton("world-map");
+        this.jumpButton = this.layout.getTaskButton("jump");
         this.plugin.setNoticeListener((message) => this.toast(message));
+        this.layout.status.append(coordinates);
         this.plugin.setPointerTileListener((tile) => {
             const region = tile && regionIdOf(tile.tileX, tile.tileY);
             coordinates.textContent = tile ? `${tile.tileX}, ${tile.tileY}, ${tile.plane} · Region ${region}` : "";
-            ghostCoordinates.textContent = tile ? `${tile.tileX}, ${tile.tileY} · Region ${region}` : "";
-        });
-        const goTo = document.createElement("input");
-        goTo.type = "text";
-        goTo.placeholder = "Go to x, y or region";
-        goTo.title = "Enter x, y, x, y, level or a region id, then press Enter";
-        goTo.setAttribute("aria-label", "Go to coordinates or region");
-        Object.assign(goTo.style, INPUT_STYLE, { width: "130px", minWidth: "0", height: "28px", padding: "3px 6px" });
-        goTo.addEventListener("keydown", (event) => {
-            if (event.key !== "Enter") return;
-            if (this.plugin.goToLocation(goTo.value)) goTo.blur();
-            else this.toast("Enter x, y, x, y, level or a region id");
         });
         const renderAllLabel = document.createElement("label");
         Object.assign(renderAllLabel.style, {
@@ -738,32 +581,17 @@ class EditorChrome {
         renderAllLabel.append("Render all Height Levels");
         this.renderAllInput = document.createElement("input");
         this.renderAllInput.type = "checkbox";
-        renderAllLabel.title = "Defaults on at HL 0 and off above it. Hover inside a building at HL 0 to reveal its contents.";
+        renderAllLabel.title = "Defaults on at HL 0 and off above it. Hover inside or along the walls of a building at HL 0 to reveal its contents.";
         this.renderAllInput.addEventListener("change", () =>
             this.plugin.setConfig({ renderAllHeightLevels: this.renderAllInput.checked, floorView: undefined }),
         );
         renderAllLabel.prepend(this.renderAllInput);
-        const mapIconsLabel = document.createElement("label");
-        Object.assign(mapIconsLabel.style, {
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            marginLeft: "8px",
-            cursor: "pointer",
-        });
-        mapIconsLabel.append("Show map icons");
-        this.mapIconsInput = document.createElement("input");
-        this.mapIconsInput.type = "checkbox";
-        this.mapIconsInput.addEventListener("change", () =>
-            this.plugin.setConfig({ showMapIcons: this.mapIconsInput.checked }),
-        );
-        mapIconsLabel.prepend(this.mapIconsInput);
         this.settingsContent = document.createElement("div");
         this.floorViewInput = document.createElement("select");
         Object.assign(this.floorViewInput.style, INPUT_STYLE);
         const floorViewLabel = document.createElement("label");
         for (const [value, label] of [["", "Automatic"], ["up-to", "Editing floor and below"],
-            ["one-above", "One floor above"], ["all", "All floors including roofs"]]) {
+        ["one-above", "One floor above"], ["all", "All floors including roofs"]]) {
             this.floorViewInput.add(new window.Option(label, value));
         }
         this.floorViewInput.onchange = () => {
@@ -772,38 +600,6 @@ class EditorChrome {
         };
         floorViewLabel.append("Visible floors", this.floorViewInput);
         this.settingsContent.append(floorViewLabel);
-        this.editorLayout = document.createElement("select");
-        this.editorLayout.add(new window.Option("Classic", "classic"));
-        this.editorLayout.add(new window.Option("GhostUI", "ghost"));
-        Object.assign(this.editorLayout.style, INPUT_STYLE);
-        this.editorLayout.onchange = () => this.plugin.setConfig({ ghostUi: this.editorLayout.value === "ghost" });
-        const zoneOverlays = document.createElement("details");
-        const zoneMenu = document.createElement("summary");
-        zoneMenu.textContent = "Zone overlays";
-        Object.assign(zoneMenu.style, { cursor: "pointer", padding: "3px 5px" });
-        const zoneControls = document.createElement("div");
-        Object.assign(zoneControls.style, PANEL_STYLE, { position: "absolute", bottom: "calc(100% + 5px)", left: "0",
-            right: "auto", width: "max-content", minWidth: "150px", padding: "4px 10px" });
-        zoneOverlays.style.position = "relative";
-        zoneOverlays.append(zoneMenu, zoneControls);
-        const ghosts = document.createElement("span");
-        ghosts.style.display = "contents";
-        const showFloors = this.ghostFloorVisibility = document.createElement("select");
-        showFloors.setAttribute("aria-label", "Show floors");
-        showFloors.title = "Controls what you see. Tools still use the editing floor.";
-        Object.assign(showFloors.style, INPUT_STYLE, { width: "auto", height: "26px", padding: "2px 4px" });
-        for (const value of ["up-to", "one-above", "all"]) showFloors.add(new window.Option("", value));
-        showFloors.onchange = () => {
-            this.plugin.setConfig({ floorView: showFloors.value as "up-to" | "one-above" | "all" });
-        };
-        const showFloorsLabel = document.createElement("label");
-        Object.assign(showFloorsLabel.style, { display: "inline-flex", alignItems: "center", gap: "4px",
-            marginInline: "5px", paddingLeft: "8px", borderLeft: "1px solid #ffffff29" });
-        showFloorsLabel.append("Show floors", showFloors);
-        navigation.insertBefore(ghosts, this.ghostMapButton);
-        const layout = document.createElement("label");
-        Object.assign(layout.style, { display: "block", marginBlock: "10px" });
-        layout.append("Editor layout", this.editorLayout);
         this.renderDistanceInput = document.createElement("input");
         this.renderDistanceInput.type = "range";
         this.renderDistanceInput.min = "25";
@@ -816,7 +612,7 @@ class EditorChrome {
         distance.textContent = "Render distance";
         this.renderDistanceLabel = document.createElement("output");
         this.renderDistanceLabel.style.marginLeft = "7px";
-        this.settingsContent.append(layout, distance, this.renderDistanceLabel, this.renderDistanceInput,
+        this.settingsContent.append(distance, this.renderDistanceLabel, this.renderDistanceInput,
             createCompactButton("Use game default", "Reset editor render distance", () => this.plugin.setConfig({ renderDistance: undefined })));
         const saveObjectsLabel = document.createElement("label");
         this.saveObjectSpawnsInput = document.createElement("input");
@@ -825,82 +621,14 @@ class EditorChrome {
             this.plugin.setConfig({ saveObjectSpawns: this.saveObjectSpawnsInput.checked }),
         );
         saveObjectsLabel.append(this.saveObjectSpawnsInput, "Save objects to object-spawns.json");
-        for (const label of [...(browserHostWindow() ? [saveObjectsLabel] : []), renderAllLabel, mapIconsLabel]) {
+        for (const label of [...(browserHostWindow() ? [saveObjectsLabel] : []), renderAllLabel]) {
             Object.assign(label.style, { display: "grid", gridTemplateColumns: "16px minmax(0, 1fr)", alignItems: "start", columnGap: "12px", margin: "14px 0", lineHeight: "20px", cursor: "pointer" });
             const input = label.querySelector("input")!;
             Object.assign(input.style, { width: "16px", height: "16px", margin: "2px 0 0" });
             this.settingsContent.appendChild(label);
         }
-        const zoneToggle = (
-            text: string,
-            color: string,
-            change: (checked: boolean) => void,
-        ): HTMLInputElement => {
-            const label = document.createElement("label");
-            Object.assign(label.style, {
-                display: "grid",
-                gridTemplateColumns: "16px minmax(0, 1fr)",
-                alignItems: "start",
-                columnGap: "12px",
-                margin: "14px 0",
-                lineHeight: "20px",
-                color,
-                cursor: "pointer",
-            });
-            const input = document.createElement("input");
-            input.type = "checkbox";
-            input.setAttribute("aria-label", `Show ${text} zones`);
-            input.addEventListener("change", () => change(input.checked));
-            Object.assign(input.style, { width: "16px", height: "16px", margin: "2px 0 0" });
-            label.append(input, `${text} zones`);
-            zoneControls.appendChild(label);
-            return input;
-        };
-        this.pvpZonesInput = zoneToggle("PvP", "#fca5a5", (checked) =>
-            this.plugin.setConfig({ showPvpZones: checked }),
-        );
-        this.multiCombatZonesInput = zoneToggle("Multi", "#fcd34d", (checked) =>
-            this.plugin.setConfig({ showMultiCombatZones: checked }),
-        );
-        this.duelZonesInput = zoneToggle("Duel", "#c4b5fd", (checked) =>
-            this.plugin.setConfig({ showDuelZones: checked }),
-        );
-        this.safeZonesInput = zoneToggle("Safe", "#86efac", (checked) =>
-            this.plugin.setConfig({ showSafeZones: checked }),
-        );
-        this.f2pZonesInput = zoneToggle("F2P", "#93c5fd", (checked) =>
-            this.plugin.setConfig({ showF2pZones: checked }),
-        );
-        const placeVisibilityControls = (ghost: boolean) => {
-            if (ghost) {
-                floorViewLabel.hidden = true;
-                ghosts.append(showFloorsLabel, zoneOverlays);
-            } else {
-                zoneOverlays.open = false;
-                floorViewLabel.hidden = false;
-                this.settingsContent.prepend(floorViewLabel);
-                this.settingsContent.append(zoneOverlays);
-            }
-            renderAllLabel.style.display = ghost ? "none" : "grid";
-            zoneControls.style.position = ghost ? "absolute" : "static";
-        };
-        this.placeVisibilityControls = placeVisibilityControls;
+        this.settingsContent.prepend(floorViewLabel);
 
-        this.topBar.append(
-            heightLabel,
-            decrement,
-            this.heightInput,
-            increment,
-            coordinates,
-            selectMode,
-            goTo,
-            createCompactButton("Select region", "Select the whole 64 x 64 region", () => { this.dismissToolPanel(); this.plugin.selectRegion(); }),
-        );
-        const fileActions = document.createElement("div");
-        Object.assign(fileActions.style, { display: "flex", flexShrink: "0", gap: "5px" });
-        fileActions.append(createCompactButton("Review changes", "Review and save pending map changes", () => this.showReview()));
-        if (!browserHostWindow()) fileActions.append(createCompactButton("Map files", "Map files, downloads and backups", () => this.toggleFilesPanel()));
-        this.topBar.prepend(fileActions);
         this.toolCue = document.createElement("div");
         this.toolCue.dataset.mapEditor = "tool-cue";
         this.toolCue.setAttribute("role", "status");
@@ -910,62 +638,25 @@ class EditorChrome {
         });
         document.body.appendChild(this.toolCue);
         this.session.savedNpcSpawnsKey ??= this.npcSpawnsKey();
-        {
-            const save = document.createElement("button");
-            save.type = "button";
-            save.setAttribute("aria-label", "Save world and map edits");
-            save.replaceChildren(createSaveIcon(), document.createTextNode("Save changes"));
-            Object.assign(save.style, {
-                height: "28px",
-                padding: "0 9px",
-                flexShrink: "0",
-                whiteSpace: "nowrap",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                border: "1px solid #8b7138",
-                borderRadius: "4px",
-                color: "#f3db9b",
-                background: "#3c321f",
-                cursor: "pointer",
-                font: "13px sans-serif",
-            });
-            save.addEventListener("click", () => this.saveCurrentChanges());
-            // A disabled button gets no mouse events, so the tooltip hangs off a wrapper.
-            const saveWrapper = document.createElement("span");
-            Object.assign(saveWrapper.style, { display: "inline-flex", flexShrink: "0" });
-            saveWrapper.append(save);
-            const showSaveTooltip = () => {
-                this.saveTooltip?.remove();
-                this.saveTooltip = showEditorTooltip(saveWrapper,
-                    save.disabled ? "No changes to save yet" : "Save world and map edits", "below");
-            };
-            const hideSaveTooltip = () => {
-                this.saveTooltip?.remove();
-                this.saveTooltip = undefined;
-            };
-            saveWrapper.addEventListener("mouseenter", showSaveTooltip);
-            saveWrapper.addEventListener("mouseleave", hideSaveTooltip);
-            save.addEventListener("focus", showSaveTooltip);
-            save.addEventListener("blur", hideSaveTooltip);
-            this.saveButton = save;
-            this.topBar.prepend(saveWrapper);
-        }
         this.fileStatus = document.createElement("span");
         this.fileStatus.setAttribute("role", "status");
         Object.assign(this.fileStatus.style, { color: "#cbd5e1", marginLeft: "8px", whiteSpace: "nowrap" });
-        this.topBar.appendChild(this.fileStatus);
+        this.layout.status.append(this.fileStatus);
 
         const viewport = document.querySelector<HTMLElement>(".game-viewport");
         this.canvasShell =
             viewport?.querySelector<HTMLElement>(".game-canvas-shell") ?? undefined;
-        this.previousCanvasTop = this.canvasShell?.style.top ?? "";
-        (viewport ?? document.body).appendChild(this.topBar);
+        this.previousCanvasStyle = this.canvasShell?.getAttribute("style") ?? null;
         if (this.canvasShell) {
-            this.canvasShell.style.top = this.topBar.style.height;
+            Object.assign(this.canvasShell.style, { top: "41px", left: "55px", right: "var(--rspsi-right, 300px)", bottom: "var(--rspsi-bottom-height, 43px)", width: "auto", height: "auto" });
             requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
         }
 
+        this.layout.onPaletteChange = (tab) => this.renderSwatches(tab);
+        this.layout.onPalette = (tab) => this.showSwatches(tab);
+        this.layout.addSelectionControls(selectMode, this.heightInput);
+        this.saveButton = this.layout.addFileAction("Save", () => this.saveCurrentChanges());
+        this.layout.onPalette("Objects");
         document.body.classList.add("map-editor-active");
         window.addEventListener("paste", this.onAreaPaste);
         window.addEventListener("keydown", this.onSaveShortcut);
@@ -977,31 +668,30 @@ class EditorChrome {
 
     remove(): void {
         this.scatterRequest++;
-        document.body.classList.remove("map-editor-active", "map-editor-ghost");
+        this.swatchRequest++;
+        if (this.minimapUrl) URL.revokeObjectURL(this.minimapUrl);
+        document.body.classList.remove("map-editor-active", "map-editor-rspsi");
         this.unsubscribe();
         this.inspectorToolPanel?.remove();
         this.inspectorToolPanel = undefined;
-        this.toolbar.remove();
-        this.ghostNavigation.remove();
-        this.ghostViewportControls.remove();
+        this.objectSwatches.unmount();
+        this.layout.remove();
         this.plugin.setPointerTileListener(undefined);
         this.plugin.setNoticeListener(undefined);
         document.body.style.removeProperty("--map-editor-panel-left");
         this.palette.remove();
         this.selectionDetails.remove();
-        this.objectActions.remove();
-        if (this.objectActionFrame !== undefined) window.cancelAnimationFrame(this.objectActionFrame);
-        this.saveTooltip?.remove();
-        this.topBar.remove();
         this.closeSettings();
-        if (this.canvasShell) this.canvasShell.style.top = this.previousCanvasTop;
+        if (this.canvasShell) {
+            if (this.previousCanvasStyle === null) this.canvasShell.removeAttribute("style");
+            else this.canvasShell.setAttribute("style", this.previousCanvasStyle);
+        }
         requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
         this.detailPanel?.remove();
-        this.overlayPalette?.remove();
         this.areaPanel?.remove();
         this.brushPanel?.remove();
         this.closeLandscapePanel();
-        this.plugin.showBlockedRegion(false);
+        this.plugin.clearTileFlagOverlays();
         this.travelPanel?.remove();
         this.travel.detach();
         this.regionPanel?.remove();
@@ -1045,7 +735,6 @@ class EditorChrome {
         this.wallPanel?.remove();
         this.filesPanel?.remove();
         this.closeLandscapePanel();
-        this.closeOverlayPalette();
         this.closeSettings();
         this.closeDetailPanel();
         this.inspectorToolPanel?.remove();
@@ -1060,6 +749,10 @@ class EditorChrome {
     }
 
     private attachInspectorPanel(name: string): HTMLElement {
+        this.layout.openSidebar();
+        this.layout.activatePalette(["build-presets", "area-stamps", "draw-wall"].includes(name) ? "Settlements" :
+            ["placement-variant", "object-placement", "ground-items"].includes(name) ? "Objects" :
+                name === "terrain-line-tool" ? "Overlays" : "Misc");
         const panel = createPanel(name, "min(330px, calc(100vw - var(--map-editor-panel-left, 62px) - 13px))");
         Object.assign(panel.style, {
             right: "12px", left: "auto", top: TOP_BAR_CLEARANCE,
@@ -1080,15 +773,10 @@ class EditorChrome {
         return panel;
     }
 
-    private selectPaintTool(): void {
-        this.dismissToolPanel(this.plugin.getConfig().tool === "terrain");
-        this.plugin.setTerrainBrush({ action: "overlay" });
-    }
-
     private buildChoices(current: "wall" | "structure" | "stamp"): HTMLElement {
         const row = document.createElement("div");
         Object.assign(row.style, { display: "flex", gap: "5px", marginBottom: "8px" });
-        row.dataset.ghostClassicControl = "";
+
         for (const [id, label, action] of [
             ["wall", "Wall", () => this.openWallPanel()],
             ["structure", "Structure", () => this.openBuildPanel()],
@@ -1166,22 +854,22 @@ class EditorChrome {
             for (const { name, label } of available) material.add(new window.Option(label, name));
             material.value = matchingStyle?.name ?? "";
             material.disabled = available.length === 0;
-            styleStatus = available.length === 0 ? "Connect to the development world for more wall styles." : "";
+            styleStatus = available.length === 0 ? "Additional wall styles are unavailable." : "";
             update();
         }).catch(() => {
             if (!panel.isConnected) return;
-            styleStatus = "Connect to the development world for more wall styles.";
+            styleStatus = "Additional wall styles are unavailable.";
             status.textContent = styleStatus;
         });
     }
 
     private openEditorHelp(): void {
-        if (this.inspectorToolPanel?.dataset.mapEditor === "ghost-help") {
+        if (this.inspectorToolPanel?.dataset.mapEditor === "editor-help") {
             this.inspectorToolPanel.remove();
             return;
         }
         const trigger = document.activeElement as HTMLElement | null;
-        const panel = this.inspectorPanel("ghost-help", true);
+        const panel = this.inspectorPanel("editor-help", true);
         panel.style.width = "min(390px, calc(100vw - var(--map-editor-panel-left, 62px) - 13px))";
         panel.append(createHeader("Map editor help", () => {
             panel.remove();
@@ -1193,9 +881,9 @@ class EditorChrome {
     private readonly onToolEscape = (event: KeyboardEvent): void => {
         if (event.key !== "Escape" || event.repeat) return;
         const target = event.target as HTMLElement | null;
-        if (target?.closest?.('[data-map-editor="ghost-tool-finder"]')) return;
-        if (this.plugin.getConfig().ghostUi && this.plugin.isWorldMapOpen()) return;
-        if (this.inspectorToolPanel?.dataset.mapEditor === "ghost-help" && this.inspectorToolPanel.isConnected) {
+        if (target?.closest?.('[data-map-editor="tool-finder"]')) return;
+        if (this.plugin.isWorldMapOpen()) return;
+        if (this.inspectorToolPanel?.dataset.mapEditor === "editor-help" && this.inspectorToolPanel.isConnected) {
             this.inspectorToolPanel.querySelector<HTMLButtonElement>("button")?.click();
             event.preventDefault();
             event.stopPropagation();
@@ -1207,14 +895,8 @@ class EditorChrome {
             event.stopPropagation();
             return;
         }
-        if (this.ghostJumpPanel) {
+        if (this.jumpPanel) {
             this.closeJumpToLocation(true);
-            event.preventDefault();
-            event.stopPropagation();
-            return;
-        }
-        if (this.overlayPalette?.isConnected && !event.defaultPrevented) {
-            this.closeOverlayPalette(true);
             event.preventDefault();
             event.stopPropagation();
             return;
@@ -1224,12 +906,16 @@ class EditorChrome {
             event.stopPropagation();
             return;
         }
-        const { ghostUi, tool: activeTool } = this.plugin.getConfig();
-        if (ghostUi && this.brushPanel?.isConnected && (!event.defaultPrevented || activeTool === "select")) {
+        const { tool: activeTool } = this.plugin.getConfig();
+        if (this.brushPanel?.isConnected && (!event.defaultPrevented || activeTool === "select")) {
             this.closeBrushPanel(true);
             event.preventDefault();
             event.stopPropagation();
             return;
+        }
+        if (activeTool === "terrain" && !event.defaultPrevented) {
+            this.plugin.setConfig({ tool: "select" });
+            event.preventDefault(); event.stopPropagation(); return;
         }
         if (this.detailPanel?.dataset.mapEditor === "review-changes") {
             this.closeDetailPanel();
@@ -1238,7 +924,7 @@ class EditorChrome {
             return;
         }
         if (event.defaultPrevented && this.plugin.getConfig().tool === "scatter") return;
-        if (this.plugin.getConfig().ghostUi && this.selectionDetails.style.display === "block") {
+        if (this.selectionDetails.style.display === "block") {
             this.plugin.clearSelection();
             return;
         }
@@ -1289,8 +975,7 @@ class EditorChrome {
     }
 
     private openTravelPanel(from?: EditModeSelection): void {
-        const ghost = this.plugin.getConfig().ghostUi === true;
-        if (ghost) this.ghostNavigation.revealTask("travel");
+        this.layout.revealTask("travel");
         if (this.travelPanel?.isConnected) {
             if (from) this.travel.useObject(from);
             return;
@@ -1298,9 +983,9 @@ class EditorChrome {
         const panel = this.inspectorPanel("travel-links");
         if (this.plugin.getSelectionMode() !== "entity") this.plugin.setSelectionMode("entity");
         this.travelPanel = panel;
-        const nearby = this.travelNearby = ghost ? document.createElement("div") : undefined;
-        if (nearby) this.ghostNavigation.setWorkspaceContent(nearby);
-        panel.append(createHeader("Travel & Warps", () => this.closeTravelPanel()));
+        const nearby = document.createElement("div");
+        nearby.dataset.mapEditor = "travel-nearby";
+        panel.append(createHeader("Travel & Warps", () => this.closeTravelPanel()), nearby);
         this.travel.attach(panel, from, nearby);
         this.syncToolCue();
     }
@@ -1308,9 +993,7 @@ class EditorChrome {
     private closeTravelPanel(): void {
         this.travelPanel?.remove();
         this.travelPanel = undefined;
-        this.travelNearby = undefined;
         this.travel.detach();
-        this.ghostNavigation.setWorkspaceContent();
         if (this.plugin.getConfig().tool === "pick") this.plugin.setConfig({ tool: "select" });
     }
 
@@ -1318,12 +1001,11 @@ class EditorChrome {
         if (selection === this.travelSelection) return;
         this.travelSelection = selection;
         const config = this.plugin.getConfig();
-        if (selection?.kind !== "loc" || !config.ghostUi || config.tool !== "select" ||
+        if (selection?.kind !== "loc" || config.tool !== "select" ||
             this.palette.isVisible() || (this.inspectorToolPanel?.isConnected && !this.travelPanel?.isConnected)) return;
         const open = () => {
-            if (!this.selectionDetails.isConnected || this.plugin.getState().selection !== selection ||
-                !this.plugin.getConfig().ghostUi || this.plugin.getConfig().tool !== "select" ||
-                (!this.travelPanel?.isConnected && this.ghostNavigation.getWorkspace() !== "Select") ||
+            if (!this.selectionDetails.isConnected || this.plugin.getState().selection !== selection || this.plugin.getConfig().tool !== "select" ||
+                (!this.travelPanel?.isConnected && this.layout.getWorkspace() !== "Select") ||
                 !this.travel.hasObject(selection)) return;
             this.openTravelPanel(selection);
         };
@@ -1393,8 +1075,10 @@ class EditorChrome {
         draftName.maxLength = 48;
         Object.assign(draftName.style, INPUT_STYLE);
         const members = document.createElement("div");
-        Object.assign(members.style, { display: "flex", flexWrap: "wrap", gap: "4px", marginBlock: "6px",
-            maxHeight: "105px", overflowY: "auto" });
+        Object.assign(members.style, {
+            display: "flex", flexWrap: "wrap", gap: "4px", marginBlock: "6px",
+            maxHeight: "105px", overflowY: "auto"
+        });
         const status = document.createElement("div");
         status.role = "status";
         const radius = document.createElement("input");
@@ -1442,7 +1126,7 @@ class EditorChrome {
                 if (cachedSet === selected) { apply(cachedIds); return; }
                 this.plugin.prepareScatter();
                 status.textContent = "Loading scenery…";
-                let ids = await loadBiomeScenery(selected).then((assets) => assets.map((asset) => asset.id), () => []);
+                let ids = await loadBiomeScenery((part) => this.plugin.landscapeData(part), selected).then((assets) => assets.map((asset) => asset.id), () => []);
                 if (!ids.length && request === this.scatterRequest) {
                     ids = (await Promise.all(fallback[selected].map(async (name) =>
                         (await this.plugin.searchScenery(name)).filter((entry) => entry.name.toLowerCase().includes(name.toLowerCase()))
@@ -1581,14 +1265,6 @@ class EditorChrome {
         this.palette.setObjectControls(controls);
     }
 
-    private toggleBuildPanel(): void {
-        if ([this.buildPanel, this.wallPanel, this.areaPanel].some((panel) => panel?.isConnected)) {
-            this.dismissToolPanel();
-            return;
-        }
-        this.openBuildPanel();
-    }
-
     private labeledField(text: string, control: HTMLInputElement | HTMLSelectElement): HTMLLabelElement {
         const label = document.createElement("label");
         Object.assign(label.style, { display: "grid", gap: "3px", minWidth: "0" });
@@ -1607,8 +1283,10 @@ class EditorChrome {
         const image = document.createElement("img");
         image.alt = "";
         image.hidden = true;
-        Object.assign(image.style, { width: size, height: size, objectFit: "contain",
-            background: "#111318", borderRadius: "4px" });
+        Object.assign(image.style, {
+            width: size, height: size, objectFit: "contain",
+            background: "#111318", borderRadius: "4px"
+        });
         let selected: number | undefined;
         return {
             image,
@@ -1621,7 +1299,7 @@ class EditorChrome {
                     if (id !== selected || !image.isConnected || !url) return;
                     image.src = url;
                     image.hidden = false;
-                }).catch(() => {});
+                }).catch(() => { });
             },
         };
     }
@@ -1643,7 +1321,7 @@ class EditorChrome {
                 ...generators.map(({ name, label }) => [name, label] as const),
                 ...presets.map(({ name }) => [name, name.replace(/_/g, " ").replace(/^./, (letter) => letter.toUpperCase())] as const),
             ]);
-            if (!kind.options.length) { body.textContent = "Connect to the development world to load structures."; return; }
+            if (!kind.options.length) { body.textContent = "No structure designs are available."; return; }
             if ([...kind.options].some(({ value }) => value === defaults.kind)) kind.value = defaults.kind;
             const style = document.createElement("select");
             const entrance = this.choice([["south", "South"], ["north", "North"], ["east", "East"], ["west", "West"]]);
@@ -1683,12 +1361,33 @@ class EditorChrome {
                 saveDraft();
                 preview.click();
             });
+            roll.replaceChildren(createRefreshIcon());
+            roll.className = "rspsi-seed-roll";
+            const seedControls = document.createElement("div");
+            seedControls.className = "rspsi-seed-controls";
+            seed.replaceWith(seedControls);
+            seedControls.append(seed, roll);
             fields.append(styleField, this.labeledField("Width in tiles", width), this.labeledField("Depth in tiles", depth),
-                ...extraFields.map(({ field }) => field), seedField, roll);
+                ...extraFields.map(({ field }) => field), seedField);
             const result = document.createElement("div");
             Object.assign(result.style, { display: "grid", gap: "6px" });
             const status = document.createElement("div");
             status.setAttribute("role", "status");
+            const selectedArea = from && from.tileEndX !== undefined && from.tileEndY !== undefined &&
+                (from.tileEndX !== from.tileX || from.tileEndY !== from.tileY) ? {
+                    tileX: Math.min(from.tileX, from.tileEndX), tileY: Math.min(from.tileY, from.tileEndY), plane: from.plane,
+                } : undefined;
+            type PreparedStructure = { contents: string; name: string };
+            let readyPlan: PreparedStructure | undefined;
+            const place = createCompactButton(selectedArea ? "Place on area" : "Place on map",
+                selectedArea ? "Place this design in the selected area" : "Place this design on the map", async () => {
+                    const plan = readyPlan ?? await generatePreview();
+                    if (!plan || !panel.isConnected) return;
+                    this.areaOptions = { terrain: "floors", interactive: true, turns: 0 };
+                    this.openAreaPanel("Place structure");
+                    this.stageArea(plan.contents, plan.name);
+                    if (selectedArea) this.plugin.placeStamp(selectedArea, () => this.closeAreaPanel());
+                });
             const recipe = () => generators.find(({ name }) => name === kind.value);
             const values = { width, height: depth, entrance, crop, storeys: levels, interior, exterior, seed };
             const validNumber = (input: HTMLInputElement) => input.value !== "" && input.validity.valid;
@@ -1701,6 +1400,8 @@ class EditorChrome {
             const invalidatePreview = () => {
                 request++;
                 result.replaceChildren();
+                readyPlan = undefined;
+                place.disabled = false;
                 status.textContent = "";
                 preview.disabled = false;
             };
@@ -1754,7 +1455,8 @@ class EditorChrome {
             style.onchange = () => { defaults.style = style.value; };
             for (const input of [width, depth, seed]) input.addEventListener("input", invalidatePreview);
             fields.addEventListener("change", saveDraft);
-            const preview = createCompactButton("Generate preview", "Preview this structure before placing it", () => {
+            const preview = createCompactButton("Generate preview", "Preview this structure before placing it", () => void generatePreview());
+            const generatePreview = async (): Promise<PreparedStructure | undefined> => {
                 const entry = recipe();
                 if (entry) {
                     const invalid = [width, depth, ...(entry.seeded ? [seed] : [])].find((input) => !validNumber(input));
@@ -1768,8 +1470,10 @@ class EditorChrome {
                 const selected = ++request;
                 const name = kind.selectedOptions[0].textContent ?? kind.value;
                 preview.disabled = true;
+                readyPlan = undefined;
+                place.disabled = true;
                 result.replaceChildren();
-                status.textContent = "Building preview…";
+                status.textContent = "Generating structure…";
                 const query = new URLSearchParams({ name: kind.value });
                 if (entry) {
                     query.set("width", width.value);
@@ -1778,22 +1482,28 @@ class EditorChrome {
                     for (const { key } of extraFields) if (entry[key]) query.set(key, values[key].value);
                     if (entry.seeded) query.set("seed", seed.value);
                 }
-                void this.plugin.previewMapPlan(query).then((plan) => {
+                try {
+                    const plan = await this.plugin.previewMapPlan(query);
                     if (!panel.isConnected || request !== selected) return;
                     const stamp = parseAreaStamp(plan);
                     status.textContent = `${stamp.width} × ${stamp.height} tiles · ${stamp.objects.length} objects`;
-                    result.append(this.buildPlanPreview(stamp), createCompactButton("Preview on map", "Position this design on the map", () => {
-                        this.areaOptions = { terrain: "floors", interactive: true, turns: 0 };
-                        this.openAreaPanel("Place structure");
-                        this.stageArea(JSON.stringify(plan), name);
-                    }));
-                }).catch((error) => {
+                    readyPlan = { contents: JSON.stringify(plan), name };
+                    place.disabled = false;
+                    result.append(this.buildPlanPreview(stamp));
+                    return readyPlan;
+                } catch (error) {
                     if (request === selected) status.textContent = error instanceof Error ? error.message : String(error);
-                }).finally(() => {
-                    if (request === selected) preview.disabled = false;
-                });
-            });
-            body.append(this.labeledField("Structure", kind), about, fields, preview, status, result);
+                } finally {
+                    if (request === selected) {
+                        preview.disabled = false;
+                        place.disabled = false;
+                    }
+                }
+            };
+            const placementActions = document.createElement("div");
+            placementActions.className = "rspsi-build-actions";
+            placementActions.append(preview, place);
+            body.append(this.labeledField("Structure", kind), about, fields, placementActions, status, result);
             update(from);
         }).catch((error) => {
             if (panel.isConnected) body.textContent = error instanceof Error ? error.message : String(error);
@@ -1805,8 +1515,10 @@ class EditorChrome {
         const canvas = document.createElement("canvas");
         canvas.setAttribute("role", "img");
         canvas.setAttribute("aria-label", "Top-down preview of the generated structure");
-        Object.assign(canvas.style, { display: "block", width: "100%", maxHeight: "230px", objectFit: "contain",
-            background: "#111318", imageRendering: "pixelated", borderRadius: "4px" });
+        Object.assign(canvas.style, {
+            display: "block", width: "100%", maxHeight: "230px", objectFit: "contain",
+            background: "#111318", imageRendering: "pixelated", borderRadius: "4px"
+        });
         const scale = 8;
         canvas.width = stamp.width * scale;
         canvas.height = stamp.height * scale;
@@ -1856,6 +1568,7 @@ class EditorChrome {
         }
         this.dismissToolPanel();
         const panel = createPanel("map-files", "min(350px, calc(100vw - var(--map-editor-panel-left, 62px) - 13px))");
+        this.layout.activatePalette("Misc");
         this.filesPanel = panel;
         Object.assign(panel.style, { left: "var(--map-editor-panel-left, 12px)", top: TOP_BAR_CLEARANCE, maxHeight: "calc(100dvh - 85px)", overflowY: "auto" });
         const body = document.createElement("div");
@@ -1941,7 +1654,7 @@ class EditorChrome {
     }
 
     private openRegionPanel(region?: number): void {
-        this.ghostNavigation.revealTask("new-region");
+        this.layout.revealTask("new-region");
         const panel = this.inspectorPanel("new-region");
         this.regionPanel = panel;
         const body = document.createElement("div");
@@ -1956,7 +1669,6 @@ class EditorChrome {
     }
 
     private attachRegionCreation(body: HTMLElement, regionId: number | undefined): void {
-        const ghost = this.plugin.getConfig().ghostUi === true;
         const form = document.createElement("form");
         Object.assign(form.style, { display: "grid", gap: "8px" });
         const position = document.createElement("input");
@@ -1979,20 +1691,12 @@ class EditorChrome {
             ground.add(new window.Option(name ?? `Ground ${id} (#${colorRgb.toString(16).padStart(6, "0")})`, String(id)));
         }
         if (materials.some(({ id }) => id === 48)) ground.value = "48";
-        const field = (label: string, control: HTMLInputElement | HTMLSelectElement) => {
-            const row = document.createElement("label");
-            row.style.display = "grid";
-            row.style.gap = "3px";
-            Object.assign(control.style, INPUT_STYLE);
-            row.append(label, control);
-            return row;
-        };
         const parseRegion = (text: string) => {
             const tile = parseEditorLocation(text);
             return tile && regionIdOf(tile.tileX, tile.tileY);
         };
-        const sourceField = field("Terrain source", source);
-        const groundField = field("Base ground", ground);
+        const sourceField = this.labeledField("Terrain source", source);
+        const groundField = this.labeledField("Base ground", ground);
         const materialSample = document.createElement("div");
         Object.assign(materialSample.style, { height: "14px", borderRadius: "3px", border: "1px solid #ffffff30" });
         groundField.append(materialSample);
@@ -2008,7 +1712,7 @@ class EditorChrome {
             if (id !== undefined) this.plugin.goToLocation(String(id));
         });
         editExisting.hidden = true;
-        const create = createCompactButton("Create in editor", "Open the new square as an unsaved draft", () => {});
+        const create = createCompactButton("Create in editor", "Open the new square as an unsaved draft", () => { });
         create.type = "submit";
         const update = () => {
             const id = parseRegion(position.value);
@@ -2031,9 +1735,9 @@ class EditorChrome {
             }
         };
         position.oninput = source.oninput = terrain.onchange = ground.onchange = caveBelow.onchange = update;
-        form.append(field("Location", position));
-        if (ghost) form.append(createCompactButton("Choose on world map", "Pick a map square visually", () => this.pickRegionFromMap()));
-        form.append(status, editExisting, field("Starting terrain", terrain), groundField, sourceField, caveLabel, create);
+        form.append(this.labeledField("Location", position));
+        form.append(createCompactButton("Choose on world map", "Pick a map square visually", () => this.pickRegionFromMap()));
+        form.append(status, editExisting, this.labeledField("Starting terrain", terrain), groundField, sourceField, caveLabel, create);
         const openLandscape = createCompactButton("Generate multi-square landscape", "Create terrain from a landform and biome", () =>
             this.openLandscapePanel(parseRegion(position.value)));
         body.append(form, openLandscape);
@@ -2125,7 +1829,7 @@ class EditorChrome {
             expand,
             initialFootprint,
             isFootprintOccupied: (id) => this.plugin.hasMapSquareData(id),
-            loadOccupiedSquares: loadOccupiedMapSquares,
+            loadOccupiedSquares: () => loadOccupiedMapSquares((part) => this.plugin.landscapeData(part)),
             selectFootprint: (footprint) => {
                 const source = expand ? footprint.regions.flatMap((id) => [id - 256, id + 256, id - 1, id + 1])
                     .map((id) => this.plugin.getNewMapSquare(id)).find((pack) => pack && this.session.landscapeSettings.has(pack.data)) : undefined;
@@ -2152,6 +1856,7 @@ class EditorChrome {
         panel.dataset.landscapeTask = draft ? "edit-draft" : expand ? "expand-region" : "new-region";
         panel.append(createHeader(expand ? "Expand map portion · Shape terrain" : footprint ? "Create new map · Shape terrain" : "Generate landscape", () => this.closeLandscapePanel()));
         void attachLandscapeEditor(panel, { tileX: footprint?.x ?? minX, tileY: footprint?.y ?? minY, plane: 0 }, INPUT_STYLE, createCompactButton, {
+            landscapeData: (part) => this.plugin.landscapeData(part),
             footprint,
             expand,
             source,
@@ -2237,7 +1942,8 @@ class EditorChrome {
         const area = JSON.parse(contents) as { origin: { x: number; y: number }; width: number; height: number };
         const items = this.groundItems.capture(area.origin.x, area.origin.y, area.width, area.height);
         const building = this.plugin.getState().selection?.kind === "building";
-        return items.length || building ? JSON.stringify({ ...area,
+        return items.length || building ? JSON.stringify({
+            ...area,
             ...(items.length ? { items } : {}), ...(building ? { foundation: true } : {}),
         }) : contents;
     }
@@ -2260,8 +1966,8 @@ class EditorChrome {
         const presets = document.createElement("select");
         const savedGroup = document.createElement("optgroup");
         savedGroup.label = "Saved presets";
-        const serverGroup = document.createElement("optgroup");
-        serverGroup.label = "Server templates";
+        const bundledGroup = document.createElement("optgroup");
+        bundledGroup.label = "Built-in templates";
         const name = document.createElement("input");
         const terrain = document.createElement("select");
         for (const input of [presets, name, terrain]) Object.assign(input.style, INPUT_STYLE);
@@ -2269,11 +1975,11 @@ class EditorChrome {
         name.setAttribute("aria-label", "Preset name");
         name.maxLength = 48;
         presets.setAttribute("aria-label", "Area preset");
-        presets.append(new window.Option("Choose a preset…", ""), savedGroup, serverGroup);
+        presets.append(new window.Option("Choose a preset…", ""), savedGroup, bundledGroup);
         terrain.setAttribute("aria-label", "Terrain to stamp");
         const loadingOption = new window.Option("Loading templates…", "");
         loadingOption.disabled = true;
-        serverGroup.append(loadingOption);
+        bundledGroup.append(loadingOption);
         for (const [value, label] of [["objects", "Objects only"], ["floors", "Objects and building floors"], ["all", "Objects and all terrain"]]) {
             terrain.add(new window.Option(label, value));
         }
@@ -2324,13 +2030,13 @@ class EditorChrome {
         };
         refreshPresets();
         void this.plugin.loadTemplateCatalog().then((entries) => {
-            serverGroup.replaceChildren();
-            for (const entry of entries) serverGroup.append(new window.Option(
-                `${entry.name} (${entry.width} × ${entry.height})`, `server:${entry.name}`,
+            bundledGroup.replaceChildren();
+            for (const entry of entries) bundledGroup.append(new window.Option(
+                `${entry.name} (${entry.width} × ${entry.height})`, `builtin:${entry.name}`,
             ));
-            serverGroup.hidden = serverGroup.childElementCount === 0;
+            bundledGroup.hidden = bundledGroup.childElementCount === 0;
         }).catch(() => {
-            loadingOption.textContent = "Server templates unavailable";
+            loadingOption.textContent = "Built-in templates unavailable";
         });
         presets.onchange = () => {
             const selected = presets.value;
@@ -2340,7 +2046,7 @@ class EditorChrome {
                     const saved = window.localStorage.getItem(selected);
                     if (saved) this.stageArea(saved, selected.slice(presetPrefix.length));
                 } else {
-                    const name = selected.slice("server:".length);
+                    const name = selected.slice("builtin:".length);
                     const template = await this.plugin.loadTemplate(name);
                     if (panel.isConnected && presets.value === selected) this.stageArea(JSON.stringify(template), name);
                 }
@@ -2434,90 +2140,82 @@ class EditorChrome {
 
     private syncToolCue(): void {
         const { config, pathStart, wallStart } = this.plugin.getState();
-        let active = "select";
         let text = "";
         switch (config.tool) {
             case "pick": {
-                active = this.itemsPanel?.isConnected ? "search-items" : "select";
                 text = `${this.plugin.getTilePickPrompt() ?? "Pick a tile"} · Esc cancels`;
                 break;
             }
             case "place":
-                active = config.placeKind === "npc" ? "search-npcs" : "search-objects";
                 text = "Click to place · R rotates · Esc stops";
                 break;
+            case "delete":
+                text = "Click an object to delete it · Ctrl+Z undoes · Esc stops";
+                break;
             case "wall":
-                active = "build";
                 text = wallStart ? "Draw wall · Click to build the preview · Esc cancels" : "Draw wall · Click the start tile";
                 break;
             case "stamp":
-                active = "build";
                 text = `${this.areaAction} · Click to place · R rotates · Esc stops`;
                 break;
             case "scatter":
-                active = "search-objects";
                 text = this.plugin.hasScatterBrush() ? `Scatter scenery · ${this.brushGestureHint()} · Esc cancels`
                     : "Scatter scenery · Choose a scenery set or search result";
                 break;
             case "terrain": {
-                active = "terrain";
                 const { action, underlay } = this.plugin.getTerrainBrush();
                 text = action === "ramp" ? "Grade ramp · Drag from the starting height to the ending height" :
                     action === "underlay" && underlay === undefined ? "Paint base ground · Choose a material" :
-                    `${TERRAIN_LABELS[action]} · ${this.brushGestureHint()}${action === "overlay" ? " · R rotates shape" : ""}`;
+                        `${TERRAIN_LABELS[action]} · ${this.brushGestureHint()}${action === "overlay" ? " · R rotates shape" : ""}`;
                 break;
             }
             case "path":
-                active = "path";
                 text = pathStart ? "Draw path · Click the end tile · Esc cancels" : "Draw path · Click the start tile";
                 break;
             case "fill":
-                active = "fill";
                 text = "Fill overlay · Click a connected floor to repaint it";
                 break;
             default:
-                if (this.buildPanel?.isConnected || this.areaPanel?.isConnected || this.wallPanel?.isConnected) active = "build";
-                else if (config.ghostUi && !this.inspectorToolPanel?.isConnected && !this.palette.isVisible() &&
+                if (!this.inspectorToolPanel?.isConnected && !this.palette.isVisible() &&
                     !this.settingsDrawer?.isConnected && !this.plugin.getState().selection) {
                     const mode = this.plugin.getSelectionMode();
                     text = mode === "ground" ? "Click a tile or drag to select an area" :
-                        mode === "building" ? "Click part of a building to select it" : "Click an object or NPC to inspect it";
+                        mode === "building" ? "Click part of a building to select it" : "Click a tile, object or NPC · Drag to select an area · Shift-click a building";
                 }
                 break;
         }
-        this.toolbar.select(active);
-        this.syncGhostTask();
+        this.syncActiveTask();
         if (this.toolCue.textContent !== text) this.toolCue.textContent = text;
-        this.toolCue.hidden = !text || !!this.ghostJumpPanel || !!this.ghostWorldMapMode;
+        this.toolCue.hidden = !text || !!this.jumpPanel || !!this.worldMapMode;
     }
 
-    private syncGhostTask(): void {
+    private syncActiveTask(): void {
         const { config } = this.plugin.getState();
-        if (!config.ghostUi) return;
+
         const panel = this.inspectorToolPanel?.isConnected ? this.inspectorToolPanel.dataset.mapEditor : undefined;
         let task: string | undefined;
         if (this.palette.isVisible()) {
             task = this.scattering ? "scatter" :
                 this.currentSearchMode() === "loc" ? "place-object" :
-                this.currentSearchMode() === "npc" ? "place-npc" : "place-item";
+                    this.currentSearchMode() === "npc" ? "place-npc" : "place-item";
         } else if (config.tool === "terrain") task = this.plugin.getTerrainBrush().action;
         else if (config.tool === "place") task = config.placeKind === "npc" ? "place-npc" : "place-object";
-        else if (["path", "fill", "scatter", "stamp", "wall"].includes(config.tool)) task = config.tool;
+        else if (["path", "fill", "scatter", "stamp", "wall", "delete"].includes(config.tool)) task = config.tool;
         else if (panel === "landscape") task = this.inspectorToolPanel?.dataset.landscapeTask;
         else if (panel === "new-region") task = "new-region";
         else if (panel === "area-stamps") task = "stamp";
         else if (panel === "build-presets") task = "structure";
         else if (panel === "ground-items") task = "place-item";
         else if (panel === "travel-links") task = "travel";
-        else if (this.ghostWorldMapMode === "zones") task = "zones";
+        else if (this.worldMapMode === "zones") task = "zones";
         else if (panel === "map-validation") task = "validate";
         else if (this.filesPanel?.isConnected) task = "map-files";
         else if (config.tool === "select" && !panel) {
             const mode = this.plugin.getSelectionMode();
-            task = mode === "entity" && this.ghostNavigation.getWorkspace() === "Build & Place"
+            task = mode === "entity" && this.layout.getWorkspace() === "Build & Place"
                 ? "build-select-entity" : `select-${mode}`;
         }
-        this.ghostNavigation.setActiveTask(task);
+        this.layout.setActiveTask(task);
     }
 
     private brushGestureHint(): string {
@@ -2540,9 +2238,93 @@ class EditorChrome {
         return { element, sync };
     }
 
+    private showSwatches(tab: string): void {
+        const lineTool = tab === "Overlays" && ["path", "fill"].includes(this.plugin.getConfig().tool);
+        this.dismissToolPanel(lineTool);
+        this.swatchSelection = this.plugin.getState().selection;
+        if ((tab === "Overlays" || tab === "Underlays") && !lineTool) {
+            this.plugin.setTerrainBrush({ action: tab === "Overlays" ? "overlay" : "underlay" });
+        }
+        this.renderSwatches(tab);
+        this.renderSelection();
+        if (tab === "Settlements") this.openBuildPanel();
+    }
+
+    private renderSwatches(tab: string): void {
+        this.objectSwatches.unmount();
+        const content = this.layout.paletteContent;
+        this.syncSwatches = undefined;
+        const request = ++this.swatchRequest;
+        if (this.minimapUrl) { URL.revokeObjectURL(this.minimapUrl); this.minimapUrl = undefined; }
+        content.replaceChildren();
+        if (tab === "Objects") {
+            this.objectSwatches.mount(content);
+            return;
+        }
+        if (tab === "Settlements") {
+            const title = document.createElement("h3"); title.textContent = "Settlements";
+            content.append(title,
+                createCompactButton("Generate structure", "Generate a structure", () => this.openBuildPanel()),
+                createCompactButton("Stamp area", "Open area stamps", () => this.openAreaPanel()),
+                createCompactButton("Draw walls", "Open wall brush", () => this.openWallPanel()));
+            return;
+        }
+        if (tab === "Misc") {
+            const title = document.createElement("h3"); title.textContent = "Minimap";
+            const map = document.createElement("img"); map.alt = "Current map square"; map.className = "rspsi-minimap";
+            const mapButton = createCompactButton("World map", "Open world map", () => this.toggleWorldMap());
+            const refresh = () => void this.plugin.loadMinimap().then(blob => {
+                if (request !== this.swatchRequest || !blob) return;
+                if (this.minimapUrl) URL.revokeObjectURL(this.minimapUrl);
+                map.src = this.minimapUrl = URL.createObjectURL(blob);
+            }).catch(() => this.toast("Could not load minimap"));
+            content.append(title, map, mapButton, createCompactButton("Refresh", "Refresh minimap", refresh),
+                document.createElement("hr"),
+                createCompactButton("Terrain flags", "Open terrain flag brush", () => this.toggleBrushPanel("Flags", "block")),
+                createCompactButton("Zones", "Edit gameplay zones", () => this.toggleWorldMap("zones")),
+                createCompactButton("Travel links", "Edit travel links", () => this.openTravelPanel()));
+            refresh(); return;
+        }
+        if (tab === "Overlays") {
+            const title = document.createElement("h3"); title.textContent = "Paint overlay";
+            const picker = this.createOverlayPicker();
+            content.append(title, picker.element);
+            this.syncSwatches = picker.sync;
+            return;
+        }
+        const title = document.createElement("h3"); title.textContent = tab;
+        const selected = document.createElement("output"); selected.dataset.mapEditor = "selected-material";
+        const search = document.createElement("input"); search.type = "search";
+        search.placeholder = `Search ${tab.toLowerCase()}…`; search.setAttribute("aria-label", `Search ${tab.toLowerCase()}`);
+        const grid = document.createElement("div"); grid.className = "rspsi-swatch-grid";
+        const swatches = this.plugin.getUnderlaySwatches();
+        const update = () => {
+            const id = this.plugin.getTerrainBrush().underlay;
+            selected.textContent = `${swatches.find(s => s.id === id)?.name ?? (id === 0 ? "Clear" : tab.slice(0, -1))} #${id ?? "—"}`;
+            for (const button of grid.querySelectorAll("button")) button.setAttribute("aria-pressed", String(Number(button.dataset.material) === id));
+        };
+        const add = (id: number, colorRgb: number, name?: string) => {
+            const button = document.createElement("button"); button.type = "button";
+            const number = document.createElement("span"); number.className = "rspsi-material-id"; number.textContent = String(id);
+            button.append(number);
+            button.dataset.material = String(id); button.title = `${name ?? (id === 0 ? "Clear" : tab.slice(0, -1))} #${id}`;
+            button.setAttribute("aria-label", button.title);
+            button.style.background = `#${(colorRgb & 0xffffff).toString(16).padStart(6, "0")}`;
+            button.onclick = () => {
+                this.plugin.setTerrainBrush({ action: "underlay", underlay: id });
+                update();
+            };
+            grid.append(button);
+        };
+        add(0, 0x202020, "Clear");
+        for (const swatch of swatches) add(swatch.id, swatch.colorRgb, swatch.name);
+        search.oninput = () => { const terms = search.value.toLowerCase().split(/\s+/); for (const button of grid.querySelectorAll("button")) button.hidden = !terms.every(t => button.title.toLowerCase().includes(t)); };
+        content.append(title, selected);
+        content.append(search, grid); this.syncSwatches = update; update();
+    }
+
     private createOverlayMaterialButton(): HTMLButtonElement {
-        const button = createCompactButton("Choose overlay", "Choose an overlay and tile shape", () => this.toggleOverlayPalette(button));
-        button.setAttribute("aria-expanded", "false");
+        const button = createCompactButton("Overlays", "Choose overlay in the swatch dock", () => this.layout.selectPalette("Overlays"));
         Object.assign(button.style, { display: "flex", alignItems: "center", gap: "7px" });
         this.updateOverlayMaterialButton(button);
         return button;
@@ -2574,12 +2356,12 @@ class EditorChrome {
     }
 
     private showJumpToLocation(): void {
-        if (this.ghostJumpPanel) {
-            this.ghostJumpPanel.querySelector("input")?.focus();
+        if (this.jumpPanel) {
+            this.jumpPanel.querySelector("input")?.focus();
             return;
         }
         this.plugin.closeWorldMap();
-        const panel = this.ghostJumpPanel = document.createElement("div");
+        const panel = this.jumpPanel = document.createElement("div");
         panel.dataset.mapEditor = "jump-to-location";
         Object.assign(panel.style, PANEL_STYLE, {
             position: "absolute", left: "0", bottom: "calc(100% + 6px)", width: "min(290px, calc(100vw - 24px))",
@@ -2590,7 +2372,7 @@ class EditorChrome {
         Object.assign(input.style, INPUT_STYLE);
         input.placeholder = "3222, 3218 or 12850";
         input.setAttribute("aria-label", "Coordinates or region ID");
-        const submit = createCompactButton("Jump", "Jump to the entered location", () => {});
+        const submit = createCompactButton("Jump", "Jump to the entered location", () => { });
         submit.type = "submit";
         const status = document.createElement("span");
         status.setAttribute("role", "status");
@@ -2607,21 +2389,22 @@ class EditorChrome {
             input.removeAttribute("aria-invalid");
             status.textContent = "";
         };
-        form.append(input, submit, status);
+        form.append(input, submit, createCompactButton("Choose on world map", "Choose on world map", () => this.toggleWorldMap()), status);
         panel.append(createHeader("Jump to location", () => this.closeJumpToLocation(true)), form);
-        this.ghostViewportControls.append(panel);
-        this.ghostJumpButton.setAttribute("aria-expanded", "true");
+        panel.dataset.rspsiPanel = "";
+        document.body.append(panel);
+        this.jumpButton.setAttribute("aria-expanded", "true");
         this.syncToolCue();
         input.focus();
     }
 
     private closeJumpToLocation(restoreFocus = false): void {
-        if (!this.ghostJumpPanel) return;
-        this.ghostJumpPanel.remove();
-        this.ghostJumpPanel = undefined;
-        this.ghostJumpButton.setAttribute("aria-expanded", "false");
+        if (!this.jumpPanel) return;
+        this.jumpPanel.remove();
+        this.jumpPanel = undefined;
+        this.jumpButton.setAttribute("aria-expanded", "false");
         this.syncToolCue();
-        if (restoreFocus) this.ghostJumpButton.focus({ preventScroll: true });
+        if (restoreFocus) this.jumpButton.focus({ preventScroll: true });
     }
 
     private showReview(): void {
@@ -2750,7 +2533,7 @@ class EditorChrome {
         return this.plugin.getState().search.kind;
     }
 
-    private toggleBrushPanel(group?: "Paint" | "Sculpt" | "Walkability", selected?: TerrainBrushAction): void {
+    private toggleBrushPanel(group?: "Paint" | "Sculpt" | "Flags", selected?: TerrainBrushAction): void {
         if (this.brushPanel?.isConnected && !group) {
             this.closeBrushPanel();
             return;
@@ -2762,21 +2545,14 @@ class EditorChrome {
         const brush = this.plugin.getTerrainBrush();
         const controls = document.createElement("div");
         Object.assign(controls.style, { display: "grid", gap: "8px" });
-        const field = (name: string, element: HTMLInputElement | HTMLSelectElement) => {
-            Object.assign(element.style, INPUT_STYLE);
-            const label = document.createElement("label");
-            Object.assign(label.style, { display: "grid", gap: "3px" });
-            label.append(name, element);
-            return label;
-        };
         const action = document.createElement("select");
         const groups = {
             Paint: ["overlay", "underlay"],
             Sculpt: ["raise", "lower", "smooth", "flatten", "ramp", "natural"],
-            Walkability: ["block", "unblock"],
+            Flags: ["block", "unblock"],
         } as const satisfies Record<string, readonly TerrainBrushAction[]>;
         const modes = document.createElement("div");
-        modes.dataset.ghostClassicControl = "";
+
         Object.assign(modes.style, { display: "flex", gap: "5px" });
         const modeButtons = new Map<string, HTMLButtonElement>();
         const showGroup = (name: keyof typeof groups, activeAction?: TerrainBrushAction) => {
@@ -2798,12 +2574,12 @@ class EditorChrome {
         const activeGroup = (Object.keys(groups) as (keyof typeof groups)[])
             .find((name) => (groups[name] as readonly TerrainBrushAction[]).includes(brush.action)) ?? "Paint";
         showGroup(group ?? activeGroup, selected ?? (group ? this.lastBrushActions[group] : brush.action));
-        const actionField = field("Action", action);
-        actionField.dataset.ghostClassicControl = "";
+        const actionField = this.labeledField("Action", action);
+
         const walkActions = document.createElement("div");
-        walkActions.dataset.ghostClassicControl = "";
+
         Object.assign(walkActions.style, { gap: "5px" });
-        const walkButtons = groups.Walkability.map((mode) => {
+        const walkButtons = groups.Flags.map((mode) => {
             const button = createCompactButton(TERRAIN_LABELS[mode], TERRAIN_LABELS[mode], () => {
                 action.value = mode;
                 update();
@@ -2811,6 +2587,29 @@ class EditorChrome {
             walkActions.append(button);
             return { button, mode };
         });
+        let flagMask = brush.flagMask ?? 1;
+        const flags = document.createElement("div"); flags.className = "rspsi-tile-flags";
+        const flagInputs = new Map<number, HTMLInputElement>();
+        for (const [bit, label, description] of [
+            [1, "Unwalkable", "Block walking on painted tiles."],
+            [2, "Bridge", "Mark painted tiles as a bridge."],
+            [4, "Remove roof", "Mark painted tiles for roof removal."],
+            [8, "Render one level lower", "Draw painted tiles on the level below."],
+            [16, "Disable tile rendering", "Set the disable-render flag on painted tiles."],
+        ] as const) {
+            const checkbox = document.createElement("input"); checkbox.type = "checkbox";
+            checkbox.setAttribute("aria-label", label);
+            checkbox.checked = !!(flagMask & bit);
+            const text = document.createElement("span"); text.append(label);
+            const help = document.createElement("small"); help.textContent = description;
+            text.append(help);
+            const row = document.createElement("label"); row.append(checkbox, text); flags.append(row);
+            flagInputs.set(bit, checkbox);
+            checkbox.onchange = () => {
+                flagMask = checkbox.checked ? flagMask | bit : flagMask & ~bit;
+                update();
+            };
+        }
         const shape = document.createElement("select");
         shape.add(new window.Option("Round", "round"));
         shape.add(new window.Option("Square", "square"));
@@ -2820,7 +2619,7 @@ class EditorChrome {
         radius.min = "0";
         radius.max = "10";
         radius.value = String(brush.radius);
-        const radiusLabel = field(`Brush radius (${brush.radius} tiles)`, radius);
+        const radiusLabel = this.labeledField(`Brush radius (${brush.radius} tiles)`, radius);
         const slider = (min: number, max: number, value: number) => {
             const input = document.createElement("input");
             input.type = "range";
@@ -2834,8 +2633,8 @@ class EditorChrome {
         const strength = document.createElement("div");
         strength.style.display = "grid";
         strength.style.gap = "4px";
-        const stepLabel = field("", step);
-        const blendLabel = field("", blend);
+        const stepLabel = this.labeledField("", step);
+        const blendLabel = this.labeledField("", blend);
         const presets = document.createElement("div");
         Object.assign(presets.style, { display: "flex", gap: "4px", flexWrap: "wrap" });
         const strengthButtons = ([["Light", 1, 25], ["Medium", 4, 50], ["Strong", 12, 100]] as const).map(
@@ -2872,11 +2671,10 @@ class EditorChrome {
         underlay.value = brush.underlay?.toString() ?? "";
         const groundColor = document.createElement("span");
         Object.assign(groundColor.style, { display: "block", height: "8px", borderRadius: "3px" });
-        const underlayLabel = field("Base ground", underlay);
+        const underlayLabel = this.labeledField("Base ground", underlay);
         underlayLabel.append(groundColor);
         const hint = document.createElement("div");
         hint.style.color = "#cbd5e1";
-        const title = document.createElement("span");
         const updateLabels = () => {
             radiusLabel.firstChild!.textContent = radius.value === "0" ? "Brush size: one tile" : `Brush radius: ${radius.value} tile${radius.value === "1" ? "" : "s"}`;
             stepLabel.firstChild!.textContent = `Strength: ${step.value} × 1/16 tile`;
@@ -2889,7 +2687,7 @@ class EditorChrome {
         };
         const update = (activate = true) => {
             const mode = action.value as TerrainBrushAction;
-            title.textContent = TERRAIN_LABELS[mode];
+            this.layout.activatePalette(mode === "overlay" ? "Overlays" : mode === "underlay" ? "Underlays" : "Misc");
             const color = ground.find((swatch) => swatch.id === Number(underlay.value))?.colorRgb;
             groundColor.style.display = color === undefined ? "none" : "block";
             if (color !== undefined) groundColor.style.backgroundColor = `#${color.toString(16).padStart(6, "0")}`;
@@ -2900,33 +2698,35 @@ class EditorChrome {
             blendLabel.style.display = usesBlend() ? "grid" : "none";
             softLabel.hidden = ["overlay", "underlay", "natural", "block", "unblock"].includes(mode);
             timing.element.style.display = mode === "ramp" ? "none" : "grid";
-            overlayMaterial.style.display = mode === "overlay" ? "flex" : "none";
+            overlayMaterial.element.style.display = mode === "overlay" ? "grid" : "none";
             hint.textContent = mode === "ramp" ? "Drag between two heights. The slope is applied on release." :
                 mode === "flatten" ? "Start on a tile at the height you want, then drag across the area to level." :
-                mode === "block" || mode === "unblock" ? "The brush outline marks the stroke area." :
-                "[ and ] change brush size. Esc cancels the active stroke.";
+                    mode === "block" || mode === "unblock" ? flagMask
+                        ? "Paint to set or clear the checked flags. Other flags stay unchanged. View controls highlighting."
+                        : "Choose at least one flag to paint." :
+                        "[ and ] change brush size. Esc cancels the active stroke.";
             updateLabels();
             const group = (Object.keys(groups) as (keyof typeof groups)[])
                 .find((name) => (groups[name] as readonly TerrainBrushAction[]).includes(mode));
             if (group) this.lastBrushActions[group] = mode;
-            walkActions.style.display = group === "Walkability" ? "flex" : "none";
-            actionField.style.display = group === "Walkability" ? "none" : "grid";
+            flags.hidden = group !== "Flags";
+            walkActions.style.display = group === "Flags" ? "flex" : "none";
+            actionField.style.display = group === "Flags" ? "none" : "grid";
             for (const { button, mode: buttonMode } of walkButtons) {
                 const active = mode === buttonMode;
                 button.setAttribute("aria-pressed", String(active));
                 button.style.borderColor = active ? "#60a5fa" : "";
             }
-            blockedLabel.hidden = group !== "Walkability";
             if (activate) this.plugin.setTerrainBrush({
-                action: mode, shape: shape.value as TerrainBrush["shape"], radius: Number(radius.value),
+                action: mode, flagMask, shape: shape.value as TerrainBrush["shape"], radius: Number(radius.value),
                 step: step.valueAsNumber, blend: blend.valueAsNumber, soft: soft.checked,
                 underlay: underlay.value ? Number(underlay.value) : undefined,
             });
         };
-        const overlayMaterial = this.createOverlayMaterialButton();
+        const overlayMaterial = this.createOverlayPicker();
         radius.title = "[ and ] change the brush size on the map";
-        controls.append(modes, actionField, walkActions, overlayMaterial, timing.element, radiusLabel,
-            field("Brush shape", shape), strength, underlayLabel, softLabel, hint);
+        controls.append(modes, actionField, walkActions, flags, overlayMaterial.element, timing.element, radiusLabel,
+            this.labeledField("Brush shape", shape), strength, underlayLabel, softLabel, hint);
         for (const control of [action, shape, radius, step, blend, underlay, soft]) {
             control.addEventListener("change", () => update());
         }
@@ -2935,30 +2735,17 @@ class EditorChrome {
             if (!panel.isConnected) { this.syncBrushInputs = undefined; return; }
             radius.value = String(this.plugin.getTerrainBrush().radius);
             timing.sync();
-            this.updateOverlayMaterialButton(overlayMaterial);
+            flagMask = this.plugin.getTerrainBrush().flagMask ?? 1;
+            flagInputs.forEach((input, bit) => { input.checked = !!(flagMask & bit); });
+            overlayMaterial.sync();
             updateLabels();
         };
-        const blocked = document.createElement("input");
-        blocked.type = "checkbox";
-        blocked.checked = this.walkabilityOverlay;
-        blocked.onchange = () => {
-            this.walkabilityOverlay = blocked.checked;
-            this.plugin.showBlockedRegion(blocked.checked);
-        };
-        const blockedLabel = document.createElement("label");
-        blockedLabel.append(blocked, " Show blocked tiles in red");
         const generate = createCompactButton("Generate landscape", "Create a landscape from a landform and biome", () => this.openLandscapePanel());
-        generate.dataset.ghostClassicControl = "";
-        controls.append(blockedLabel, generate);
-        const header = createHeader("Terrain brush", () => this.closeBrushPanel(this.plugin.getConfig().ghostUi));
-        const classicTitle = header.querySelector("strong")!;
-        classicTitle.dataset.ghostClassicControl = "";
-        title.dataset.ghostTitle = "";
-        title.style.fontWeight = "bold";
-        classicTitle.after(title);
+
+        controls.append(generate);
+        const header = createHeader("Terrain brush", () => this.closeBrushPanel(true));
         panel.append(header, controls);
         update(!!group);
-        this.plugin.showBlockedRegion(this.walkabilityOverlay);
         this.syncToolCue();
     }
 
@@ -3032,29 +2819,6 @@ class EditorChrome {
         }
     }
 
-    private createHeightButton(text: string, delta: number): HTMLButtonElement {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.textContent = text;
-        button.title = "Height/Level";
-        button.setAttribute("aria-label", `${delta < 0 ? "Decrease" : "Increase"} Height/Level`);
-        Object.assign(button.style, {
-            width: "28px",
-            flexShrink: "0",
-            height: "28px",
-            padding: "0",
-            border: "1px solid rgba(255,255,255,0.2)",
-            borderRadius: "4px",
-            color: "#fff",
-            background: "rgba(255,255,255,0.07)",
-            cursor: "pointer",
-        });
-        button.addEventListener("click", () =>
-            this.setHeightLevel(this.plugin.getConfig().heightLevel + delta),
-        );
-        return button;
-    }
-
     private setHeightLevel(level: number): void {
         this.plugin.setConfig({ heightLevel: Math.max(0, Math.min(3, level | 0)) });
     }
@@ -3083,32 +2847,49 @@ class EditorChrome {
         }
         this.plugin.setConfig({ tool: "place" });
         this.palette.setVisible(false);
-        if (mode === "loc" || this.plugin.getConfig().ghostUi) this.showPlacementOptions(id, mode);
+        this.showPlacementOptions(id, mode);
+    }
+
+    private selectedObjectSwatch(): ObjectSwatch | undefined {
+        const selected = this.plugin.getState().selection;
+        if (selected?.kind !== "loc") return;
+        return {
+            id: selected.locId, type: selected.shape ?? 10, turn: selected.rotation ?? 0,
+            name: selected.locName || this.plugin.getLocName(selected.locId) || `Object ${selected.locId}`
+        };
+    }
+
+    private addObjectSwatch(swatch: ObjectSwatch): void {
+        this.objectSwatches.add(swatch);
+        this.layout.selectPalette("Objects");
     }
 
     private showPlacementOptions(id: number, mode: "loc" | "npc"): void {
         this.placementOptions?.remove();
-        const ghost = this.plugin.getConfig().ghostUi === true;
         const shapes = mode === "loc" ? this.plugin.getLocPlacementShapes(id) : [];
-        if (!ghost && shapes.length < 2) return;
+
         const panel = this.inspectorPanel("placement-variant", true);
         this.placementOptions = panel;
         const name = (mode === "loc" ? this.plugin.getLocName(id) : this.plugin.getNpcName(id)) ||
             `${mode === "loc" ? "Object" : "NPC"} ${id}`;
-        panel.append(createHeader(ghost ? name : "Object variant", () => {
+        panel.append(createHeader(name, () => {
             panel.remove();
-            if (ghost) this.plugin.setConfig({ tool: "select" });
+            this.plugin.setConfig({ tool: "select" });
         }));
-        if (ghost) {
-            const actions = document.createElement("div");
-            Object.assign(actions.style, { display: "flex", gap: "5px", flexWrap: "wrap", marginBlock: "7px" });
-            actions.append(createCompactButton("Choose another", "Open asset search", () => this.toggleSearch(mode, true)),
-                createCompactButton("Rotate", "Rotate the placement preview (R)", () => this.plugin.rotate()));
-            const hint = document.createElement("p");
-            hint.style.marginBlock = "3px 5px";
-            hint.textContent = "Click a tile to place. Keep clicking to place more.";
-            panel.append(hint, actions);
-        }
+
+        const actions = document.createElement("div");
+        Object.assign(actions.style, { display: "flex", gap: "5px", flexWrap: "wrap", marginBlock: "7px" });
+        actions.append(createCompactButton("Choose another", "Open asset search", () => this.toggleSearch(mode, true)),
+            createCompactButton("Rotate", "Rotate the placement preview (R)", () => this.plugin.rotate()));
+        const hint = document.createElement("p");
+        hint.style.marginBlock = "3px 5px";
+        hint.textContent = "Click a tile to place. Keep clicking to place more.";
+        panel.append(hint, actions);
+
+        if (mode === "loc") panel.append(createCompactButton("Add to swatches", "Add placement object to swatches", () => {
+            const config = this.plugin.getConfig();
+            this.addObjectSwatch({ id, name, type: config.shape, turn: config.rotation });
+        }));
         if (shapes.length < 2) return;
         const variants = document.createElement("select");
         variants.setAttribute("aria-label", "Object variant");
@@ -3136,6 +2917,8 @@ class EditorChrome {
         }
         if (!(mode === "loc" && this.plugin.getConfig().tool === "scatter")) this.dismissToolPanel();
         if (!sameTab) this.search(mode);
+        this.layout.activatePalette("Objects");
+        this.layout.openSidebar();
         this.palette.setVisible(true);
         this.syncToolCue();
     }
@@ -3144,16 +2927,20 @@ class EditorChrome {
         return this.overlaySwatches.find((swatch) => swatch.id === id)?.colorRgb ?? 0x64748b;
     }
 
-    private createOverlaySwatchIcon(id: number): SVGElement {
+    private createOverlaySwatchIcon(id: number, fullTile = false): SVGElement {
         const color = this.overlayColor(id);
         const textureId = this.overlaySwatches.find((swatch) => swatch.id === id)?.textureId;
         const texture = textureId === undefined ? undefined : this.plugin.getOverlayTexture(textureId);
-        const icon = createOverlayIcon(color, texture);
+        const render = (source?: string) => fullTile
+            ? createOverlayShapeIcon(getOverlayShapeTriangles(0, 0), `#${(color & 0xffffff).toString(16).padStart(6, "0")}`, source)
+            : createOverlayIcon(color, source);
+        const icon = render(texture);
+        if (fullTile) icon.setAttribute("preserveAspectRatio", "none");
         if (textureId !== undefined && !texture) {
             const retry = (): void => {
                 if (!icon.isConnected) return;
                 const loaded = this.plugin.getOverlayTexture(textureId);
-                if (loaded) icon.replaceChildren(...createOverlayIcon(color, loaded).childNodes);
+                if (loaded) icon.replaceChildren(...render(loaded).childNodes);
                 else window.setTimeout(retry, 250);
             };
             window.setTimeout(retry, 250);
@@ -3161,111 +2948,76 @@ class EditorChrome {
         return icon;
     }
 
-    private closeOverlayPalette(restoreFocus = false): void {
-        this.overlayPalette?.remove();
-        this.overlayPalette = undefined;
-        this.overlayShapePicker = undefined;
-        this.overlayTrigger?.setAttribute("aria-expanded", "false");
-        if (restoreFocus) this.overlayTrigger?.focus({ preventScroll: true });
-        this.overlayTrigger = undefined;
-    }
-
-    private toggleOverlayPalette(trigger?: HTMLButtonElement): void {
-        if (this.overlayPalette?.isConnected && this.overlayTrigger === trigger) {
-            this.closeOverlayPalette(true);
-            return;
-        }
-        this.closeOverlayPalette();
-        if (!trigger && !this.brushPanel?.isConnected) this.dismissToolPanel(true);
-        this.palette.setVisible(false);
-        this.overlaySwatches = this.plugin.getOverlaySwatches();
-        const panel = trigger ? document.createElement("div") :
-            createPanel("overlay-palette", "min(300px, calc(100vw - var(--map-editor-panel-left, 62px) - 13px))");
-        if (trigger) {
-            panel.dataset.mapEditor = "overlay-palette";
-            Object.assign(panel.style, {
-                background: "#121418", border: "1px solid #ffffff24", borderRadius: "5px", padding: "7px",
-                minWidth: "0",
+    private createOverlayPicker(onPick?: () => void): { element: HTMLElement; sync: () => void } {
+        const element = document.createElement("div");
+        element.dataset.mapEditor = "overlay-picker";
+        Object.assign(element.style, { display: "grid", gap: "5px" });
+        const dropdown = document.createElement("div");
+        dropdown.dataset.mapEditor = "overlay-dropdown";
+        dropdown.hidden = true;
+        const useOverlay = createActionButton("Use overlay",
+            () => this.createOverlaySwatchIcon(this.plugin.getConfig().overlayId), () => {
+                dropdown.hidden = !dropdown.hidden;
+                useOverlay.setAttribute("aria-expanded", String(!dropdown.hidden));
+                if (!dropdown.hidden) {
+                    if (!dropdown.childElementCount) populate();
+                    sync();
+                    search.focus();
+                }
             });
-            trigger.after(panel);
-            trigger.setAttribute("aria-expanded", "true");
-            this.overlayTrigger = trigger;
-        } else Object.assign(panel.style, {
-            top: TOP_BAR_CLEARANCE, maxHeight: "calc(100dvh - 78px)", overflowY: "auto", zIndex: "10004",
-        });
-        this.overlayPalette = panel;
-        panel.appendChild(createHeader("Choose terrain overlay", () => this.closeOverlayPalette(true)));
+        useOverlay.setAttribute("aria-expanded", "false");
         const search = document.createElement("input");
         search.type = "search";
-        search.placeholder = "Find overlay by name or ID";
-        search.setAttribute("aria-label", "Search terrain overlays");
-        Object.assign(search.style, INPUT_STYLE, { marginBlock: "6px" });
-        const swatches = document.createElement("div");
-        Object.assign(swatches.style, {
-            display: "grid",
-            gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
-            gap: "5px",
-            maxHeight: trigger ? "min(34dvh, 310px)" : "",
-            overflowY: "auto",
-        });
-        const appendSwatch = (id: number, colorRgb: number, name?: string, textureId?: number): void => {
-            const swatch = document.createElement("button");
-            swatch.type = "button";
-            swatch.textContent = String(id);
-            swatch.title = name ? `Overlay ${id} · ${name}` : `Overlay ${id}`;
-            swatch.setAttribute("aria-label", swatch.title);
-            swatch.dataset.overlay = `${id} ${name ?? ""}`.toLowerCase();
-            Object.assign(swatch.style, {
-                height: "38px",
-                padding: "0",
-                border: `2px solid ${id === this.plugin.getConfig().overlayId ? "#60a5fa" : "rgba(255,255,255,0.2)"}`,
-                borderRadius: "4px",
-                color: "#fff",
-                background: `#${(colorRgb & 0xffffff).toString(16).padStart(6, "0")}`,
-                cursor: "pointer",
-                font: "11px sans-serif",
-                textShadow: "0 1px 2px #000",
-            });
-            swatch.addEventListener("click", () => {
-                this.plugin.setConfig({ overlayId: id });
-                this.closeOverlayPalette(true);
-            });
-            swatches.appendChild(swatch);
-            if (textureId !== undefined) {
-                const showTexture = (): void => {
-                    const texture = this.plugin.getOverlayTexture(textureId);
-                    if (texture) {
-                        swatch.style.backgroundImage = `url("${texture}")`;
-                        swatch.style.backgroundSize = "cover";
-                    } else {
-                        window.setTimeout(() => {
-                            if (swatch.isConnected) showTexture();
-                        }, 250);
-                    }
+        search.placeholder = "Search overlays…";
+        search.setAttribute("aria-label", "Search overlays");
+        const grid = document.createElement("div");
+        grid.className = "rspsi-swatch-grid";
+        const shapes = this.createOverlayShapePicker();
+        const sync = () => {
+            const { overlayId } = this.plugin.getConfig();
+            if (useOverlay.dataset.overlayId !== String(overlayId)) {
+                useOverlay.dataset.overlayId = String(overlayId);
+                useOverlay.replaceChild(this.createOverlaySwatchIcon(overlayId), useOverlay.firstChild!);
+            }
+            for (const button of grid.querySelectorAll("button")) {
+                button.setAttribute("aria-pressed", String(Number(button.dataset.material) === overlayId));
+            }
+            this.fillOverlayShapePicker(shapes);
+        };
+        const populate = () => {
+            for (const swatch of [{ id: 0, colorRgb: 0x202020, name: "Clear" }, ...this.overlaySwatches]) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.dataset.material = String(swatch.id);
+                button.title = `${swatch.name ?? "Overlay"} #${swatch.id}`;
+                button.setAttribute("aria-label", button.title);
+                const icon = this.createOverlaySwatchIcon(swatch.id, true);
+                icon.classList.add("rspsi-material-preview");
+                const number = document.createElement("span");
+                number.className = "rspsi-material-id";
+                number.textContent = String(swatch.id);
+                button.append(icon, number);
+                button.onclick = () => {
+                    dropdown.hidden = true;
+                    useOverlay.setAttribute("aria-expanded", "false");
+                    this.plugin.setConfig({ overlayId: swatch.id });
+                    onPick?.();
+                    sync();
+                    if (useOverlay.isConnected) useOverlay.focus();
                 };
-                showTexture();
+                grid.append(button);
             }
+            search.oninput = () => {
+                const terms = search.value.toLowerCase().split(/\s+/);
+                for (const button of grid.querySelectorAll("button")) {
+                    button.hidden = !terms.every(term => button.title.toLowerCase().includes(term));
+                }
+            };
+            dropdown.append(search, grid);
         };
-        const matches = document.createElement("div");
-        matches.setAttribute("role", "status");
-        search.oninput = () => {
-            const terms = search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-            let count = 0;
-            for (const swatch of swatches.querySelectorAll<HTMLButtonElement>("button[data-overlay]")) {
-                swatch.hidden = !terms.every((term) => swatch.dataset.overlay!.includes(term));
-                if (!swatch.hidden) count++;
-            }
-            matches.textContent = count ? "" : "No overlays match.";
-        };
-        panel.append(search);
-        this.overlayShapePicker = this.createOverlayShapePicker();
-        panel.appendChild(this.overlayShapePicker);
-        appendSwatch(0, 0x27303a, "Clear");
-        for (const swatch of this.overlaySwatches) {
-            appendSwatch(swatch.id, swatch.colorRgb, swatch.name, swatch.textureId);
-        }
-        panel.append(swatches, matches);
-        if (trigger) search.focus({ preventScroll: true });
+        element.append(useOverlay, dropdown, shapes);
+        sync();
+        return { element, sync };
     }
 
     /** The twelve overlay shapes at the current rotation; a repeat click rotates the picked one. */
@@ -3385,7 +3137,7 @@ class EditorChrome {
 
     private syncSaveButton(): void {
         const changed = this.hasUnsavedChanges();
-        this.ghostNavigation?.setChanged(changed);
+        this.layout?.setChanged(changed);
         this.syncReview(changed);
         if (this.fileStatus) {
             this.fileStatus.textContent = changed ? "Unsaved changes" : this.session.lastSaveStatus ?? "";
@@ -3406,67 +3158,22 @@ class EditorChrome {
         const state = this.plugin.getState();
         const panelTool = this.inspectorToolPanel?.dataset.activeTool;
         if (panelTool && panelTool !== state.config.tool) this.inspectorToolPanel?.remove();
-        const ghost = state.config.ghostUi === true;
-        if (!ghost) {
-            this.closeJumpToLocation();
-            if (this.inspectorToolPanel?.dataset.mapEditor === "ghost-help") this.inspectorToolPanel.remove();
-            if (this.ghostWorldMapMode) this.plugin.closeWorldMap();
-        }
-        this.toolbar.setVisible(!ghost);
-        this.ghostNavigation.setVisible(ghost);
-        if (this.travelPanel?.isConnected && ghost !== !!this.travelNearby) {
-            if (ghost) this.ghostNavigation.revealTask("travel");
-            this.travelNearby = ghost ? document.createElement("div") : undefined;
-            this.ghostNavigation.setWorkspaceContent(this.travelNearby);
-            this.travel.setNearby(this.travelNearby);
-        }
-        this.topBar.style.display = ghost ? "none" : "flex";
-        this.ghostViewportControls.style.display = ghost ? "flex" : "none";
-        const editFloor = state.config.heightLevel;
-        this.ghostFloorInput.value = String(editFloor);
-        const options = this.ghostFloorVisibility.options;
-        options[0].textContent = editFloor === 0 ? "Ground only" : editFloor === 3 ? "All floors" : `Through floor ${editFloor}`;
-        options[1].textContent = `Through floor ${Math.min(3, editFloor + 1)}`;
-        options[1].hidden = editFloor >= 2;
-        options[2].textContent = "All floors";
-        options[2].hidden = editFloor === 3;
-        // Several choices are equivalent on the top two floors. When going
-        // back down, keep the user's saved view preference.
-        const view = state.config.floorView ?? "up-to";
-        this.ghostFloorVisibility.value = editFloor === 3 ? "up-to" : editFloor === 2 && view === "one-above" ? "all" : view;
-        if (this.visibilityLayout !== ghost) {
-            this.visibilityLayout = ghost;
-            this.placeVisibilityControls(ghost);
-        }
-        document.body.classList.toggle("map-editor-ghost", ghost);
+
+        this.syncSwatches?.();
         this.syncBrushInputs?.();
         this.syncScatterInputs?.();
-        if (ghost) document.body.style.setProperty("--map-editor-panel-left", "calc(min(178px, 34vw) + 20px)");
-        else document.body.style.removeProperty("--map-editor-panel-left");
-        this.editorLayout.value = ghost ? "ghost" : "classic";
+
         this.renderDistanceInput.value = String(state.config.renderDistance ?? 25);
         this.renderDistanceLabel.value = state.config.renderDistance === undefined ? "Game default" : `${state.config.renderDistance} tiles`;
         this.selectionModeInput.value = this.plugin.getSelectionMode();
-        if (state.config.tool !== "place" || (!ghost && state.config.placeKind !== "loc")) this.placementOptions?.remove();
-        this.pvpZonesInput.disabled = !state.world.definition;
-        this.safeZonesInput.disabled = !state.world.definition;
-        this.duelZonesInput.checked = state.config.showDuelZones;
-        this.safeZonesInput.checked = state.config.showSafeZones;
-        this.f2pZonesInput.disabled = !state.world.definition;
-        this.f2pZonesInput.checked = state.config.showF2pZones;
-        this.multiCombatZonesInput.disabled = !state.world.definition;
+        if (state.config.tool !== "place") this.placementOptions?.remove();
         this.heightInput.value = String(state.config.heightLevel);
         this.renderAllInput.checked = state.config.renderAllHeightLevels;
         this.floorViewInput.value = state.config.floorView ?? "";
-        this.mapIconsInput.checked = state.config.showMapIcons;
         this.saveObjectSpawnsInput.checked = state.config.saveObjectSpawns;
-        this.pvpZonesInput.checked = state.config.showPvpZones;
-        this.multiCombatZonesInput.checked = state.config.showMultiCombatZones;
-        this.toolbar.setIcon("overlay", () => this.createOverlaySwatchIcon(state.config.overlayId));
-        if (this.overlayShapePicker) this.fillOverlayShapePicker(this.overlayShapePicker);
         this.syncToolCue();
         this.palette.setMode(state.search.kind);
-        this.palette.setGhostLayout(ghost, this.scattering);
+        this.palette.setLayout(this.scattering);
         this.palette.setSelectedId(
             state.search.kind === "npc" ? state.config.npcId : state.config.locId,
         );
@@ -3484,21 +3191,13 @@ class EditorChrome {
         const mode = this.plugin.getSelectionMode();
         const isEntity = selection?.kind === "loc" || selection?.kind === "npc";
         const isBuilding = selection?.kind === "building";
-        const workspace = this.ghostNavigation.getWorkspace();
-        const entityWorkspace = workspace === "Select" || workspace === "Build & Place";
-        const inContext = !config.ghostUi || (config.tool === "select" && (
-            (workspace === "Select" && (isBuilding || (mode === "ground" && !isEntity))) ||
-            (entityWorkspace && mode === "entity" && isEntity)
-        ));
-        const actionsAvailable = config.ghostUi && config.tool === "select" && mode === "entity" &&
-            entityWorkspace && !this.inspectorToolPanel?.isConnected &&
-            !this.palette.isVisible() && !this.plugin.isWorldMapOpen();
-        this.syncObjectActions(actionsAvailable && selection?.kind === "loc" ? selection : undefined);
+        const inContext = selection !== this.swatchSelection && config.tool === "select" && (mode !== "building" || isBuilding) && (mode !== "ground" || !isEntity);
         if (!selection || !inContext || this.inspectorToolPanel?.isConnected || this.palette.isVisible()) {
             if (!selection) this.selectionImage = undefined;
             this.selectionDetails.style.display = "none";
             return;
         }
+        this.layout.activatePalette(isEntity ? "Objects" : isBuilding ? "Settlements" : "Misc");
         const imageKey = `${selection.kind}:${selection.locId}:${selection.tileX}:${selection.tileY}:${selection.plane}`;
         if (this.selectionImage && this.selectionImage.key !== imageKey) this.selectionImage = undefined;
         this.selectionDetails.replaceChildren();
@@ -3554,8 +3253,8 @@ class EditorChrome {
             selection.locId >= 0
                 ? `${selection.locName || (selection.kind === "npc" ? "Unknown NPC" : "Unknown object")} · ${selection.kind === "npc" ? "NPC" : "ID"} ${selection.locId}`
                 : hasTileRange
-                  ? "Ground tiles"
-                  : "Ground tile";
+                    ? "Ground tiles"
+                    : "Ground tile";
         const location = document.createElement("div");
         location.textContent =
             !hasTileRange
@@ -3582,18 +3281,22 @@ class EditorChrome {
         if (isGroundSelection) {
             if (!hasTileRange) {
                 const overlay = this.plugin.getSelectionOverlay();
-                const useOverlay = createActionButton("Use overlay",
-                    () => this.createOverlaySwatchIcon(overlay ?? 0),
-                    () => this.plugin.useSelectionOverlay());
-                useOverlay.disabled = overlay === undefined;
-                if (useOverlay.disabled) {
-                    useOverlay.style.opacity = "0.45";
-                    useOverlay.style.cursor = "not-allowed";
-                }
-                actions.appendChild(useOverlay);
+                const current = document.createElement("div");
+                current.className = "rspsi-current-overlay";
+                current.dataset.mapEditor = "current-overlay";
+                const preview = this.createOverlaySwatchIcon(overlay ?? 0);
+                preview.setAttribute("role", "img");
+                preview.setAttribute("aria-label", overlay === undefined ? "Overlay unavailable" :
+                    overlay === 0 ? "No overlay" : `Current overlay #${overlay}`);
+                const label = document.createElement("span");
+                label.textContent = overlay === 0 ? "Current overlay · None" : "Current overlay";
+                const use = createCompactButton("Use", "Use current tile overlay", () => this.plugin.useSelectionOverlay());
+                use.disabled = overlay === undefined;
+                current.append(preview, label, use);
+                actions.append(current);
             }
             actions.append(
-                this.createOverlayShapePicker(),
+                this.createOverlayPicker(() => this.plugin.paintSelection()).element,
                 createActionButton("Paint overlay", createPaintIcon, () =>
                     this.plugin.paintSelection(),
                 ),
@@ -3602,6 +3305,10 @@ class EditorChrome {
         }
         if (selection.kind === "loc") {
             actions.append(
+                createActionButton("Add to swatches", createSaveIcon, () => {
+                    const swatch = this.selectedObjectSwatch();
+                    if (swatch) this.addObjectSwatch(swatch);
+                }),
                 createActionButton("Rotate object", createRotateIcon, () => this.plugin.rotateSelection(), "R"),
                 createActionButton("Duplicate object", createDuplicateIcon, () =>
                     this.plugin.duplicateSelection(), "C",
@@ -3651,14 +3358,6 @@ class EditorChrome {
                 actions.appendChild(image);
             }
         }
-        if (isGroundSelection && !hasTileRange && this.plugin.getState().world.definition) {
-            actions.append(
-                createActionButton("Set spawn point", createSpawnIcon, () => this.plugin.setSpawnPoint()),
-            );
-        }
-        if (!hasTileRange) actions.append(createActionButton("Test in game", createMoveIcon, () => {
-            if (!this.plugin.testTile(selection)) this.toast(`Log in as staff and use ::tele ${selection.tileX} ${selection.tileY} ${selection.plane}`);
-        }));
         if (selection.kind !== "npc") {
             const copy = createActionButton("Copy area", createDuplicateIcon, () => {
                 try {
@@ -3688,7 +3387,7 @@ class EditorChrome {
             actions.append(
                 createActionButton("Duplicate area", createDuplicateIcon, () => this.duplicateArea()),
                 createActionButton("Save as preset", createSaveIcon, () => this.saveSelectionAsPreset()),
-                createActionButton("Build here", createLayersIcon, () => this.openBuildPanel(selection)),
+                createActionButton("Build here", createHammerIcon, () => this.openBuildPanel(selection)),
 
                 createActionButton("Clear area", createTrashIcon, () => this.plugin.clearArea()),
                 createActionButton("Flatten area", createLayersIcon, () => this.plugin.flattenArea()),
@@ -3703,27 +3402,10 @@ class EditorChrome {
                 Math.min(selection.tileY, selection.tileEndY!) === bounds.minY) {
                 actions.append(this.createRegionEdgeControls());
             }
-            if (width > 2 && depth > 2 && selection.plane === 0) {
-                const options = document.createElement("div");
-                Object.assign(options.style, { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "5px" });
-                const style = document.createElement("select");
-                for (const name of BUILDING_STYLES) style.add(new window.Option(name, name, name === this.buildingStyle, name === this.buildingStyle));
-                style.addEventListener("change", () => { this.buildingStyle = style.value as BuildingStyle; });
-                const floors = document.createElement("select");
-                for (let count = 1; count <= 3; count++) floors.add(new window.Option(`${count} floor${count === 1 ? "" : "s"}`, String(count), count === this.buildingFloors, count === this.buildingFloors));
-                floors.addEventListener("change", () => { this.buildingFloors = Number(floors.value); });
-                const shape = document.createElement("select");
-                for (const name of BUILDING_SHAPES) shape.add(new window.Option(name, name, name === this.buildingShape, name === this.buildingShape));
-                shape.addEventListener("change", () => { this.buildingShape = shape.value as BuildingShape; });
-                for (const select of [style, floors, shape]) Object.assign(select.style, { minWidth: "0", padding: "5px", color: "#cbd5e1", background: "#20242b", border: "1px solid rgba(255,255,255,0.16)", borderRadius: "4px" });
-                options.append(style, floors, shape);
-                actions.append(options, createActionButton("Generate building", createLayersIcon, () =>
-                    this.plugin.generateBuilding(this.buildingStyle, this.buildingFloors, this.buildingShape),
-                ));
-            }
+
         }
-        this.selectionDetails.append(config.ghostUi ? createHeader(title.textContent ?? "Selection", () => this.plugin.clearSelection()) : title, location);
-        if (!config.ghostUi || isEntity) this.selectionDetails.append(rotation);
+        this.selectionDetails.append(createHeader(title.textContent ?? "Selection", () => this.plugin.clearSelection()), location);
+        if (isEntity) this.selectionDetails.append(rotation);
         if (selection.kind === "npc") {
             const source = document.createElement("div");
             source.textContent = selection.npcSource === "custom"
@@ -3802,29 +3484,6 @@ class EditorChrome {
         this.selectionDetails.style.display = "block";
     }
 
-    private syncObjectActions(object?: EditModeSelection): void {
-        if (this.objectActionFrame !== undefined) {
-            window.cancelAnimationFrame(this.objectActionFrame);
-            this.objectActionFrame = undefined;
-        }
-        const bar = this.objectActions;
-        bar.style.display = object ? "flex" : "none";
-        if (!object) return;
-        const position = () => {
-            const at = this.plugin.projectObject(object);
-            const visible = !!at && at.x >= 0 && at.x <= window.innerWidth && at.y >= 45 && at.y < window.innerHeight;
-            bar.style.visibility = visible ? "visible" : "hidden";
-            if (visible) {
-                const x = Math.min(window.innerWidth - bar.offsetWidth - 6, Math.max(6, at.x - bar.offsetWidth / 2));
-                const y = Math.min(window.innerHeight - bar.offsetHeight - 6, at.y + 8);
-                bar.style.left = `${Math.round(x)}px`;
-                bar.style.top = `${Math.round(y)}px`;
-            }
-            this.objectActionFrame = window.requestAnimationFrame(position);
-        };
-        position();
-    }
-
     private captureSelectionImage(key: string): void {
         this.selectionImage = { key, dataUrl: "", loading: true };
         this.renderSelection();
@@ -3877,36 +3536,27 @@ class EditorChrome {
     }
 
     private toggleWorldMap(mode?: "zones"): void {
-        if (this.plugin.getConfig().ghostUi) {
-            const nextMode = mode ?? "navigate";
-            const alreadyOpen = this.ghostWorldMapMode === nextMode;
-            if (mode) this.dismissToolPanel();
-            else {
-                this.closeJumpToLocation();
-                this.plugin.closeWorldMap();
-            }
-            if (alreadyOpen) return;
-            this.plugin.finishActiveBrush();
-            this.plugin.toggleWorldMap({
-                mode: nextMode,
-                onClose: () => this.syncGhostWorldMap(),
-            });
-            if (this.plugin.isWorldMapOpen()) this.syncGhostWorldMap(nextMode);
-            return;
+
+        const nextMode = mode ?? "navigate";
+        const alreadyOpen = this.worldMapMode === nextMode;
+        if (mode) this.dismissToolPanel();
+        else {
+            this.closeJumpToLocation();
+            this.plugin.closeWorldMap();
         }
-        const alreadyOpen = this.plugin.isWorldMapOpen();
-        this.dismissToolPanel();
         if (alreadyOpen) return;
+        this.plugin.finishActiveBrush();
         this.plugin.toggleWorldMap({
-            findTravelLinks: () => this.openTravelPanel(),
-            createRegion: (tile) => this.toggleFilesPanel(regionIdOf(tile.tileX, tile.tileY)),
+            mode: nextMode,
+            onClose: () => this.syncWorldMap(),
         });
+        if (this.plugin.isWorldMapOpen()) this.syncWorldMap(nextMode);
     }
 
-    private syncGhostWorldMap(mode?: "navigate" | "zones"): void {
-        this.ghostWorldMapMode = mode;
-        this.ghostMapButton.setAttribute("aria-pressed", String(mode === "navigate"));
-        if (!this.ghostViewportControls.isConnected) return;
+    private syncWorldMap(mode?: "navigate" | "zones"): void {
+        this.worldMapMode = mode;
+        this.mapButton.setAttribute("aria-pressed", String(mode === "navigate"));
+        if (!this.mapButton.isConnected) return;
         this.syncToolCue();
         this.renderSelection();
     }
@@ -3926,15 +3576,17 @@ class EditorChrome {
     }
 
     private toggleSettings(): void {
+        this.layout.openSidebar();
         if (this.settingsDrawer) {
             this.closeSettings();
             return;
         }
         this.dismissToolPanel();
         const panel = createPanel("settings", "min(340px, calc(100vw - var(--map-editor-panel-left, 62px) - 13px))");
+        this.layout.activatePalette("Misc");
         this.settingsDrawer = panel;
         panel.append(createHeader("Settings", () => this.closeSettings()), this.settingsContent);
-        this.editorLayout.focus();
+        this.renderDistanceInput.focus();
     }
 
     private closeSettings(): void {
@@ -4064,14 +3716,14 @@ class EditorChrome {
             if (this.groundItems.dirty) json("ground-items-custom.json", this.groundItems.contents());
             const connected = downloadOnly ? undefined : this.mapFiles;
             const overrides = this.plugin.worldOverridesForSave();
-            for (const key of ["spawn", "zones"] as const) {
+            for (const key of ["zones"] as const) {
                 if (key in overrides) json(`map-${key}.json`, JSON.stringify(overrides[key], null, 2) + "\n");
             }
             await this.withFileProgress(connected ? "Saving map edit layer…" : "Preparing map ZIP…", async () => {
                 if (connected) {
                     if (this.travel.dirty) await connected.checkLoadedDefinition("map-warps.json", this.travel.savedContents());
                     if (this.groundItems.dirty) await connected.checkLoadedDefinition("ground-items-custom.json", this.groundItems.savedContents());
-                    for (const key of ["spawn", "zones"] as const) {
+                    for (const key of ["zones"] as const) {
                         if (key in overrides) await connected.checkLoadedWorld(`map-${key}.json`, this.plugin.getLoadedWorldSetting(key));
                     }
                     const additions = new Set(newSquares.map((regionId) => `regions/${regionId}.pack`));

@@ -2,6 +2,8 @@ const fs = require("fs");
 const path = require("path");
 
 const { ObjectType } = require("./ObjectType.ProceduralRegionStream");
+const { editorGenerationPath } = require("../EditorGeneration");
+const { normalizeTerrainBiome } = require(editorGenerationPath("landscapes/TerrainBiome"));
 const { PROCEDURAL_DATA_DIRECTORY } = require("./ProceduralDataPaths.ProceduralRegionStream");
 
 const TERRAIN_BIOME_DIRECTORY = path.join(PROCEDURAL_DATA_DIRECTORY, "terrain-biomes");
@@ -340,6 +342,13 @@ function sampleRegionTerrainForBiome(regionX, regionY) {
   };
 }
 
+// Captures remain writable runtime data; shipped defaults belong to the editor.
+function terrainBiomeInputPath(biome) {
+  const runtimePath = path.join(TERRAIN_BIOME_DIRECTORY, `${biome}.json`);
+  return fs.existsSync(runtimePath) ? runtimePath
+    : editorGenerationPath("landscapes/data/terrain-biomes", `${biome}.json`);
+}
+
 function readBiomeDocument(outputPath, biomeName) {
   const nowIso = new Date().toISOString();
   const emptyDoc = {
@@ -441,7 +450,7 @@ function dumpTerrainBiome(player, biomeArg) {
 
   fs.mkdirSync(TERRAIN_BIOME_DIRECTORY, { recursive: true });
   const outputPath = path.join(TERRAIN_BIOME_DIRECTORY, `${biome}.json`);
-  const doc = readBiomeDocument(outputPath, biome);
+  const doc = readBiomeDocument(terrainBiomeInputPath(biome), biome);
 
   doc.updatedAt = new Date().toISOString();
   doc.ids.treeIds = mergeUniqueSorted(doc.ids.treeIds, sample.treeIds);
@@ -496,7 +505,7 @@ function loadTerrainBiome(biomeArg, { optional = false } = {}) {
     throw new Error("Usage: ::genterrain <biome> [seed]");
   }
 
-  const inputPath = path.join(TERRAIN_BIOME_DIRECTORY, `${biome}.json`);
+  const inputPath = terrainBiomeInputPath(biome);
   if (!fs.existsSync(inputPath)) {
     if (optional) return undefined;
     throw new Error(`No terrain biome dump found for '${biome}'. Use ::dumpterrain ${biome} first.`);
@@ -508,9 +517,8 @@ function loadTerrainBiome(biomeArg, { optional = false } = {}) {
     throw new Error(`Terrain biome '${biome}' has no samples. Use ::dumpterrain ${biome} first.`);
   }
 
-  const treeIds = sortedUnique(doc?.ids?.treeIds ?? []);
-  const underlayIds = sortedUnique(doc?.ids?.underlayIds ?? []);
-  const groundDecorationIds = sortedUnique(doc?.ids?.groundDecorationIds ?? []);
+  const normalized = normalizeTerrainBiome(doc);
+  const { treeIds, groundDecorationIds } = normalized;
   const metrics = recomputeMetrics(doc.samples);
   const buildDensityById = (fieldName, ids) => {
     const accum = new Map();
@@ -547,46 +555,7 @@ function loadTerrainBiome(biomeArg, { optional = false } = {}) {
     }
     return result;
   };
-  const buildProfileById = (fieldName, ids, fallbackType) => {
-    const counts = new Map();
-    for (const sample of doc.samples) {
-      const entries = Array.isArray(sample?.[fieldName]) ? sample[fieldName] : [];
-      for (const entry of entries) {
-        const id = entry?.id | 0;
-        if (id <= 0) {
-          continue;
-        }
-        const type = entry?.type | 0;
-        const orientation = (entry?.orientation | 0) & 0x3;
-        const weight = Math.max(1, entry?.count | 0);
-        const key = `${id}:${type}:${orientation}`;
-        counts.set(key, (counts.get(key) ?? 0) + weight);
-      }
-    }
 
-    const profile = {};
-    for (const id of ids) {
-      let best = null;
-      for (const [key, count] of counts.entries()) {
-        const [idText, typeText, orientationText] = key.split(":");
-        if ((Number.parseInt(idText, 10) | 0) !== (id | 0)) {
-          continue;
-        }
-        const candidate = {
-          type: Number.parseInt(typeText, 10) | 0,
-          orientation: Number.parseInt(orientationText, 10) & 0x3,
-          count: count | 0,
-        };
-        if (!best || candidate.count > best.count) {
-          best = candidate;
-        }
-      }
-      profile[String(id)] = best
-        ? { type: best.type, orientation: best.orientation }
-        : { type: fallbackType | 0, orientation: 0 };
-    }
-    return profile;
-  };
 
   const treeDensity = clamp(
     Number.isFinite(metrics.averageTreeDensity) ? metrics.averageTreeDensity : 0,
@@ -602,15 +571,7 @@ function loadTerrainBiome(biomeArg, { optional = false } = {}) {
   return {
     biome,
     inputPath,
-    treeIds,
-    underlayIds,
-    groundDecorationIds,
-    treeProfileById: buildProfileById("treeProfiles", treeIds, ObjectType.INTERACTIVE),
-    groundDecorationProfileById: buildProfileById(
-      "groundDecorationProfiles",
-      groundDecorationIds,
-      ObjectType.GROUND_DECOR
-    ),
+    ...normalized,
     treeDensityById: buildDensityById("treeIdStats", treeIds),
     groundDecorationDensityById: buildDensityById("groundDecorationIdStats", groundDecorationIds),
     treeDensity,

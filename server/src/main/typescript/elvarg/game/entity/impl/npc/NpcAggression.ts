@@ -56,7 +56,7 @@ export class NpcAggression {
                 continue;
             }
             const hunted = NpcAggression.huntedAt.get(npc);
-            if (hunted?.playerIndex === player.getIndex() && cycle - hunted.cycle < SINGLE_WAY_HOLD_TICKS) return true;
+            if (hunted != null && hunted.playerIndex === player.getIndex() && cycle - hunted.cycle < SINGLE_WAY_HOLD_TICKS) return true;
         }
         return false;
     }

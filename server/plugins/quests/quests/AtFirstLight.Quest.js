@@ -149,7 +149,6 @@ module.exports = function registerAtFirstLightQuest(api) {
   /** Text-only message boxes (g3koUf: the bed checked again, capture tick 871). */
   const STATEMENTS = new Set(["MdlNBh", "LNk3X1", "fZnlnI", "AFxMNH", "oSl9ut", "g3koUf"]);
 
-  const VERITY_EXPLAINED_LINE = "Now, what else can I do for you.";
   const VERITY_LEAD_LINE = "If anyone did, it would've been Wolf. She's always getting Fox into some kind of trouble.";
   const WOLF_MOUSE_LINE = "He's very easy to distract. We have a little fake mouse we use sometimes.";
   const WOLF_PYRE_LINE = "He'll have stopped off for a bit of hunting first. There are some pyre foxes about halfway between here and the Locus Oasis that he was eyeing up. I bet that's where you'll find him.";
@@ -441,9 +440,12 @@ module.exports = function registerAtFirstLightQuest(api) {
     if (own !== undefined) event.expression = own;
     // Met Apatura: set as her second line appears, at the first meeting (capture tick 123).
     if (npcId === APATURA_NPC_ID && stage === 0) at(APATURA_MET_LINE, () => setSub(player, "masterMet", 1));
-    if (npcId === VERITY_NPC_ID && stage === STAGE_STARTED) at(VERITY_LEAD_LINE, () => advance(player, STAGE_VERITY));
-    // Her explanation in the quest's first talk counts as the rumours introduction (capture ticks 243-258, 1352).
-    if (npcId === VERITY_NPC_ID && text === VERITY_EXPLAINED_LINE) event.before = () => verityIntroduced(player, true);
+    // Her lead also closes the quest's first talk, whose explanation counts as the rumours introduction
+    // (capture ticks 243-267, 1352). Marked here, after both "talked to Verity" branches have been answered.
+    if (npcId === VERITY_NPC_ID && stage === STAGE_STARTED) at(VERITY_LEAD_LINE, () => {
+      verityIntroduced(player, true);
+      advance(player, STAGE_VERITY);
+    });
     if (npcId === WOLF_NPC_ID) {
       if (stage === STAGE_VERITY) at(WOLF_MOUSE_LINE, () => advance(player, STAGE_MOUSE));
       if (stage === STAGE_MOUSE) at(WOLF_PYRE_LINE, () => advance(player, STAGE_PYRE_FOXES));
@@ -592,6 +594,7 @@ module.exports = function registerAtFirstLightQuest(api) {
     const { player } = event;
     if (event.npcId !== APATURA_NPC_ID || stageOf(player) !== 0) return false;
     // Another plugin's variant comes first (the Hunter cape's enhancement, Teleports.SkillCapes.js): leave it the talk.
+    // This relies on items/ registering before quests/ (PluginManager sorts plugin paths), as the variant order does.
     const ours = selectApaturaVariant(player);
     const definition = event.definition ?? NpcDefinition.forId(APATURA_NPC_ID);
     const first = api.core.PluginManager.emitNpcDialogueVariant({ player, npc: event.npc ?? null, npcId: APATURA_NPC_ID, definition });

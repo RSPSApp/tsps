@@ -445,7 +445,7 @@ test("journal as captured at stages 7, 8, 9 and 10 (ticks 764, 1004, 1063, 1133)
   assert.equal(at(12).at(-1), "<col=ff0000>QUEST COMPLETE!");
 });
 
-test("post-quest: Apatura's rumour milestones answer from the rumours done (none: her menu at once, tick 1329)", async (t) => {
+test("post-quest: Apatura's rumour milestones are skipped until their notes and key exist (her menu at once, tick 1329)", async (t) => {
   const f = actor(t, { stage: 12, attributes: { "at-first-light:stage-version": 1, "hunter.rumours": { assignments: {}, active: null, completed: 0, outfit: 0 } } });
   const apatura = npcAt(f, NPC.APATURA, [1554, 3033, 0]);
   const said = await play(f, () => h.talk(f, apatura), []);
@@ -576,6 +576,9 @@ test("Verity: the quest's first talk is her rumours introduction; a player she a
   const verity = npcAt(fresh, NPC.VERITY, [1559, 9464, 0]);
   const first = await play(fresh, () => h.talk(fresh, verity), ["Yes please."]);
   assert.match(first[0], /^Guild Scribe Verity: Oh, hello there newcomer\./);
+  const lead = first.indexOf("PLAYER: Well, actually, I heard there might be something I could help you with?");
+  assert.equal(first[lead + 1], "Guild Scribe Verity: You'll have to be slightly more specific. There's always something that needs doing down here!",
+    "no 'Hi Verity...' after the introduction (capture ticks 259-261)");
   assert.equal(fresh.player.getAttribute("hunter.rumours").unlocked, true, "the explanation counts");
   const known = actor(t, { tile: TILE.VERITY, stage: 1, attributes: { "at-first-light:stage-version": 1,
     "hunter.rumours": { assignments: {}, active: null, completed: 0, outfit: 0, unlocked: true } } });

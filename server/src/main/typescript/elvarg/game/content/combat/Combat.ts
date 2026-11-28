@@ -1299,12 +1299,14 @@ export class Combat {
      * a delayed hit from the previous fight is still in flight. Pursuit continues and
      * the attack resumes once it lands - cancelling here throws the click away, which
      * is what made attacking a new npc feel unresponsive after a kill.
+     *
+     * A taken target (TARGET_IN_COMBAT) is not one, for an NPC either: it gives the target up
+     * rather than waiting the other fight out (rsprox capture, rev 243 Edgeville Dungeon chaos
+     * druids: a druid whose player another druid took stopped following within 2-7 ticks, #6922).
      */
     private isTransientDenial(response: CanAttackResponse): boolean {
         return response === CanAttackResponse.ALREADY_UNDER_ATTACK ||
-            response === CanAttackResponse.COMBAT_METHOD_NOT_ALLOWED ||
-            // An npc waits its turn; a player is turned away on the spot.
-            (response === CanAttackResponse.TARGET_IN_COMBAT && !this.character.isPlayer());
+            response === CanAttackResponse.COMBAT_METHOD_NOT_ALLOWED;
     }
 
     /**
@@ -1366,7 +1368,8 @@ export class Combat {
                 }
                 return;
             case CanAttackResponse.TARGET_IN_COMBAT:
-                if (!player) return;
+                // An NPC is told nothing, but gives the taken target up too (isTransientDenial).
+                if (!player) break;
                 player.sendMessage(target.isPlayer()
                     ? `Someone else is already fighting ${target.getAsPlayer().getDisplayName()}.`
                     : "Someone else is fighting that.");

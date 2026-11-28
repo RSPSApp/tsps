@@ -9,7 +9,9 @@ different reasons, and each has its own response and message.
 | An NPC is fighting someone else | `TARGET_IN_COMBAT` | `Someone else is fighting that.` | The attack stops. |
 | A player is fighting someone else | `TARGET_IN_COMBAT` | `Someone else is already fighting <name>.` | The attack stops. |
 
-An NPC whose target is taken keeps following and waits, as before.
+An NPC whose target is taken gives it up too. In an rsprox capture (rev 243, Edgeville Dungeon chaos
+druids, #6922), a druid whose player another druid took kept following them for 2-7 ticks and then stopped;
+none waited the fight out. Ours stops at the refusal: no single timer fits the recorded 2-7 ticks.
 
 ## Sources
 

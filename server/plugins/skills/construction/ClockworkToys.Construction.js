@@ -215,6 +215,8 @@ function pickUp({ player, npc }) {
   const at = npc.getLocation();
   forget(npc);
   player.getInventory().adds(entry.toy.unwoundId, 1);
+  // Captured for the mouse only (the user's rev 243 At First Light capture, tick 356); the other toys say nothing here.
+  if (entry.toy.kind === "mouse") player.getPacketSender().sendTypedMessage(ChatType.SPAM, "You catch the mouse.");
   Sounds.playAreaSound({ soundId: STEP_SOUND, x: at.getX(), y: at.getY(), level: at.getZ(), loops: 1, radius: SOUND_RANGE, source: player });
   return true;
 }

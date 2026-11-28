@@ -791,12 +791,27 @@ function useExitRing({ player, objectId, location }) {
 }
 
 /**
- * The ring's "Favourites" picks a favourite from its sub-menu; chosen without one (the option
- * itself), it only says so.
+ * The ring's "Favourites" picks a favourite from its sub-menu (sub-ops 1-10, one per saved slot)
+ * and teleports there at once; chosen without one (the option itself), it only says so.
  */
-function favouritesOption({ player }) {
-  if (!player) return;
-  player.sendMessage("You will need to select a favourite from the sub-menu.");
+function favouritesOption({ player, location, subOpId }) {
+  if (!player || !canUse(player)) return;
+  const slot = Number(subOpId) - 1;
+  const slots = favouriteSlots(player);
+  const code = Number.isInteger(slot) && slot >= 0 && slot < MAX_FAVOURITES ? slots[slot] : "";
+  if (!code) {
+    player.sendMessage("You will need to select a favourite from the sub-menu.");
+    return;
+  }
+  const ring = resolveRing(player, rings.get(code), ringTile(location));
+  if (!ring?.destination) return;
+  const locked = codeLockRefusal(player, ring.code);
+  if (locked) {
+    refuseLockedCode(player, ring, ringTile(location), false, locked);
+    return;
+  }
+  if (!core.TeleportHandler.checkReqs(player, ring.destination, 20)) return;
+  fairyTeleport(player, ring, ringTile(location), false);
 }
 
 /** At login: the last destination and the favourite slots. */

@@ -328,7 +328,7 @@ export type ClientMessage =
   | { type: "move"; worldX: number; worldY: number; modifierFlags: number; run?: boolean }
   /** On the interaction clicks below, modifierFlags is the packet's Ctrl byte (1 while Ctrl is held), left out when 0. */
   | { type: "npc_option"; index: number; clickType: number; modifierFlags?: number }
-  | { type: "object_option"; id: number; x: number; y: number; clickType?: number; action?: string; modifierFlags?: number }
+  | { type: "object_option"; id: number; x: number; y: number; clickType?: number; action?: string; subOpId?: number; modifierFlags?: number }
   | { type: "world_entity_option"; index: number; clickType: number }
   | { type: "chat"; text: string; messageType: "public" | "game" | "friends_chat"; autoChat?: boolean; style?: ChatStyle }
   | { type: "clan_chat"; clanType: number; text: string }
@@ -864,7 +864,8 @@ export function decodeClientPacket(frame: Buffer): ClientMessage {
       reader.byte();
       const action = reader.string() || undefined;
       const clickType = reader.byte() || undefined;
-      return { type: "object_option", id, x, y, clickType, action };
+      const subOpId = reader.byte() || undefined;
+      return { type: "object_option", id, x, y, clickType, action, subOpId };
     }
     case ClientPacket.CHAT: {
       // Kind 3 is public chat the client's autochat timer repeats (chat_sendpublic type 1).

@@ -158,7 +158,7 @@ test("A released soldier walks off in the house, falls over and leaves the unwou
 });
 
 test("Pick-up takes a walking toy back unwound; another player's toy is not theirs to take", (t) => {
-  const { player } = ownerInHouse(t);
+  const { player, seen } = ownerInHouse(t);
   const other = newPlayer(t, "taker");
   player.getInventory().adds(id.poh_toy_mouse_wound, 1);
   const here = player.getLocation().clone();
@@ -171,6 +171,8 @@ test("Pick-up takes a walking toy back unwound; another player's toy is not thei
   assert.equal(npcOption(player, npc, 1).handled, true);
   assert.equal(npc.isRegistered(), false);
   assert.equal(player.getInventory().getAmount(id.poh_toy_mouse_unwound), 1);
+  // The user's rev 243 At First Light capture, tick 356.
+  assert.deepEqual(seen.typed.at(-1), [core.ChatType.SPAM, "You catch the mouse."]);
 });
 
 test("The varbit clears 78 ticks after the last release, not an earlier one", (t) => {

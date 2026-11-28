@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-199 quests · ✅ passed: 24 · ⚠️ passed with issues: 24 · 🔄 in progress: 16 · ❌ failed: 0 · 🔁 needs recheck: 50 · untested: 85
+199 quests · ✅ passed: 24 · ⚠️ passed with issues: 23 · 🔄 in progress: 17 · ❌ failed: 0 · 🔁 needs recheck: 50 · untested: 85
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -21,7 +21,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Alfred Grimhand's Barcrawl | untested |  |  |  |  |
 | [Animal Magnetism](animal-magnetism/README.md) | untested |  |  |  |  |
 | [Another Slice of H.A.M.](another-slice-of-ham/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash | 3 |
-| [At First Light](at-first-light/README.md) | ⚠️ passed with issues |  | agent |  | 1 |
+| [At First Light](at-first-light/README.md) | 🔄 in progress | 2026-11-28 | agent | claude-opus-5-5 | 1 |
 | [Bear Your Soul](bear-your-soul/README.md) | 🔄 in progress | 2026-10-31 | agent | DeepSeek V4.1 Flash |  |
 | [Below Ice Mountain](below-ice-mountain/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 6 |
 | [Beneath Cursed Sands](beneath-cursed-sands/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash | 1 |

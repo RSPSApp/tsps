@@ -151,6 +151,8 @@ export interface PluginObjectInteractionEvent {
   objectId: number;
   clickType: number;
   option?: string;
+  /** The 1-based sub-menu row picked under the option (a fairy ring's favourite), if any. */
+  subOpId?: number;
   location: { x: number; y: number; z: number };
   sourceLocation?: { x: number; y: number; z: number };
   handled: boolean;

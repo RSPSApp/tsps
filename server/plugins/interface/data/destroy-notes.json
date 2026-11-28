@@ -1,6 +1,12 @@
 {
- "_source": "The confirmation's note (and its question, where it is not \"Are you sure you want to destroy this item?\") for each item's Destroy, by obj gameval, as live sends them in confirmdestroy_init (rsprox captures). Quest items are not listed yet. An item not listed gets DestroyItem's own default note.",
+ "_source": "The confirmation's note (and its question, where it is not \"Are you sure you want to destroy this item?\") for each item's Destroy, by obj gameval, as live sends them in confirmdestroy_init (rsprox captures). Quest items are not listed yet, except At First Light's, whose notes are their Wiki item pages' destroy text (no capture destroys them). An item not listed gets DestroyItem's own default note.",
  "items": {
+  "afl_fur": "You can obtain another from Guild Hunter Fox in the Avium Savannah.",
+  "afl_fur_prepped": "You can obtain some more from Atza in Outer Fortis.",
+  "afl_leaf1": "You can pick another from a bush in the Avium Savannah.",
+  "afl_leaf2": "You can pick another from a bush near the Locus Oasis.",
+  "afl_poultice": "You can craft another from a smooth leaf, a sticky leaf, and an embertailed jerboa tail.",
+  "afl_report": "You can obtain another from Guild Hunter Fox in the Avium Savannah.",
   "aide_arrow": "You can get more Training arrows by talking to the Ranged Combat skill tutor north of Lumbridge Castle.",
   "aide_shortbow": "You can get another Training bow by talking to the Ranged Combat skill tutor north of Lumbridge Castle.",
   "book_of_the_dead": "You can obtain another from Commander Fullore at Kourend Castle.",

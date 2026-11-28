@@ -842,7 +842,7 @@ export class ClientConnection {
           continue;
         case "object_option":
           if (this.player) OBJECT_ACTIONS.executeAction(
-            this.player, packet.id, packet.x, packet.y, packet.clickType, packet.action
+            this.player, packet.id, packet.x, packet.y, packet.clickType, packet.action, packet.subOpId
           );
           continue;
         case "player_option":

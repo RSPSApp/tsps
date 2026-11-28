@@ -197,6 +197,11 @@ function openMenu(player, from, head, relic = null) {
   sender.sendInterfaceFlagsRange((MENU << 16) | MENU_CHOICES, 0, MENU_SLOTS, PAUSE_BUTTON);
 }
 
+/** "spirit-trees:menu" { player, relic }: the menu for a league relic's fairy mushroom (openMenu's `relic`). */
+function openRelicMenu({ player, relic }) {
+  if (player && relic) openMenu(player, null, null, relic);
+}
+
 /** The last tree travelled to, for the client: its menu slot plus one. */
 function sendPrevious(player) {
   const slot = trees.findIndex((tree) => tree.name === player.getAttribute(LAST_DESTINATION_ATTRIBUTE));
@@ -411,7 +416,7 @@ module.exports = {
     api.onCustomEvent("spirit-trees:open", openFromPatch);
     api.onCustomEvent("spirit-trees:last-destination", lastDestinationFrom);
     api.onCustomEvent("spirit-trees:destinations", destinationsEvent);
-    api.onCustomEvent("spirit-trees:menu", ({ player, relic }) => { if (player && relic) openMenu(player, null, null, relic); });
+    api.onCustomEvent("spirit-trees:menu", openRelicMenu);
     api.onCustomEvent("interface:closed", menuClosed);
   },
 };

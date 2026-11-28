@@ -2946,6 +2946,25 @@ test("Fairy mushroom: live's chat, then the real fairy ring dials (no staff aske
     assert.ok(ticksTo(player, { x: open.location.getX(), y: open.location.getY(), z: open.location.getZ() }) > 0, `${open.code} by the dials`);
     assert.equal(player.getAttribute("league:last-destination:fairy-mushroom")?.label, open.code, "its Last-destination");
 
+    // The grant ends with the dials: closed, a late Confirm is a ring's own (a staff asked); so too once the relic is gone.
+    const wield = /only works for those who wield fairy magic/;
+    const confirmed = (code) => {
+      relocate(player, new Location(3200, 3200, 0));
+      dial(code);
+      hooks.onInterfaceActionClick({ player, groupId: 398, childId: 26, handled: false });
+      return ticksTo(player, { x: open.location.getX(), y: open.location.getY(), z: open.location.getZ() }, 8) > 0;
+    };
+    click(player, I.FAIRY_MUSHROOM, "Fairy-Ring");
+    emit("interface:closed", { player, interfaceId: 398 });
+    assert.equal(confirmed(open.code), false, "a Confirm after the dials closed does nothing");
+    assert.match(player.sent.messages.at(-1), wield);
+    click(player, I.FAIRY_MUSHROOM, "Fairy-Ring");
+    const picks = player.getAttribute("league:relics");
+    player.setAttribute("league:relics", {});
+    assert.equal(confirmed(open.code), false, "nor once the relic is no longer held");
+    assert.match(player.sent.messages.at(-1), wield);
+    player.setAttribute("league:relics", picks);
+
     // Tool leprechauns: the menu interface (no recording).
     click(player, I.FAIRY_MUSHROOM, "Tool-leprechauns");
     assert.equal(menuOf(player).title, "Tool Leprechaun Locations");

@@ -380,7 +380,9 @@ function cancelPendingTeleport(player, pending = pendingTeleports.get(player)) {
  * The dials opened by a league relic's fairy mushroom ("fairy-rings:configure" with `relic`): no staff
  * or quest is asked, and its Confirm keeps the relic's rules: `refuse(destination)` (a message, or
  * null to go: its league area locks), `wildernessLevel` (as far as it reaches) and `chosen(ring)`
- * (its last destination). Live opens these same dials from the mushroom (rsprox 234/3275).
+ * (its last destination), and while `active()` says the relic is still held. The grant lasts only while
+ * these dials are open: Confirm or their closing ends it. Live opens these same dials from the mushroom
+ * (rsprox 234/3275).
  */
 const relicDials = new WeakMap();
 
@@ -618,8 +620,10 @@ function hasLightSource(player) {
 }
 
 function confirmDial(player) {
-  const relic = relicDials.get(player) ?? null;
+  const granted = relicDials.get(player) ?? null;
   relicDials.delete(player);
+  // A relic given up since (relics reset, a re-pick) grants nothing: the ring's own rules apply.
+  const relic = granted && granted.active?.() !== false ? granted : null;
   if (!relic && !canUse(player)) return;
   const ring = resolveRing(player, rings.get(codeFromDials(player)), configuredRing.get(player));
   if (!ring?.destination) {
@@ -747,6 +751,8 @@ function interfaceAction(event) {
  */
 function interfaceClosed({ player, interfaceId }) {
   if (interfaceId !== DIALS_INTERFACE) return;
+  // A relic's grant ends with its dials (a later Confirm is a ring's own).
+  relicDials.delete(player);
   const sender = player.getPacketSender();
   sender.closeSubInterface(SIDE_MODAL);
   sender.sendClientScript(MESLAYER_CLOSE_SCRIPT, SEARCH_MESLAYER);

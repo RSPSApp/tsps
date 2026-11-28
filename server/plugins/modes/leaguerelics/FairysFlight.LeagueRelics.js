@@ -49,6 +49,7 @@ function rings(player) {
     player,
     location: null,
     relic: {
+      active: () => active(player),
       wildernessLevel: Teleports.ANY_WILDERNESS_LEVEL,
       refuse: (destination) => (Teleports.areaOpen(player, destination) ? null : Common.message("areaLocked")),
       chosen: (ring) => remember(player, ring.code, ring.destination, Teleports.ANY_WILDERNESS_LEVEL),

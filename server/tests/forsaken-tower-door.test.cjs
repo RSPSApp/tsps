@@ -2,9 +2,14 @@
 //
 // #6912: the Forsaken Tower's entrance (33491 at 1382,3817) did nothing when opened. Its open leaf
 // (33492) is nameless and has no action at all — the same model 36259 — so the door catalog's
-// action scan cannot pair them; SINGLE_DOOR_OPEN_IDS carries the pair. Wiki (The Forsaken Tower):
-// the entrance is how players get in, and the tower's own doors (33556 -> 33557) are the cache-scan
-// kind, so they must keep working.
+// action scan cannot pair them, and pairing them as an ordinary single door leaves it standing for
+// 500 ticks.
+//
+// What live does: rsprox local 1002193 (oploc1 at tick 759, ticks 763-765) and 1002135 (ticks
+// 27386-27388) — inviswall on the doorway, the actionless leaf on the tile outside at face 0,
+// iron_door_open (71), the player walked across, and the closed door back two ticks later. So it is
+// a pass-through gate that shuts behind the opener, and the tower's own doors (33556 -> 33557) are
+// the cache-scan kind and must keep working.
 //
 // Only the Doors plugin is loaded: the click seam is "door:open", which is the same function the
 // Open option runs (Doors.plugin.js requestDoorOpen), and the map region is the tower's own.
@@ -18,11 +23,14 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 
-const DOOR = 33491, OPEN_LEAF = 33492, X = 1382, Y = 3817;
+const DOOR = 33491, OPEN_LEAF = 33492, INVISWALL = 38848, IRON_DOOR_OPEN = 71;
+const X = 1382, Y = 3817; // the doorway; the tower is north of it
+const OUTSIDE = [X, Y - 1], INSIDE = [X, Y];
 const INNER_DOOR = 33556, INNER_OPEN = 33557, INNER_X = 1380, INNER_Y = 3826;
 
 let core;
 let next = 6100;
+const players = [];
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -34,15 +42,23 @@ before(async () => {
   PluginManager.emitServerStartup({});
 });
 
-function player() {
+/** A real player standing outside the entrance, recording the sounds it is sent. */
+function actor(t) {
   const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
-  const who = new Player(new PlayerSession(channel));
-  who.setIndex(next++);
-  who.setUsername("towerdoor" + who.getIndex());
-  who.setRegistered(true);
-  who.setLocation(new core.Location(X, Y - 1, 0));
-  who.needsPlacement = false;
-  return who;
+  const player = new Player(new PlayerSession(channel));
+  player.setIndex(next++);
+  player.setUsername("towerdoor" + player.getIndex());
+  player.setRegistered(true);
+  player.setLocation(new core.Location(...OUTSIDE, 0));
+  player.needsPlacement = false;
+  players.push(player);
+  const sounds = [];
+  t.mock.method(player.getPacketSender(), "sendSoundEffect", (...args) => {
+    sounds.push([core.World.getProcessCycle(), ...args]);
+    return player.getPacketSender();
+  });
+  t.after(() => { player.setRegistered(false); core.TaskManager.cancelTasks(player.getIndex()); });
+  return { player, sounds };
 }
 
 /** The object instance standing on a tile, or null (a doorway can hold a floor loc too). */
@@ -56,16 +72,7 @@ function objectAt(id, x, y) {
   return null;
 }
 
-/** Where a door's open leaf went after it swung (the leaf sits beside the doorway). */
-function leafNear(id, x, y) {
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dy = -1; dy <= 1; dy++) {
-      const found = objectAt(id, x + dx, y + dy);
-      if (found) return [x + dx, y + dy];
-    }
-  }
-  return null;
-}
+const at = (player) => [player.getLocation().getX(), player.getLocation().getY()];
 
 function open(who, object) {
   const request = { player: who, object, handled: false };
@@ -73,26 +80,47 @@ function open(who, object) {
   return request.handled === true;
 }
 
-function tick(count) {
-  for (let i = 0; i < count; i++) core.TaskManager.process();
+/** One game tick: the test players' own movement, then the world's tasks. */
+function tick(count = 1) {
+  for (let i = 0; i < count; i++) {
+    for (const player of players) {
+      player.getMovementQueue().process();
+      core.TaskManager.processWalkTo(player.getIndex());
+    }
+    core.TaskManager.process();
+  }
 }
 
-test("the tower's entrance opens into its actionless leaf and frees the doorway", () => {
+test("the entrance is a pass-through gate: it opens, walks the opener in and shuts two ticks later", (t) => {
+  tick(12);
   const door = objectAt(DOOR, X, Y);
   assert.ok(door, "the closed door stands on the doorway");
-  assert.equal(open(player(), door), true, "the Open option is answered");
+  const { player, sounds } = actor(t);
+  assert.equal(open(player, door), true, "the Open option is answered");
+
   tick(1);
+  assert.ok(objectAt(INVISWALL, X, Y), "the doorway is an invisible wall while the door is open");
+  assert.ok(objectAt(OPEN_LEAF, X, OUTSIDE[1]), "the actionless leaf stands on the tile outside");
   assert.equal(objectAt(DOOR, X, Y), null, "the closed leaf is gone");
-  assert.ok(leafNear(OPEN_LEAF, X, Y), "the open leaf has swung beside the doorway");
-  assert.equal(core.RegionManager.blocked(new core.Location(X, Y, 0)), false, "the doorway tile is clear");
-  assert.equal(core.RegionManager.blocked(new core.Location(X, Y + 1, 0)), false, "and the tile inside it");
+  assert.deepEqual(sounds.filter(([, id]) => id === IRON_DOOR_OPEN).map(([, id]) => id), [IRON_DOOR_OPEN],
+    "the iron door's own opening sound, once");
+
+  tick(2); // the close task runs two ticks after the swap
+  assert.ok(objectAt(DOOR, X, Y), "the closed door is back");
+  assert.equal(objectAt(OPEN_LEAF, X, OUTSIDE[1]), null, "the open leaf is gone");
+  assert.equal(objectAt(INVISWALL, X, Y), null, "and so is the invisible wall");
+  assert.deepEqual(at(player), INSIDE, "the opener walked through and is standing inside");
 });
 
-test("the tower's own doors still open through the cache scan", () => {
+test("the tower's own doors still open through the cache scan", (t) => {
+  tick(12);
   const door = objectAt(INNER_DOOR, INNER_X, INNER_Y);
   assert.ok(door, "33556 stands on its doorway");
-  assert.equal(open(player(), door), true);
+  const { player } = actor(t);
+  player.setLocation(new core.Location(INNER_X, INNER_Y - 1, 0));
+  assert.equal(open(player, door), true);
   tick(1);
   assert.equal(objectAt(INNER_DOOR, INNER_X, INNER_Y), null);
-  assert.ok(leafNear(INNER_OPEN, INNER_X, INNER_Y), "33556 swaps to its Close leaf");
+  assert.ok(objectAt(INNER_OPEN, INNER_X, INNER_Y - 1) ?? objectAt(INNER_OPEN, INNER_X, INNER_Y + 1),
+    "33556 swaps to its Close leaf beside the doorway");
 });

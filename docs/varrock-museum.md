@@ -90,6 +90,25 @@ and Kudos agree across the three and with the Wiki's Kudos page.
   lamp." and ends the conversation there; the report stays open for the next talk.
 - A player still holding a report's lamp gets no second one and no lamp line.
 
+# Dig Site display cases
+
+The five finds (old and ancient symbol, old and ancient coin, pottery) go in cases 36, 37, 45,
+44 and 22. Each is accepted only by its own case.
+
+## From rsprox captures (1723, 1757, 1843; revision 227)
+
+- Every placement recorded follows the player showing that find to an archaeologist, who names
+  its case.
+- Used on its case before that (1843 tick 7894), the find stays in the backpack and the player
+  says "Perhaps I should talk to the archaeologists before updating their displays." (animation
+  555). After showing it (ticks 7906-7912) the same click places it (tick 7926).
+
+## Ours
+
+- The check is per find. Only one refusal is recorded, for the old coin.
+- A find used on an archaeologist is assessed itself, whatever else is carried. Talk-to's "I found
+  something interesting." keeps the transcript's order.
+
 # Curator Haig Halen: Sailing salvaging relics
 
 Code: `server/plugins/world/museum/SalvagingRelics.Museum.js`; test:

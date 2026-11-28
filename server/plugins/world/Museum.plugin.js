@@ -54,6 +54,9 @@ const KUDOS_CHANGED_EVENT = "museum:kudos-changed";
 // salvaging finds) comes with this spam message and synth sound 3653 on the same tick.
 const KUDOS_MESSAGE = "You have earned Kudos with the Museum!";
 const SOUND_KUDOS = 3653;
+// rsprox 1843 tick 7894: the player's own line, and its chathead animation.
+const SHOW_FIRST_LINE = "Perhaps I should talk to the archaeologists before updating their displays.";
+const SHOW_FIRST_ANIMATION = 555;
 
 const DIG_SITE_KEY = "the_dig_site";
 const WHAT_LIES_BELOW_KEY = "what_lies_below";
@@ -542,12 +545,24 @@ function selectInteresting(steps) {
   return null;
 }
 
+/**
+ * The assessment of the find used on the archaeologist: its own branch only. The Talk-to menu
+ * judges the first find carried (ASSESSMENT_ORDER), which may not be the one used.
+ */
+function selectAssessment(itemId) {
+  return (steps) => {
+    const interesting = selectInteresting(steps);
+    const branch = interesting?.find((step) => step.type === "condition" && outerItem(step.text) === itemId);
+    return branch ? [...interesting.filter((step) => step.type !== "condition"), ...branch.steps] : null;
+  };
+}
+
 function showArtefact(event) {
   const { player, itemId, npcId } = event;
   const page = ARCHAEOLOGIST_PAGES.get(npcId);
   if (!page || !ARTEFACTS.has(itemId)) return;
   event.handled = true;
-  runtime.startTranscript(api, player, npcId, page, "standard-dialogue", selectInteresting);
+  runtime.startTranscript(api, player, npcId, page, "standard-dialogue", selectAssessment(itemId));
 }
 
 function outerItem(text) {
@@ -600,6 +615,13 @@ function recordArtefactCondition({ player, npcId, text }) {
   if (itemId !== null && ARTEFACTS.has(itemId)) updateDig(player, "shown", itemId);
 }
 
+/** A find no archaeologist has assessed stays in the bag (rsprox 1843 tick 7894). */
+function refuseUnassessed(player) {
+  const chain = new api.core.DialogueChainBuilder();
+  chain.add(new api.core.PlayerDialogue(0, SHOW_FIRST_LINE, SHOW_FIRST_ANIMATION));
+  player.getDialogueManager().startDialogues(chain);
+}
+
 function placeArtefact(event) {
   const { player, itemId, objectId, location } = event;
   const artefact = ARTEFACTS.get(itemId);
@@ -609,6 +631,10 @@ function placeArtefact(event) {
   if (!has(player, itemId)) return;
   if (isDisplayed(player, itemId)) {
     player.sendMessage("You've already shown one of those. You can pop this one in the finds crate over in the corner.");
+    return;
+  }
+  if (!isShown(player, itemId)) {
+    refuseUnassessed(player);
     return;
   }
   const inventory = player.getInventory();

@@ -33,6 +33,7 @@ const TOOLS = 24535;
 const BARNABUS = 1903;
 const DISPLAY_EMPTY = 24550;
 const KUDOS_MESSAGE = "You have earned Kudos with the Museum!";
+const SHOW_FIRST_LINE = "Perhaps I should talk to the archaeologists before updating their displays.";
 const SOUND_KUDOS = 3653;
 // Timeline display varbits (cache gamevals).
 const VM = {
@@ -298,7 +299,8 @@ function objectAction(world, name, option, player, objectId, x, y, z = 0) {
 function itemOnObject(world, player, itemId, objectId, x, y) {
   const event = { player, object: {}, objectId, item: { getId: () => itemId }, itemId, itemSlot: 0,
     interfaceType: 3214, location: { x, y, z: 0 }, handled: false };
-  for (const handler of world.itemObject) if (!event.handled) handler(event);
+  // Named item/object hooks (the storage crate's) register strings first; only the open hooks take every use.
+  for (const handler of world.itemObject) if (!event.handled && typeof handler === "function") handler(event);
   return event;
 }
 
@@ -307,6 +309,13 @@ function itemOnNpc(world, player, itemId, npcId) {
     slot: 0, interfaceId: 3214, handled: false };
   for (const handler of world.itemNpc) if (!event.handled) handler(event);
   return event;
+}
+
+/** A save whose finds an archaeologist has already assessed. */
+const assessed = (...shown) => ({ [STATE]: { dig: { shown } } });
+
+function spoken(player) {
+  return player.texts.map((line) => line.replace(/\s+/g, " "));
 }
 
 function getKudos(world, player) {
@@ -424,8 +433,12 @@ test("Museum: real cache actions, transcript assessment, display cases and Minas
   assert.equal(player.inventory.getAmount(I.UNCLEANED_FIND), 0);
   assert.equal(player.inventory.getAmount(I.OLD_SYMBOL), 1);
 
-  // Wiki: using the artefact on the empty case awards 10 Kudos; showing the
-  // archaeologist is advice, not a gate. Place this one directly.
+  // The case takes it once an archaeologist has seen it (rsprox 1843 ticks 7892-7926).
+  itemOnObject(world, player, I.OLD_SYMBOL, DISPLAY_EMPTY, 3262, 3448);
+  play(player);
+  assert.equal(player.inventory.getAmount(I.OLD_SYMBOL), 1);
+  itemOnNpc(world, player, I.OLD_SYMBOL, BARNABUS);
+  play(player);
   itemOnObject(world, player, I.OLD_SYMBOL, DISPLAY_EMPTY, 3262, 3448);
   assert.equal(player.inventory.getAmount(I.OLD_SYMBOL), 0);
   assert.equal(getKudos(world, player), 10);
@@ -438,7 +451,7 @@ test("Museum: real cache actions, transcript assessment, display cases and Minas
   itemOnNpc(world, player, I.ANCIENT_SYMBOL, BARNABUS);
   play(player);
   assert.ok(player.texts.some((text) => text.replace(/\s+/g, " ").includes("display case 37")), player.texts.join(" | "));
-  assert.deepEqual(player.getAttribute(STATE).dig.shown, [I.ANCIENT_SYMBOL]);
+  assert.deepEqual(player.getAttribute(STATE).dig.shown, [I.OLD_SYMBOL, I.ANCIENT_SYMBOL]);
   itemOnObject(world, player, I.ANCIENT_SYMBOL, DISPLAY_EMPTY, 3262, 3450);
   assert.equal(getKudos(world, player), 20);
 
@@ -789,7 +802,7 @@ test("Museum: cleaning uses the fixed /51 table and replaces suppressed uniques 
 
 test("Museum: placing a unique artefact removes its duplicates from inventory and bank", () => {
   const world = makeApi(questFixtures());
-  const player = makePlayer({}, { ...TOOL_ITEMS }, EQUIPPED);
+  const player = makePlayer(assessed(I.OLD_SYMBOL), { ...TOOL_ITEMS }, EQUIPPED);
   player.inventory.adds(I.OLD_SYMBOL, 2);
   player.setBankItem(I.OLD_SYMBOL, 3);
 
@@ -798,6 +811,69 @@ test("Museum: placing a unique artefact removes its duplicates from inventory an
   assert.equal(player.inventory.getAmount(I.OLD_SYMBOL), 0);
   assert.equal(player.getBanks()[0].getAmount(I.OLD_SYMBOL), 0);
   assert.equal(getKudos(world, player), 10);
+});
+
+const DISPLAY_FINDS = [
+  [I.OLD_SYMBOL, 3262, 3448, DISPLAY_EMPTY, VARBIT.oldSymbol],
+  [I.ANCIENT_SYMBOL, 3262, 3450, DISPLAY_EMPTY, VARBIT.ancientSymbol],
+  [I.POTTERY, 3259, 3452, 24543, VARBIT.pottery],
+  [I.ANCIENT_COIN, 3259, 3450, DISPLAY_EMPTY, VARBIT.ancientCoin],
+  [I.OLD_COIN, 3259, 3448, DISPLAY_EMPTY, VARBIT.oldCoin],
+];
+
+test("Museum: a find no archaeologist has seen stays in the backpack", () => {
+  const world = makeApi(questFixtures());
+  for (const [itemId, x, y, objectId, varbit] of DISPLAY_FINDS) {
+    const player = makePlayer({}, { [itemId]: 1 });
+    const event = itemOnObject(world, player, itemId, objectId, x, y);
+    assert.equal(event.handled, true);
+    play(player);
+    assert.deepEqual(spoken(player), [SHOW_FIRST_LINE]);
+    assert.ok(player.calls.some(([name, , animation]) => name === "sendInterfaceAnimation" && animation === 555));
+    assert.equal(player.inventory.getAmount(itemId), 1);
+    assert.equal(player.getVarbit(varbit), 0);
+    assert.equal(getKudos(world, player), 0);
+  }
+});
+
+test("Museum: each find is refused by every case but its own", () => {
+  const world = makeApi(questFixtures());
+  const all = DISPLAY_FINDS.map(([itemId]) => itemId);
+  for (const [itemId] of DISPLAY_FINDS) {
+    for (const [other, x, y, objectId] of DISPLAY_FINDS) {
+      if (other === itemId) continue;
+      const player = makePlayer(assessed(...all), { [itemId]: 1 });
+      assert.equal(itemOnObject(world, player, itemId, objectId, x, y).handled, false);
+      assert.equal(player.inventory.getAmount(itemId), 1);
+      assert.equal(getKudos(world, player), 0);
+    }
+  }
+});
+
+test("Museum: the find used on any archaeologist is the one assessed, whatever else is carried", () => {
+  const world = makeApi(questFixtures());
+  const cases = [[I.ANCIENT_COIN, 44], [I.POTTERY, 22], [I.OLD_SYMBOL, 36], [I.ANCIENT_SYMBOL, 37], [I.OLD_COIN, 45]];
+  const carried = Object.fromEntries([I.CLEAN_NECKLACE, ...cases.map(([itemId]) => itemId)].map((id) => [id, 1]));
+  for (const archaeologist of [1903, 1904, 1905, 1906, 1907, 1908]) {
+    const player = makePlayer({}, { ...carried });
+    for (const [itemId, number] of cases) {
+      player.texts.length = 0;
+      itemOnNpc(world, player, itemId, archaeologist);
+      play(player);
+      const named = new Set(spoken(player).join(" ").match(/display case \d+/g));
+      assert.deepEqual([...named], [`display case ${number}`], `${archaeologist}: ${player.texts.join(" | ")}`);
+    }
+    assert.deepEqual(player.getAttribute(STATE).dig.shown, cases.map(([itemId]) => itemId));
+  }
+
+  // Showing one find unlocks that find's case only.
+  const player = makePlayer({}, { ...carried });
+  itemOnNpc(world, player, I.ANCIENT_COIN, BARNABUS);
+  play(player);
+  itemOnObject(world, player, I.ANCIENT_COIN, DISPLAY_EMPTY, 3259, 3450);
+  assert.equal(player.inventory.getAmount(I.ANCIENT_COIN), 0);
+  itemOnObject(world, player, I.OLD_COIN, DISPLAY_EMPTY, 3259, 3448);
+  assert.equal(player.inventory.getAmount(I.OLD_COIN), 1);
 });
 
 test("Museum: Minas does not play the no-report fallback after a report in the same chat", () => {
@@ -830,7 +906,7 @@ test("Museum: VM_KUDOS wire mirrors persisted Kudos at 0/99/100 and preserves si
 
   // Award from 0 through the registered display handler.
   const displayWorld = makeApi(questFixtures());
-  const display = makePlayer({}, { [I.OLD_SYMBOL]: 1 }, []);
+  const display = makePlayer(assessed(I.OLD_SYMBOL), { [I.OLD_SYMBOL]: 1 }, []);
   display.setVarp(1010, siblingBits);
   itemOnObject(displayWorld, display, I.OLD_SYMBOL, DISPLAY_EMPTY, 3262, 3448);
   assert.equal(getKudos(displayWorld, display), 10);

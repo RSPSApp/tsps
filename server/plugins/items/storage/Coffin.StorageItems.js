@@ -81,6 +81,13 @@ const family = {
   accepts: (id) => remainsIds().includes(id),
   room: (player, _id, held) => Math.max(0, capacity(player) - held.reduce((sum, entry) => sum + entry.amount, 0)),
   gathers: (player) => Storage.hasOpen(player, family),
+  /**
+   * The bank panel's op 9, which the cache labels from param 595 ("Empty"): every shade remain goes
+   * into the bank, as many as fit when the bank is short — a coffin is not a wearable container
+   * whose bank op is Wear. Wiki: Update:Deadman: Annihilation Drops This Friday! (28 January 2026)
+   * put the option there and excluded coffins from the bank's "Empty Containers" button.
+   */
+  bankEmpty: (player) => Storage.emptyToBank(player, family),
 };
 
 function fill({ player }) {

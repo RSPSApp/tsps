@@ -1,8 +1,10 @@
 // Run after `yarn build`: node --test tests/hod-ruins-stairs.test.cjs
 // The Heart of Darkness owns the Ruins of Tapoyauik entrance stairs (loc 54525, "Climb-down"):
 // pre-quest the entrance is sealed (Wiki: not accessible before quest completion) with a
-// message instead of a silent no-op; after the quest the click is left to the generic climb,
-// where the declared pair in data/climb-links.json carries the player into the ruins.
+// message instead of a silent no-op; between the banish (stage 74) and completion (76) the
+// captured re-entry line plays instead of a descent; after the quest the click is left to
+// the generic climb, where the declared pair in data/climb-links.json carries the player
+// into the ruins.
 // The ruins' Climb-up stairs (54526) open only south, into a walled row: no floor tile routes
 // to the open face, so the quest routes the Climb-up from the player's own tile instead.
 const assert = require("node:assert/strict");
@@ -16,10 +18,20 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { Location } = require("../dist/game/model/Location");
 
+// Capture transcripts before loading the quest: the quest grabs startTranscript from
+// QuestRuntime at module load.
+const runtime = require("../plugins/quests/QuestRuntime");
+const transcripts = [];
+runtime.startTranscript = (api, player, npcId, page, variant) => {
+  transcripts.push({ npcId, variant });
+  return true;
+};
+
 const RUINS_STAIRS_ID = 54525;
 const RUINS_STAIRS_UP_ID = 54526;
 const STAGE_KEY = "quest.the_heart_of_darkness.stage";
-const S = { BELOW: 56, BANISHED: 74 };
+const S = { BELOW: 56, BANISHED: 74, COMPLETE: 76 };
+const RUINS_AGAIN = "heart-of-the-ruins-attempting-to-re-enter-the-ruins";
 const SEALED_MESSAGE = "You can't enter the Ruins of Tapoyauik until you complete The Heart of Darkness.";
 
 let climbHandler;
@@ -84,9 +96,18 @@ test("pre-quest the ruins entrance is sealed with a message, not a silent no-op"
   assert.deepEqual(messages, [SEALED_MESSAGE]);
 });
 
+test("banished from Tapoyauik (stage 74) the stairs play the captured re-entry line and do not descend", () => {
+  transcripts.length = 0;
+  const { handled } = climb(S.BANISHED);
+  assert.equal(handled, true, "the quest claims the click");
+  assert.deepEqual(transcripts, [{ npcId: 13694, variant: RUINS_AGAIN }]);
+});
+
 test("after the quest the stairs are left to the generic climb (the declared link descends into the ruins)", () => {
-  const { handled, messages } = climb(S.BANISHED);
+  transcripts.length = 0;
+  const { handled, messages } = climb(S.COMPLETE);
   assert.equal(handled, false, "the quest must not claim the post-quest click");
+  assert.equal(transcripts.length, 0);
   assert.equal(messages.length, 0);
 });
 

@@ -15,9 +15,8 @@
  * - Konar's area for a task is one whose box's centre is entered by the same rule, when any is.
  * - A counting spawn in a sealed location does not count while the seal holds: a quest seals
  *   the entrance (the Ruins of Tapoyauik needs The Heart of Darkness, the Ogre Enclave needs
- *   Watchtower - the Wiki's blue dragon task page lists each location with its requirement)
- *   or the world data has no entrance at all (the Dragon Nest pocket). A task whose counting
- *   monsters spawn only behind seals is not offered.
+ *   Watchtower - the Wiki's blue dragon task page lists each location with its requirement).
+ *   A task whose counting monsters spawn only behind seals is not offered.
  * - Ours: a task with no placed monster at all (all spawned by content) is left to the master.
  */
 const fs = require("fs");
@@ -84,14 +83,12 @@ function entered(type, player, x, y) {
 /**
  * Locations a character may not enter yet: a quest seals the entrance (Wiki blue dragon task
  * page: "The Ruins of Tapoyauik" needs The Heart of Darkness, "The Ogre Enclave" needs
- * Watchtower), or the world's map data has no entrance at all - the server's Dragon Nest is a
- * sealed pocket (live-walked 2026-11-27: no stairs or cave leads down, the pocket is empty; the
- * Wiki's Dragon Nest is an open cave, so this is a dumper-data gap). The boxes are the full map
- * squares holding each location's counted spawns (npc-spawns.json + live walk).
+ * Watchtower). The Dragon Nest is not sealed: its cave entry (tlati_dragon_nest_cave_entry,
+ * loc 57591, loc-teleports.json) works in main, and the Wiki gives the Nest no requirement.
+ * The boxes are the full map squares holding each location's counted spawns (npc-spawns.json).
  */
 const SEALED_LOCATIONS = [
   { label: "Ruins of Tapoyauik", minX: 1536, minY: 9536, maxX: 1727, maxY: 9727, quest: "the_heart_of_darkness" },
-  { label: "Dragon Nest", minX: 1216, minY: 9472, maxX: 1279, maxY: 9535 },
   { label: "Ogre Enclave", minX: 2560, minY: 9408, maxX: 2623, maxY: 9471, quest: "watchtower" },
 ];
 
@@ -104,13 +101,11 @@ function sealedAt(x, y) {
 }
 
 /**
- * Whether a tile's sealed location counts as entered for the character: its quest is complete
- * (a pocket with no entrance in the world data has no quest and is never entered).
+ * Whether a tile's sealed location counts as entered for the character: its quest is complete.
  */
 function sealOpen(player, x, y) {
   const loc = sealedAt(x, y);
   if (loc === null) return true;
-  if (!loc.quest) return false;
   const request = { player, key: loc.quest, complete: false };
   Common.api.emitCustomEvent("quest:is-complete", request);
   return request.complete === true;

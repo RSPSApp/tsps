@@ -2,8 +2,7 @@
 // Demonic Pacts League (type 6) slayer, verified against the OSRS Wiki's task table
 // (Demonic_Pacts_League/Guide/Slayer; local copy: the fixture's `source`, fetched 2026-11-26):
 // - a task is offered exactly while an area its counting monsters spawn in is unlocked,
-//   and a sealed location (a quest-sealed entrance, or no entrance in the world data)
-//   counts only once its quest is done,
+//   and a quest-sealed location counts only once its quest is done,
 // - every task's counting monsters are placed in the world so the task can be completed
 //   (the documented dumper-data gaps are asserted as a known list, not silently passed),
 // - a completed kill pays Slayer XP of the monster's hitpoints at the world's experience
@@ -266,13 +265,32 @@ const nonArea = (row) => {
   }
   return nonAreaCache.get(row);
 };
+/**
+ * The plugin's open-areas clause (Tasks.Slayer.eligible -> openAreas): a master with areas
+ * (Konar) only offers a row when one of the row's areas is open - its box centre entered by the
+ * same rule the counting tiles use, with no quest seal on it. Masters without areas pass.
+ */
+const areaOpen = (player, row) => {
+  const master = Data.get().masters.get(row.masterId);
+  if (!master.locations) return true;
+  const areas = row.entry.areaRows.map((id) => Data.get().areas.get(id)).filter(Boolean);
+  if (!areas.length) return true;
+  return areas.some((area) => {
+    const request = {
+      player, master: master.id, task: row.entry.task, bossId: null, area, wilderness: false,
+      counts: (npcId, name) => Data.npcCountsFor(row.entry.task.id, npcId, name),
+      available: true,
+    };
+    for (const handler of custom["slayer:task-available"] ?? []) handler(request);
+    return request.available !== false;
+  });
+};
 /** A counting tile grants reachability only inside a square the league names (incl. null overrides). */
 const effective = (tile) => tile.areaId !== null || (tile.areaId === null && tile.inIndex);
 /**
- * A counting tile the gate names but that sits in a sealed location (Slayer.LeagueAreaUnlocks
+ * A counting tile the gate names but that sits in a quest-sealed location (Slayer.LeagueAreaUnlocks
  * sealedLocations). The suite's characters have done no quests, so a sealed tile is never
- * reachable: a quest-sealed entrance stays sealed, and a pocket with no entrance in the world
- * data never opens.
+ * reachable: the seal holds until the quest completes.
  */
 const sealed = (tile) => SEALED_LOCATIONS.some(
   (loc) => tile.x >= loc.minX && tile.x <= loc.maxX && tile.y >= loc.minY && tile.y <= loc.maxY);
@@ -290,9 +308,9 @@ test("a task is offered exactly when a counting tile is reachable and unsealed",
   // The plugin (Slayer.LeagueAreaUnlocks.entered + sealOpen): a counting tile is reachable when
   // its square is named by the league and the character unlocked that area, or the league
   // opens the square to everyone (area: null override). A square no area names is reachable by
-  // no one. A tile in a sealed location (a quest-sealed entrance, or no entrance in the world
-  // data) is reachable only once the quest is done - and the suite's characters have done no
-  // quests. A task with no counting tile at all is left to the master's own logic (always offered).
+  // no one. A tile in a quest-sealed location is reachable only once the quest is done - and
+  // the suite's characters have done no quests. A task with no counting tile at all is left
+  // to the master's own logic (always offered).
   // One subtest per task row: a row that fails is reported on its own, and the other rows
   // still run.
   let checked = 0;
@@ -346,7 +364,10 @@ test("a fresh Demonic Pacts character is offered exactly the tasks reachable fro
         : row.placed.filter(effective);
       const reachable = row.placed.length === 0 || countingTiles.some(
         (t2) => (t2.areaId === VARLAMORE || t2.areaId === null) && !sealed(t2));
-      const expected = nonArea(row) && reachable;
+      // Konar's rows also need one of the row's areas open; the fresh character holds only
+      // Varlamore, so for example his Blue Dragons row stays closed even though the Dragon
+      // Nest tile reaches him.
+      const expected = nonArea(row) && reachable && areaOpen(fresh, row);
       assert.equal(offered, expected, `fresh character offered "${name}": expected ${expected}`);
     });
   }
@@ -355,29 +376,35 @@ test("a fresh Demonic Pacts character is offered exactly the tasks reachable fro
 /** The Blue Dragons row (a counting task, not a boss). */
 const blueRow = () => rows.find((r) => !r.isBoss && norm(r.fixture.monster) === "bluedragon" && r.placed.length > 0);
 
-test("Blue Dragons: not offered while every counted spawn sits in a sealed location", () => {
+test("Blue Dragons: the Dragon Nest keeps the task offered while the Ruins' and Enclave's spawns stay sealed", () => {
   const row = blueRow();
   const master = Data.get().masters.get(row.masterId);
   const name = row.entry.task.displayName;
-  // A fresh character's only Varlamore counted spawns: the Ruins complex (sealed until The
-  // Heart of Darkness) and the Dragon Nest pocket (no entrance in the world data).
-  const fresh = character("sealed-fresh");
-  assert.ok(!eligibleNames(fresh, master).includes(name), "fresh character: not offered");
-  // Unlocking Kandarin adds the Ogre Enclave - sealed until Watchtower.
-  const enclave = character("sealed-enclave", { areas: [VARLAMORE, KANDARIN] });
-  assert.ok(!eligibleNames(enclave, master).includes(name), "Kandarin without Watchtower: not offered");
+  // A fresh character's counted Varlamore spawns: the Ruins complex (sealed until The Heart
+  // of Darkness) and the Dragon Nest - whose cave entry tlati_dragon_nest_cave_entry (loc
+  // 57591, loc-teleports.json) works in main and the Wiki gives the Nest no requirement, so
+  // the nest is never sealed.
+  const fresh = character("nest-fresh");
+  assert.ok(eligibleNames(fresh, master).includes(name), "fresh character: offered via the Dragon Nest");
+  // Unlocking Kandarin adds the Ogre Enclave - sealed until Watchtower - but the nest still
+  // offers the task.
+  const enclave = character("nest-enclave", { areas: [VARLAMORE, KANDARIN] });
+  assert.ok(eligibleNames(enclave, master).includes(name), "Kandarin without Watchtower: offered via the nest");
 });
 
-test("Blue Dragons: The Heart of Darkness lifts the Ruins' seal", () => {
-  const row = blueRow();
+test("the Ruins' seal holds until The Heart of Darkness (Jellies count only there for a fresh character)", () => {
+  const row = rows.find((r) => !r.isBoss && norm(r.fixture.monster) === "jellies" && r.placed.length > 0);
+  assert.ok(row, "a Jellies task with placed monsters exists");
   const master = Data.get().masters.get(row.masterId);
   const name = row.entry.task.displayName;
-  const done = character("hod-done");
-  done.setAttribute("quest.the_heart_of_darkness.stage", 76); // S.COMPLETE
-  assert.ok(eligibleNames(done, master).includes(name), "quest complete: offered");
-  const mid = character("hod-mid");
+  const fresh = character("jelly-fresh");
+  assert.ok(!eligibleNames(fresh, master).includes(name), "fresh character: the Ruins seal holds");
+  const mid = character("jelly-mid");
   mid.setAttribute("quest.the_heart_of_darkness.stage", 72); // FIGHT: Amoxliatl, before the banish
   assert.ok(!eligibleNames(mid, master).includes(name), "mid-quest: still sealed");
+  const done = character("jelly-done");
+  done.setAttribute("quest.the_heart_of_darkness.stage", 76); // S.COMPLETE
+  assert.ok(eligibleNames(done, master).includes(name), "quest complete: the Ruins open");
 });
 
 test("Blue Dragons: Watchtower lifts the Ogre Enclave's seal (Kandarin unlocked)", () => {

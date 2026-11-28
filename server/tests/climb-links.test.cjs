@@ -74,10 +74,12 @@ test("the Kebos Lowlands spiral staircase lands up on its north-east tile, as ca
 test("the Ruins of Tapoyauik entrance stairs link both ways (the ruins pair sits at height z2, beyond the generic plane-0 underground search)", () => {
     // Surface 54525 offers Climb-down at 1693,3230,0; the ruins 54526 offers Climb-up at
     // 1693,9630,2 (+6400 underground plane, height z2). Declared landings: down on
-    // 1692,9630,2, up on 1692,3230,0 — both walkable, the north row of the ruins walled.
-    assert.deepEqual(lands(mapObject(1693, 3230, 0, 54525), ClimbLinks.DOWN, new Location(1693, 3231, 0)), [1692, 9630, 2]);
+    // 1693,9633,2 (the recorded descent tile — rsprox tapoyauik_temple_entrance recordings
+    // 1695/1001302 — where the quest's Ruins.enter also places the player), up on
+    // 1692,3230,0 — both walkable, the north row of the ruins walled.
+    assert.deepEqual(lands(mapObject(1693, 3230, 0, 54525), ClimbLinks.DOWN, new Location(1693, 3231, 0)), [1693, 9633, 2]);
     assert.deepEqual(lands(mapObject(1693, 9630, 2, 54526), ClimbLinks.UP, new Location(1694, 9630, 2)), [1692, 3230, 0]);
-    assert.equal(RegionManager.blocked(new Location(1692, 9630, 2), null), false, "the down landing is walkable");
+    assert.equal(RegionManager.blocked(new Location(1693, 9633, 2), null), false, "the down landing is walkable");
     assert.equal(RegionManager.blocked(new Location(1692, 3230, 0), null), false, "the up landing is walkable");
 });
 

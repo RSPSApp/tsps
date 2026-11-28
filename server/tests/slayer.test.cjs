@@ -1224,6 +1224,34 @@ test("a gargoyle waits at 0 hitpoints for the rock hammer", () => {
   const auto = { npc: fresh, preventDeath: false };
   Finishers.beforeDeath(auto);
   assert.equal(auto.preventDeath, false, "Gargoyle Smasher with a hammer finishes it");
+
+  // Wiki (Gargoyle, Granite hammer): the granite hammer smashes it by itself while wielded, with
+  // no Gargoyle Smasher unlock and no hammer in the pack.
+  const wieldedPlayer = equip(createPlayer(), { 3: 21742 });
+  wieldedPlayer.performAnimation = () => {};
+  const smashed = npcNamed("Gargoyle");
+  Object.assign(smashed, {
+    getAttribute: () => undefined, setAttribute() {},
+    getHitpoints: () => 0, setHitpoints() {},
+    getCombat: () => ({ getKiller: () => wieldedPlayer }),
+  });
+  const wielded = { npc: smashed, preventDeath: false };
+  Finishers.beforeDeath(wielded);
+  assert.equal(wielded.preventDeath, false, "a wielded granite hammer smashes a gargoyle without the unlock");
+  assert.equal(wieldedPlayer.messages.at(-1), "The gargoyle cracks apart.");
+  assert.equal(wieldedPlayer.inventory.length, 0, "the wielded hammer is not an inventory item");
+
+  // The granite maul is not a finishing item (Wiki: Gargoyle lists rock/granite hammer and
+  // thrownhammer only), so a maul-wielding player without the unlock still leaves it waiting.
+  const mauledPlayer = equip(createPlayer(), { 3: 4153 });
+  const mauled = npcNamed("Gargoyle");
+  Object.assign(mauled, {
+    getAttribute: () => undefined, setAttribute() {},
+    getCombat: () => ({ getKiller: () => mauledPlayer }),
+  });
+  const maul = { npc: mauled, preventDeath: false };
+  Finishers.beforeDeath(maul);
+  assert.equal(maul.preventDeath, true, "a granite maul alone does not finish it");
 });
 
 test("a bag of salt or ice cooler is consumed when used too early, and salt works from 4 hitpoints", () => {

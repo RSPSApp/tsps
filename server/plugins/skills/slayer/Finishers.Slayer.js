@@ -5,7 +5,8 @@
  * rockslugs, desert lizards and zygomites stay alive at 0 hitpoints until an item finishes them
  * (used on them at or below the threshold). With the matching unlock (Gargoyle Smasher, Slug
  * Salter, Reptile Freezer, 'Shroom Sprayer) and the item in the inventory, the killing hit does
- * it on its own; a brine sabre kills rockslugs outright. Fungicide refills a spray.
+ * it on its own; an `equipped` item (the granite hammer) does it without the unlock; a brine
+ * sabre kills rockslugs outright. Fungicide refills a spray.
  */
 const DATA = require("../data/slayer-finishers.json");
 const Tasks = require("./Tasks.Slayer");
@@ -71,13 +72,19 @@ function wieldsAny(player, ids) {
   return weapon != null && ids?.includes(weapon.getId());
 }
 
-/** At 0 hitpoints: finished by an item, the autokill unlock, a brine sabre, or kept alive. */
+/** At 0 hitpoints: finished by an item, a wielded auto-finisher, the autokill unlock, or kept alive. */
 function beforeDeath(event) {
   const { npc } = event;
   const finisher = finisherFor(npc);
   if (!finisher || npc.getAttribute?.(FINISHED_ATTRIBUTE) === true) return;
   const player = npc.getCombat?.()?.getKiller?.(false);
   if (player && wieldsAny(player, finisher.weapons)) return;
+  // The granite hammer smashes gargoyles by itself while wielded, with no Gargoyle Smasher
+  // unlock and no hammer in the pack (Wiki: Gargoyle, Granite hammer).
+  if (player && wieldsAny(player, finisher.equipped)) {
+    finish(player, npc, finisher, { kind: "tool" });
+    return;
+  }
   if (player && Tasks.hasUnlockBit(player, finisher.unlockBit)) {
     const item = carried(player, finisher);
     if (item) {

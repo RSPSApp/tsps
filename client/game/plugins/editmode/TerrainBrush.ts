@@ -23,10 +23,11 @@ export type TerrainBrush = {
     step: number;
     blend: number;
     underlay?: number;
+    flagMask?: number;
 };
 
 export const DEFAULT_TERRAIN_BRUSH: TerrainBrush = {
-    action: "overlay", radius: 0, shape: "round", soft: true, step: 4, blend: 100,
+    flagMask: 1, action: "overlay", radius: 0, shape: "round", soft: true, step: 4, blend: 100,
 };
 
 export function isHeightBrush(action: TerrainBrushAction): boolean {

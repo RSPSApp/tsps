@@ -9,7 +9,7 @@ type ObjectAddress = { id: number; at: Coordinate };
 type Destination = { label: string; to: Coordinate; beside?: ObjectAddress };
 type TravelStep = "action" | "destination" | "return" | "review";
 type Warp = WarpSource & { destinations: Destination[]; returnLink?: WarpAddress };
-type GameWarp = Warp & { name?: string; conditional?: boolean };
+type GameWarp = Warp & { name?: string; conditional?: boolean; mapDerived?: boolean };
 type MakeButton = (text: string, title: string, onClick: () => void) => HTMLButtonElement;
 
 const keyOf = ({ id, op, from }: WarpAddress) => `${id}:${op}:${from.join(",")}`;
@@ -32,6 +32,10 @@ export class EditorTravel {
     private source?: WarpSource;
     private returnTo?: WarpSource;
     private sourceObject?: EditModeSelection;
+    private objectRoutes: GameWarp[] = [];
+    private objectRequest = 0;
+    private resolvingObject = false;
+    private objectError = "";
     private step: TravelStep = "action";
     private actionLabel = "";
     private pending: Destination[] = [];
@@ -67,6 +71,7 @@ export class EditorTravel {
     }
 
     detach(): void {
+        this.objectRequest++;
         this.body = undefined;
         this.nearby = undefined;
         this.nearbyResults = undefined;
@@ -124,18 +129,15 @@ export class EditorTravel {
         Object.assign(this.body.style, { display: "grid", gap: "7px" });
         panel.appendChild(this.body);
         this.source = undefined;
+        this.sourceObject = undefined;
         if (from?.kind === "loc") this.useObject(from);
         else this.render();
         void this.load();
     }
 
-    setNearby(nearby: HTMLElement | undefined): void {
-        this.nearby = nearby;
-        this.nearbyResults = undefined;
-        this.render();
-    }
-
     browse(): void {
+        this.objectRequest++;
+        this.sourceObject = undefined;
         this.source = undefined;
         this.browseAt = this.plugin.getCameraTile();
         this.nearbySearch = "";
@@ -157,16 +159,21 @@ export class EditorTravel {
     private sourcesFor(object: EditModeSelection): GameWarp[] {
         const matches = ({ id, from }: WarpSource) => id === object.locId &&
             from[0] === object.tileX && from[1] === object.tileY && from[2] === object.plane;
-        const original = this.vanilla.filter(matches);
+        const original = [...this.vanilla, ...this.objectRoutes.filter(route => !this.vanilla.some(warp => keyOf(warp) === keyOf(route)))].filter(matches);
         return [
             ...[...this.overrides.values()].filter(matches),
             ...original.filter((warp) => !this.overrides.has(keyOf(warp))),
         ];
     }
 
+    private originalSource(source: WarpAddress): GameWarp | undefined {
+        const key = keyOf(source);
+        return this.vanilla.find(warp => keyOf(warp) === key) ?? this.objectRoutes.find(warp => keyOf(warp) === key);
+    }
+
     private optionName(source: WarpAddress): string | undefined {
         const custom = this.overrides.get(keyOf(source));
-        const vanilla = this.vanilla.find((warp) => keyOf(warp) === keyOf(source));
+        const vanilla = this.originalSource(source);
         return custom?.actionLabel ?? this.plugin.getLocActions(source.id)[source.op - 1] ??
             (custom ? "Custom travel link" : vanilla ? "Game travel link" : undefined);
     }
@@ -183,10 +190,72 @@ export class EditorTravel {
     }
 
     useObject(object: EditModeSelection): void {
-        const known = this.sourcesFor(object)[0];
-        const from = coordinates(object);
+        this.source = undefined;
+        this.sourceObject = object;
+        this.objectRoutes = [];
+        this.pending = [];
         this.name = this.objectName(object.locId, object.locName);
-        this.useSource(known ?? { id: object.locId, op: this.freeOption(object.locId, from) ?? 1, from }, object);
+        this.resolvingObject = true;
+        this.objectError = "";
+        const request = ++this.objectRequest;
+        this.render();
+        void this.plugin.loadObjectTravel(object).then(routes => {
+            if (request !== this.objectRequest) return;
+            if (!Array.isArray(routes)) throw new Error("Invalid object travel data");
+            this.objectRoutes = routes as GameWarp[];
+        }).catch(() => {
+            if (request === this.objectRequest) this.objectError = "Game destinations could not be loaded. You can still edit or add a travel action.";
+        }).finally(() => {
+            if (request !== this.objectRequest) return;
+            this.resolvingObject = false;
+            this.render();
+        });
+    }
+
+    private renderObject(body: HTMLElement, object: EditModeSelection): void {
+        const title = document.createElement("strong");
+        title.textContent = this.name;
+        body.append(title, this.help(textOf(coordinates(object))));
+        const routes = this.sourcesFor(object);
+        const actions = new Map<number, string>();
+        this.plugin.getLocActions(object.locId).forEach((label, index) => { if (label) actions.set(index + 1, label); });
+        routes.forEach(route => actions.set(route.op, route.actionLabel ?? this.optionName(route) ?? "Travel"));
+        if (this.resolvingObject) body.append(this.help("Finding game destinations…"));
+        if (this.objectError) body.append(this.help(this.objectError));
+        for (const [op, label] of [...actions].sort(([a], [b]) => a - b)) {
+            const row = document.createElement("section");
+            Object.assign(row.style, { display: "grid", gap: "5px", borderTop: "1px solid #666", paddingTop: "8px" });
+            const heading = document.createElement("strong");
+            heading.textContent = label;
+            row.append(heading);
+            const route = routes.find(route => route.op === op);
+            if (route?.destinations.length) {
+                for (const destination of route.destinations) {
+                    const output = document.createElement("output");
+                    output.setAttribute("aria-label", `${label} destination`);
+                    output.value = `${destination.label} · ${textOf(destination.to)}`;
+                    row.append(output, this.button("Go to destination", `Go to ${label} destination at ${textOf(destination.to)}`, () => this.goTo(destination.to)));
+                }
+                if (route.mapDerived) row.append(this.help("Map-derived game destination; the landing tile can vary with the approach."));
+                if (route.conditional) row.append(this.help("Game requirements and confirmation still apply."));
+            } else row.append(this.help("No travel destination available for this action."));
+            const change = this.button("Change destination", `Change destination for ${label}`, () => {
+                this.useSource({ id: object.locId, op, from: coordinates(object) }, object);
+                this.moveTo("destination");
+            });
+            change.disabled = this.resolvingObject;
+            row.append(change);
+            body.append(row);
+        }
+        if (!actions.size) body.append(this.help("This object has no menu actions."));
+        const free = this.freeOption(object.locId, coordinates(object));
+        const add = this.button("Add travel action", "Add a travel action to this object", () => {
+            if (free !== undefined) this.useSource({ id: object.locId, op: free, from: coordinates(object) }, object);
+        });
+        add.disabled = free === undefined || this.resolvingObject;
+        body.append(add);
+        if (free === undefined) body.append(this.help("All five menu slots are in use. Choose an existing action to change its destination."));
+        body.append(this.button("Browse nearby links", "Return to the travel link list", () => this.browse()));
     }
 
     private renderNearby(root: HTMLElement): void {
@@ -242,7 +311,8 @@ export class EditorTravel {
             });
             const position = document.createElement("small");
             position.textContent = warp.actionLabel ? `${warp.actionLabel} · ${textOf(warp.from)}` : textOf(warp.from);
-            Object.assign(row.style, { whiteSpace: "normal", overflowWrap: "anywhere" });
+            Object.assign(row.style, { whiteSpace: "normal", overflowWrap: "anywhere", width: "100%", textAlign: "left" });
+            position.style.display = "block";
             row.append(position);
             row.setAttribute("aria-current", String(!!this.source && keyOf(warp) === keyOf(this.source)));
             list.append(row);
@@ -259,11 +329,11 @@ export class EditorTravel {
         this.source = addressOf(source);
         this.sourceObject = object;
         const saved = this.overrides.get(keyOf(source));
-        const original = this.vanilla.find((warp) => keyOf(warp) === keyOf(source));
+        const original = this.originalSource(source);
         const paired = this.pairedWarp(saved);
         this.returnTo = paired && { ...addressOf(paired), actionLabel: paired.actionLabel ?? this.optionName(paired) ?? "Return" };
         this.pending = (saved ?? original)?.destinations.map((destination) => ({ ...destination })) ?? [];
-        this.actionLabel = (saved || original) ? this.optionName(source) ?? "Enter" : "Enter";
+        this.actionLabel = this.optionName(source) ?? "Enter";
         this.step = this.pending.length ? "review" : "action";
         this.render();
     }
@@ -291,6 +361,7 @@ export class EditorTravel {
     }
 
     private moveTo(step: TravelStep): void {
+        if (this.body?.querySelector('[aria-invalid="true"]')) return this.notify("Enter valid destination coordinates before continuing.");
         if (!isLabel(this.actionLabel, 40)) return this.notify("Enter a plain text menu action of up to 40 characters.");
         if ((step === "return" || step === "review") && (!this.pending.length || this.pending.some(({ label }) => !isLabel(label, 60)))) {
             return this.notify("Choose a tile or object and name each destination.");
@@ -303,11 +374,21 @@ export class EditorTravel {
         const body = this.body;
         if (!body?.isConnected) return;
         body.replaceChildren();
-        if (this.nearby) this.renderNearby(this.nearby);
-        else body.append(this.button("Pick source object", "Click any object to use it as the entrance", () => this.pickSource()));
+        if (this.nearby) {
+            this.nearby.hidden = !!this.source || !!this.sourceObject;
+            if (this.nearby.hidden) {
+                this.nearby.replaceChildren();
+                this.nearbyResults = undefined;
+            } else this.renderNearby(this.nearby);
+        } else if (!this.source && !this.sourceObject) body.append(this.button("Pick source object", "Click any object to use it as the entrance", () => this.pickSource()));
         const source = this.source;
         if (!this.loaded) {
             body.append(this.help("Loading travel links…"));
+            return;
+        }
+        if (!source && this.sourceObject) {
+            this.plugin.showTravelMarkers([this.sourceObject], this.sourcesFor(this.sourceObject).flatMap(route => route.destinations.map(destination => toEditorTile(destination.to))));
+            this.renderObject(body, this.sourceObject);
             return;
         }
         if (!source) {
@@ -338,7 +419,11 @@ export class EditorTravel {
         else if (this.step === "destination") this.renderDestinations(body, source);
         else if (this.step === "return") this.renderReturn(body);
         else this.renderReview(body, source);
-        if (!this.nearby) body.append(this.button("Browse nearby links", "Return to the travel link list", () => this.browse()));
+        if (this.sourceObject) body.append(this.button("Back to object actions", "Back to object actions", () => {
+            this.source = undefined;
+            this.render();
+        }));
+        body.append(this.button("Browse nearby links", "Return to the travel link list", () => this.browse()));
     }
 
     private goTo(at: Coordinate): void {
@@ -410,9 +495,16 @@ export class EditorTravel {
             name.value = destination.label;
             name.maxLength = 60;
             name.oninput = () => { destination.label = name.value; };
-            body.append(this.field(`Destination ${index + 1} name`, name), this.help(destination.beside
-                ? `Beside ${this.objectName(destination.beside.id)} at ${textOf(destination.beside.at)}`
-                : textOf(destination.to)), this.row(
+            const position = document.createElement("input");
+            position.value = textOf(destination.to);
+            position.oninput = () => {
+                const at = parseEditorLocation(position.value);
+                const valid = !!at && /[,\s]/.test(position.value.trim());
+                position.setAttribute("aria-invalid", String(!valid));
+                if (valid) { destination.to = [at.tileX, at.tileY, at.plane ?? source.from[2]]; delete destination.beside; }
+            };
+            body.append(this.field(`Destination ${index + 1} name`, name),
+                this.field(`Destination ${index + 1} coordinates`, position), this.row(
                 this.button("Go to arrival", "Move the camera to this arrival tile", () => this.goTo(destination.to)),
                 this.button("Remove destination", "Remove this destination", () => {
                     this.pending.splice(index, 1);
@@ -496,7 +588,7 @@ export class EditorTravel {
     }
 
     private renderReview(body: HTMLElement, source: WarpSource): void {
-        const original = this.vanilla.find((warp) => keyOf(warp) === keyOf(source));
+        const original = this.originalSource(source);
         const existing = this.overrides.get(keyOf(source));
         body.append(this.help(`${this.actionLabel} · ${this.returnTo ? "Two-way" : "One-way"}`));
         // Show destinations here so an existing link can be inspected or followed without walking through the wizard.

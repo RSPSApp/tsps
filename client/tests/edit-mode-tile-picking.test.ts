@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { Ray } from "../game/math/Raycast";
-import { pickEditorTile, type EditorPickMap } from "../game/plugins/editmode/EditorTilePicking";
+import { isEditorRoofCutawayTile, pickEditorTile, type EditorPickMap } from "../game/plugins/editmode/EditorTilePicking";
 
 function map(baseX = 0, baseY = 0): EditorPickMap {
     const size = 9;
@@ -34,3 +34,14 @@ assert.equal(pickEditorTile(new Ray([1, -10, 1], [1, 0, 0]), 1, [emptyFloors]), 
 assert.equal(pickEditorTile(new Ray([1, -10, 1], [0, -1, 0]), 1, [emptyFloors]), undefined, "sky-facing rays do not pick behind the camera");
 assert.equal(pickEditorTile(slanted, 2, [{ ...emptyFloors, heightMapData: new Int16Array() }]), undefined, "unloaded floors have no stale fallback");
 console.log("Editor heightfield picking tests passed");
+
+// Roof cutaway includes the exterior wall edge and its corners, then restores outdoors.
+const roof = (x: number, y: number, plane: number) => plane === 0 && x >= 64 && x <= 66 && y >= 64 && y <= 66;
+for (const [x, y] of [[65, 65], [63, 65], [67, 65], [65, 63], [65, 67], [63, 63], [67, 67]]) {
+    assert.equal(isEditorRoofCutawayTile({ tileX: x, tileY: y, plane: 0 }, roof), true,
+        `interior, wall edges and corners keep roofs hidden at ${x},${y}`);
+}
+for (const [x, y] of [[62, 65], [68, 65], [65, 62], [65, 68]]) {
+    assert.equal(isEditorRoofCutawayTile({ tileX: x, tileY: y, plane: 0 }, roof), false, "leaving the wall margin restores roofs");
+}
+assert.equal(isEditorRoofCutawayTile({ tileX: 65, tileY: 65, plane: 1 }, roof), false, "roof flags are sampled on the edited plane");

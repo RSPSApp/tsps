@@ -66,3 +66,13 @@ export function pickEditorTileHit(
     }
     return best && { tile: best, t: bestT };
 }
+
+/** Include the wall/corner tiles bordering a roofed interior in the automatic cutaway. */
+export function isEditorRoofCutawayTile(tile: EditModeTile, isRoofed: (x: number, y: number, plane: number) => boolean): boolean {
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+            if (isRoofed(tile.tileX + dx, tile.tileY + dy, tile.plane)) return true;
+        }
+    }
+    return false;
+}

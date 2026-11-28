@@ -66,13 +66,11 @@ module.exports = {
         configure: (webpackConfig) => {
             // Share the pure geometry and item rules with the server plugins.
             const motionPath = path.resolve(appRoot, "../server/plugins/world/ContinuousMotion.FreeMovement.js");
-            const diagonalWallPath = path.resolve(appRoot, "../server/plugins/agent/mcp/DiagonalWall.AgentMcp.js");
             const blightedItemsPath = path.resolve(appRoot, "../server/plugins/items/BlightedItems.js");
             const foodDataPath = path.resolve(appRoot, "../server/plugins/items/data/food.json");
             for (const plugin of webpackConfig.resolve.plugins ?? []) {
                 if (plugin.constructor.name === "ModuleScopePlugin") {
                     plugin.allowedFiles.add(motionPath);
-                    plugin.allowedFiles.add(diagonalWallPath);
                     plugin.allowedFiles.add(blightedItemsPath);
                     plugin.allowedFiles.add(foodDataPath);
                 }
@@ -115,7 +113,9 @@ module.exports = {
                             loader.includes("babel-loader") &&
                             oneOfRule.include === paths.appSrc
                         ) {
-                            oneOfRule.exclude = /node_modules/;
+                            // The shared editor planners are also CommonJS so Node agent tools
+                            // can use the same source. App Babel helpers would turn them into ESM.
+                            oneOfRule.exclude = [/node_modules/, /[\\/]game[\\/]plugins[\\/]editmode[\\/]generation[\\/].*\.js$/];
                         }
                     }
                     rule.oneOf.unshift(glslLoader);

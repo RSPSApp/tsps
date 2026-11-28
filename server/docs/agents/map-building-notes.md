@@ -115,7 +115,7 @@ in a neighbour's building can pick that building's piece; check the result and o
 | A building can lean on another structure | Varrock house at 3229,3381 uses the city wall as its south wall: a tight capture left a black gap, a margin pulled in a stretch of crenellated city wall |
 | `find_buildings` finds by roof | Tents and stalls with roof pieces count too: 3200,3421 is Varrock's striped tent, not a house |
 | Furniture is mostly interactive | A default paste is an empty shell; `interactive: "keep"` brings chairs, beds and ladders; untested whether copied ladders and doors work, since handlers can be tied to the original tiles |
-| Catalog (`plugins/agent/data/templates/`) | `varrock-house-a` (8×7), `varrock-house-west` (11×9 with margin), `varrock-tent` (7×7); all checked by screenshot, also rotated |
+| Catalog (`client/game/plugins/editmode/generation/templates/`) | `varrock-house-a` (8×7), `varrock-house-west` (11×9 with margin), `varrock-tent` (7×7); all checked by screenshot, also rotated |
 
 ## Walls
 

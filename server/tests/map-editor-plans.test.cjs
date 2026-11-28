@@ -136,7 +136,14 @@ test("wetlands and tropical shores use shaped banks and a coherent water level",
 });
 
 test("the shared forest planner uses materials and native scenery from the existing terrain capture", () => {
-  const forest = require("../plugins/world/data/terrain-biomes/forest.json");
+  const forest = require(require("../plugins/world/EditorGeneration").editorGenerationPath("landscapes/data/terrain-biomes/forest.json"));
+  const { editorGenerationPath } = require("../plugins/world/EditorGeneration");
+  const { normalizeTerrainBiome } = require(editorGenerationPath("landscapes/TerrainBiome"));
+  const loaded = require("../plugins/world/procedural/TerrainBiomeUtil.ProceduralRegionStream").loadTerrainBiome("forest");
+  for (const [key, value] of Object.entries(normalizeTerrainBiome(forest))) {
+    assert.deepEqual(loaded[key], value, `server and browser share captured ${key}`);
+  }
+  assert.equal(loaded.inputPath, editorGenerationPath("landscapes/data/terrain-biomes/forest.json"));
   const tree = forest.ids.treeIds[0];
   const groundCover = forest.ids.groundDecorationIds[0];
   const core = {
@@ -364,5 +371,44 @@ test("structure seeds vary floor plans and keep themed furniture indoors", () =>
       }
     }
     assert.ok(layouts.size >= 3, `${name} only made ${layouts.size} floor plans`);
+  }
+});
+
+test("server-only snapshots resolve the editor planners and assets from the generated dist bundle", t => {
+  const { prepareEditorGeneration } = require("../scripts/prepare-editor-generation.cjs");
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "editor-generation-runtime-"));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const runtime = path.join(directory, "server");
+  const destination = path.join(runtime, "dist/editor-generation");
+  fs.mkdirSync(destination, { recursive: true });
+  fs.writeFileSync(path.join(destination, "stale.js"), "throw new Error('stale artifact')");
+  prepareEditorGeneration(path.resolve(__dirname, "../../client/game/plugins/editmode/generation"), destination);
+  assert.equal(fs.existsSync(path.join(destination, "stale.js")), false, "deleted sources cannot survive in a release");
+  assert.equal(fs.existsSync(path.join(destination, "landscapes/LocalLandscape.ts")), false, "browser integration code stays out of the server bundle");
+  const resolver = path.join(runtime, "plugins/world/EditorGeneration.js");
+  fs.mkdirSync(path.dirname(resolver), { recursive: true });
+  fs.copyFileSync(path.resolve(__dirname, "../plugins/world/EditorGeneration.js"), resolver);
+  const { editorGenerationPath } = require(resolver);
+  assert.equal(fs.realpathSync(editorGenerationPath("buildings/MapPlans.js")), fs.realpathSync(path.join(destination, "buildings/MapPlans.js")));
+  fs.mkdirSync(path.join(directory, "client/game/plugins/editmode/generation"), { recursive: true });
+  assert.equal(fs.realpathSync(editorGenerationPath("buildings/MapPlans.js")), fs.realpathSync(path.join(destination, "buildings/MapPlans.js")),
+    "a full source checkout with only server dependencies installed still uses the self-contained runtime bundle");
+  const plans = require(editorGenerationPath("buildings/MapPlans.js"));
+  assert.ok(plans.preview(new URLSearchParams("name=furnished-house&seed=12"), () => ({ sizeX: 1, sizeY: 1 })).objects.length > 0);
+  const landscapeFile = editorGenerationPath("landscapes/LandscapePlans.js");
+  assert.ok(fs.readFileSync(landscapeFile, "utf8").includes('require("node:zlib")'), "the snapshot uses its built-in compression codec");
+  assert.ok(require(landscapeFile).catalog().biomes.length > 0);
+  const templates = path.join(runtime, "plugins/agent/mcp/MapTemplateFiles.js");
+  fs.mkdirSync(path.dirname(templates), { recursive: true });
+  fs.copyFileSync(path.resolve(__dirname, "../plugins/agent/mcp/MapTemplateFiles.js"), templates);
+  const previous = process.env.AGENT_MCP_TEMPLATES_DIR;
+  delete process.env.AGENT_MCP_TEMPLATES_DIR;
+  try {
+    const library = require(templates);
+    assert.equal(library.readTemplate("varrock-house-a").width, 8);
+    assert.equal(library.listTemplates().length, 3);
+  } finally {
+    if (previous === undefined) delete process.env.AGENT_MCP_TEMPLATES_DIR;
+    else process.env.AGENT_MCP_TEMPLATES_DIR = previous;
   }
 });

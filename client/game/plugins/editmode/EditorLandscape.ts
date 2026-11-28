@@ -1,4 +1,3 @@
-import { fetchContent } from "../../../network/serverConnection/contentApi";
 import { WORLD_COORD_MAX } from "./EditorCoordinates";
 import type { MapFootprint } from "./EditorWorldMap";
 import type { EditModeRegionPack, EditModeTile } from "./types";
@@ -24,10 +23,8 @@ const examples = [
     { label: "Swampland", landform: "wetlands", biome: "swamp", size: "region" },
 ];
 
-type EncodedPack = { regionId: number; data: string };
-
 type LandscapePreview = {
-    packs?: EncodedPack[];
+    packs?: EditModeRegionPack[];
     width: number;
     height: number;
     regions: number[];
@@ -40,18 +37,13 @@ type LandscapePreview = {
     preview: { columns: number; rows: number; colours: string[]; pixels: string };
 };
 
-async function landscapeData<T>(part = ""): Promise<T> {
-    const payload = await fetchContent("/api/world/landscapes" + part);
-    if (!payload || typeof payload !== "object") throw new Error("Connect to the development world to generate maps.");
-    if (payload.error) throw new Error(payload.error);
-    return payload as T;
-}
+export type LandscapeData = (part?: string) => Promise<any>;
 
-export function loadOccupiedMapSquares(): Promise<number[]> {
+export function loadOccupiedMapSquares(landscapeData: LandscapeData): Promise<number[]> {
     return landscapeData("/occupied");
 }
 
-export async function loadBiomeScenery(biome: string): Promise<readonly { id: number; name: string }[]> {
+export async function loadBiomeScenery(landscapeData: LandscapeData, biome: string): Promise<readonly { id: number; name: string }[]> {
     return landscapeData("/scenery?" + new URLSearchParams({ biome }));
 }
 
@@ -84,6 +76,7 @@ export async function attachLandscapeEditor(
     inputStyle: Partial<CSSStyleDeclaration>,
     button: (text: string, title: string, run: () => void) => HTMLButtonElement,
     options: {
+        landscapeData: LandscapeData;
         draft?: LandscapeDraft;
         footprint?: MapFootprint;
         expand?: boolean;
@@ -102,6 +95,7 @@ export async function attachLandscapeEditor(
     status.role = "status";
     status.textContent = "Loading landscape presets…";
     panel.append(status);
+    const landscapeData = async <T,>(part = ""): Promise<T> => options.landscapeData(part);
     try {
         const catalog = await landscapeData<LandscapeCatalog>();
         if (!panel.isConnected) return;
@@ -217,9 +211,7 @@ export async function attachLandscapeEditor(
         const sliders = [slider("Height variation", relief, "%"), slider("Foliage density", foliage, "%"), slider("Extra lakes", lakes)];
         if (options.expand) sliders.push(slider("Edge blend", edgeBlend, " tiles"));
 
-        const unpack = (encoded: readonly EncodedPack[]) => {
-            const packs = encoded.map(({ regionId, data }) =>
-                ({ regionId, data: Uint8Array.from(window.atob(data), (char) => char.charCodeAt(0)) }));
+        const validatePacks = (packs: readonly EditModeRegionPack[]) => {
             if (footprint && (packs.length !== footprint.regions.length ||
                 new Set(packs.map(({ regionId }) => regionId)).size !== footprint.regions.length ||
                 packs.some(({ regionId }) => !footprint.regions.includes(regionId)))) {
@@ -241,7 +233,7 @@ export async function attachLandscapeEditor(
         };
         let revision = 0;
         let timer: number | undefined;
-        let approved: { query: URLSearchParams; replace: boolean; packs?: EditModeRegionPack[] } | undefined;
+        let approved: { query: URLSearchParams; replace: boolean; packs?: readonly EditModeRegionPack[] } | undefined;
         let sceneLocation: EditModeTile | undefined;
         let buildingPreview = false;
         let creating = false;
@@ -254,7 +246,7 @@ export async function attachLandscapeEditor(
             creating = true;
             create.disabled = true;
             status.textContent = "Keeping terrain…";
-            const result = preview ? Promise.resolve(preview) : landscapeData<EncodedPack[]>("/packs?" + query).then(unpack);
+            const result = preview ? Promise.resolve(preview) : landscapeData<EditModeRegionPack[]>("/packs?" + query).then(validatePacks);
             void result.then((packs) => {
                 if (!panel.isConnected || current !== revision) return;
                 const location = locationFor(query);
@@ -311,7 +303,7 @@ export async function attachLandscapeEditor(
                     : currentDraft ? "Landscape draft is open. Reroll or change a setting to update it."
                     : info;
                 if (!used && !edited && !currentDraft) {
-                    const packs = options.showScene ? unpack(result.packs ?? []) : undefined;
+                    const packs = options.showScene ? validatePacks(result.packs ?? []) : undefined;
                     if (packs && options.showScene) {
                         sceneLocation = locationFor(query);
                         options.showScene(packs, sceneLocation, Math.max(result.width, result.height));

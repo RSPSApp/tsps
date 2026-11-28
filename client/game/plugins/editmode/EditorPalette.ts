@@ -1,4 +1,4 @@
-import { createCloseIcon, createConfigIcon, EDITOR_TOP_BAR_CLEARANCE } from "./EditorToolbar";
+import { createEditorCloseButton, createConfigIcon, EDITOR_TOP_BAR_CLEARANCE } from "./EditorToolbar";
 
 /**
  * Search palette ported from elvarg-web-client: NPC/object/item modes, cache
@@ -17,6 +17,7 @@ export interface EditorPaletteOptions {
     onQueryChange: (query: string) => void;
     onPick: (id: number) => void;
     onInspect: (id: number) => void;
+    onAddSwatch?: (id: number, name: string) => void;
     onClose: () => void;
     loadThumbnail?: (kind: PaletteMode, id: number) => Promise<string | undefined>;
 }
@@ -27,8 +28,8 @@ export class EditorPalette {
     private readonly results: HTMLDivElement;
     private readonly objectControls: HTMLDivElement;
     private readonly modeToggle = document.createElement("div");
-    private readonly ghostHeader = document.createElement("div");
-    private readonly ghostTitle = document.createElement("strong");
+    private readonly header = document.createElement("div");
+    private readonly title = document.createElement("strong");
     private readonly modeButtons: Record<PaletteMode, HTMLButtonElement>;
     private mode: PaletteMode = "npc";
     private selectedId = -1;
@@ -133,21 +134,13 @@ export class EditorPalette {
 
         this.objectControls = document.createElement("div");
         this.objectControls.hidden = this.mode !== "loc";
-        const close = document.createElement("button");
-        close.type = "button";
-        close.setAttribute("aria-label", "Close asset search");
-        Object.assign(close.style, {
-            display: "inline-grid", placeItems: "center", padding: "4px", cursor: "pointer",
-            border: "1px solid #ffffff29", borderRadius: "4px", background: "#ffffff10", color: "inherit",
-        });
-        close.append(createCloseIcon());
-        close.onclick = options.onClose;
-        this.ghostHeader.append(this.ghostTitle, close);
-        this.ghostHeader.style.marginBottom = "7px";
-        this.ghostHeader.style.alignItems = "center";
-        this.ghostHeader.style.justifyContent = "space-between";
-        this.ghostHeader.style.display = "none";
-        this.element.append(this.ghostHeader, modeToggle, this.objectControls, this.input, this.results);
+        const close = createEditorCloseButton("Close asset search", options.onClose);
+        this.header.append(this.title, close);
+        this.header.style.marginBottom = "7px";
+        this.header.style.alignItems = "center";
+        this.header.style.justifyContent = "space-between";
+        this.header.style.display = "none";
+        this.element.append(this.header, modeToggle, this.objectControls, this.input, this.results);
         this.element.addEventListener("mousedown", (event) => event.stopPropagation());
         this.element.addEventListener("click", (event) => event.stopPropagation());
         document.body.appendChild(this.element);
@@ -162,13 +155,10 @@ export class EditorPalette {
         }
     }
 
-    public setGhostLayout(ghost: boolean, scattering: boolean): void {
-        this.element.style.left = ghost ? "auto" : "var(--map-editor-panel-left, 62px)";
-        this.element.style.right = ghost ? "12px" : "auto";
-        this.modeToggle.style.display = ghost ? "none" : "grid";
-        this.ghostHeader.style.display = ghost ? "flex" : "none";
-        this.ghostTitle.textContent = this.mode === "loc" ? (scattering ? "Scatter scenery" : "Place objects") :
-            this.mode === "npc" ? "Place NPCs" : "Place ground items";
+    public setLayout(scattering: boolean): void {
+        this.modeToggle.style.display = "grid";
+        this.header.style.display = "flex";
+        this.title.textContent = scattering ? "Scatter scenery" : this.mode === "npc" ? "NPCs" : this.mode === "item" ? "Ground items" : "Objects";
     }
 
     public isVisible(): boolean {
@@ -414,7 +404,14 @@ export class EditorPalette {
             event.stopPropagation();
             this.options.onInspect(result.id);
         });
-        row.append(pick, inspect);
+        row.append(pick);
+        if (this.mode === "loc" && this.options.onAddSwatch) {
+            const add = document.createElement("button"); add.type = "button"; add.textContent = "+";
+            add.title = "Add to object swatches"; add.setAttribute("aria-label", `Add ${result.name} to object swatches`);
+            add.onclick = () => this.options.onAddSwatch?.(result.id, result.name);
+            row.append(add);
+        }
+        row.append(inspect);
         return row;
     }
 }

@@ -78,7 +78,7 @@ const makePlugin = (getTerrainHeight: (tile: typeof pointer) => number = () => -
         getStampObjectInfo: () => ({ sizeX: 1, sizeY: 1, interactive: false }),
         getTerrainFlags: () => 0,
         getCameraTile: () => pointer,
-        showBlockedTiles: (tiles: typeof pointer[]) => blockedFrames.push(tiles),
+        showTileFlagTiles: (flag, tiles) => { if (flag === 1) blockedFrames.push([...tiles]); },
         jumpCameraToTile: () => {},
         setTerrainOverlay: (tile: unknown, overlay: number, shape: number, rotation: number) =>
             calls.push(["paint", tile, overlay, shape, rotation]),
@@ -222,6 +222,7 @@ const makePlugin = (getTerrainHeight: (tile: typeof pointer) => number = () => -
 
 {
     const plugin = makePlugin();
+    plugin.setConfig({ showUnwalkableFlags: true });
     plugin.setTerrainBrush({ action: "block", radius: 0 });
     plugin.applyAtPointer();
     assert.deepEqual(blockedFrames.at(-1), [pointer], "the blocked overlay updates as soon as a stroke lands");
@@ -237,12 +238,19 @@ const makePlugin = (getTerrainHeight: (tile: typeof pointer) => number = () => -
     const plugin = makePlugin(sample);
     const house = parseAreaStamp({
         name: "House", foundation: true, source: { x: 0, y: 0 }, width: 3, height: 2,
-        objects: [{ id: 1, dx: 0, dy: 0, z: 0, type: 0, face: 0 }],
-        tiles: [{ dx: 0, dy: 0, z: 0, flag: 4 }, { dx: 3, dy: 2, z: 1, height: 37 }],
+        objects: [{ id: 1, dx: 0, dy: 0, z: 0, type: 0, face: 0 }, { id: 2, dx: 0, dy: 0, z: 0, type: 22, face: 0 }],
+        tiles: [{ dx: 0, dy: 0, z: 0, flag: 4, overlay: { id: 5, shape: 0, rotation: 0 } }, { dx: 3, dy: 2, z: 1, height: 37 }],
     });
     plugin.armStamp(house, { turns: 1, terrain: "floors", interactive: false });
     plugin.applyAtPointer();
     const edits = plugin.getConfig().edits;
+    const floor = edits.find(edit => edit.kind === "terrain")!;
+    const removedGrass = edits.filter(edit => edit.kind === "delete");
+    assert.deepEqual(removedGrass.map(edit => edit.rotation), [0, 1, 2, 3], "all grass rotations are cleared beneath the new floor");
+    assert.ok(removedGrass.every(edit => edit.shape === 22 && edit.tileX === floor.tileX && edit.tileY === floor.tileY && edit.plane === floor.plane),
+        "clear only floor decorations on the rotated painted floor, leaving surrounding scenery alone");
+    const decoration = edits.findIndex(edit => edit.kind === "place" && edit.locId === 2);
+    assert.ok(decoration > edits.indexOf(removedGrass.at(-1)!), "cleanup precedes the template's own floor decorations");
     const elevations = new Set<number>();
     for (let dx = 0; dx <= 2; dx++) for (let dy = 0; dy <= 3; dy++) {
         const tile = { tileX: pointer.tileX + dx, tileY: pointer.tileY + dy, plane: 0 };
@@ -254,7 +262,11 @@ const makePlugin = (getTerrainHeight: (tile: typeof pointer) => number = () => -
     assert.ok(edits.some((edit) => edit.kind === "height" && edit.plane === 1 && edit.locId === 37),
         "levelling ground leaves the template's upper-floor gaps intact");
     plugin.undo();
-    assert.deepEqual(plugin.getConfig().edits, [], "foundation and stamp undo together");
+    assert.deepEqual(plugin.getConfig().edits, [], "foundation, grass cleanup and stamp undo together");
+    plugin.armStamp(house, { turns: 0, terrain: "objects", interactive: false });
+    plugin.applyAtPointer();
+    assert.ok(!plugin.getConfig().edits.some(edit => edit.kind === "delete"), "objects-only stamps preserve existing ground decorations");
+    plugin.undo();
 }
 
 {
@@ -412,27 +424,6 @@ const makePlugin = (getTerrainHeight: (tile: typeof pointer) => number = () => -
     assert.equal(plugin.redo(), false, "saving ends the redo history");
 }
 
-// A generated building only exists in the rebuilt region, and stays that way through redo.
-{
-    const plugin = makePlugin();
-    plugin.setConfig({ tool: "select" });
-    plugin.applyAtPointer();
-    plugin.selectRegion();
-    calls.length = 0;
-    plugin.generateBuilding("Classic", 1, "Rectangle");
-    const generated = plugin.getConfig().edits.length;
-    assert.ok(generated > 0);
-    assert.equal(calls.filter((call) => call[0] === "add").length, 0, "generating places nothing directly");
-    plugin.undo();
-    assert.equal(plugin.getConfig().edits.length, 0);
-    calls.length = 0;
-    refreshes.length = 0;
-    plugin.redo();
-    assert.equal(plugin.getConfig().edits.length, generated);
-    assert.equal(calls.filter((call) => call[0] === "add" || call[0] === "paint").length, 0, "redo places nothing directly either");
-    assert.ok(refreshes.at(-1)!.includes(12850), "redo rebuilds the region that holds it");
-}
-
 // Undo brings back a deleted object.
 {
     const plugin = makePlugin();
@@ -497,3 +488,66 @@ const makePlugin = (getTerrainHeight: (tile: typeof pointer) => number = () => -
 }
 
 console.log("Editor terrain tools tests passed");
+
+// View flags work independently of the paint tool and respect the edited floor.
+{
+    const frames = new Map<number, readonly typeof pointer[]>();
+    const plugin = makePlugin(() => -1, {
+        getTerrainFlags: tile => tile.tileX === pointer.tileX && tile.tileY === pointer.tileY ? 31 : 0,
+        showTileFlagTiles: (flag, tiles) => frames.set(flag, tiles),
+    });
+    plugin.setConfig({ tool: "select", showUnwalkableFlags: true, showBridgeFlags: true,
+        showRemoveRoofFlags: true, showLowerZFlags: true, showDisableRenderFlags: true });
+    for (const flag of [1, 2, 4, 8, 16]) assert.deepEqual(frames.get(flag), [pointer]);
+    plugin.setConfig({ showBridgeFlags: false, heightLevel: 1 });
+    assert.deepEqual(frames.get(2), [], "turning off one flag hides only that flag");
+    assert.deepEqual(frames.get(4), [{ ...pointer, plane: 1 }], "flags follow the selected height level");
+    assert.equal(plugin.getConfig().edits.length, 0, "visibility never edits map flags");
+    plugin.setConfig({ active: false });
+    for (const flag of [1, 2, 4, 8, 16]) assert.deepEqual(frames.get(flag), []);
+}
+{
+    const frames = new Map<number, readonly typeof pointer[]>();
+    const region = regionIdOf(pointer.tileX, pointer.tileY);
+    const plugin = makePlugin(() => -1, {
+        getVisibleRegionIds: () => [region, region + 256],
+        getTerrainFlags: tile => tile.tileY === pointer.tileY &&
+            (tile.tileX === pointer.tileX || tile.tileX === pointer.tileX + 64) ? 2 : 0,
+        showTileFlagTiles: (flag, tiles) => frames.set(flag, tiles),
+    });
+    plugin.setConfig({ showBridgeFlags: true });
+    assert.deepEqual(frames.get(2), [pointer, { ...pointer, tileX: pointer.tileX + 64 }],
+        "flag visibility covers all visible map squares, not only the one under the pointer");
+}
+
+// Flag brushes use the base map rather than a renderer still rebuilding an undone edit.
+{
+    const plugin = makePlugin(() => -1, {
+        getBaseRegionFlags: () => new Uint8Array(4 * 64 * 64),
+        getTerrainFlags: () => 1,
+    });
+    plugin.setTerrainBrush({ action: "block", radius: 0, flagMask: 2 });
+    plugin.applyAtPointer();
+    assert.equal(plugin.getConfig().edits.at(-1)?.locId, 2, "the cache is authoritative for unchanged flags");
+    plugin.undo();
+    plugin.setTerrainBrush({ action: "unblock", flagMask: 1 });
+    plugin.applyAtPointer();
+    assert.equal(plugin.getConfig().edits.length, 0, "stale renderer flags do not recreate an undone edit");
+}
+
+// Flags brushes set/clear only the checked mask, independently of tile selection.
+{
+    const plugin = makePlugin(() => -1, { getTerrainFlags: () => 1 });
+    plugin.setTerrainBrush({ action: "block", radius: 0, flagMask: 6 });
+    plugin.applyAtPointer();
+    assert.equal(plugin.getConfig().edits.at(-1)?.locId, 7, "bridge and roof bits are added without removing unwalkable");
+    plugin.setTerrainBrush({ action: "unblock", flagMask: 6 });
+    plugin.applyAtPointer();
+    assert.equal(plugin.getConfig().edits.at(-1)?.locId, 1, "only the checked flags are cleared");
+    plugin.undo();
+    assert.equal(plugin.getConfig().edits.at(-1)?.locId, 7, "clearing flags is one undo step");
+    const count = plugin.getConfig().edits.length;
+    plugin.setTerrainBrush({ flagMask: 0 });
+    plugin.applyAtPointer();
+    assert.equal(plugin.getConfig().edits.length, count, "no checked flags means no map edits");
+}

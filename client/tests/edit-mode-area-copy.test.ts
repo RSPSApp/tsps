@@ -240,7 +240,7 @@ async function clipboardUi(): Promise<void> {
     select(500,500); resolveClipboard(f.contents); await settle();
     assert.ok(plugin.getConfig().edits.some(e=>e.tileX===127&&e.kind==='npc'), 'async paste keeps the captured destination');
     assert.ok(!plugin.getConfig().edits.some(e=>e.tileX===500), 'later selection is not the destination');
-    (document.querySelector('button[aria-label="Save world and map edits"]') as HTMLButtonElement).click();
+    (document.querySelector('[data-map-editor="menu-bar"] button[aria-label="Save"]') as HTMLButtonElement).click();
     assert.equal(messages.filter(m=>m[0].type==='elvarg:region-pack').length,4,'host Save receives all region packs');
     const npcMessage=messages.find(m=>m[0].type==='elvarg:custom-npc-spawns')[0];
     assert.equal(npcMessage.spawns.length,2);

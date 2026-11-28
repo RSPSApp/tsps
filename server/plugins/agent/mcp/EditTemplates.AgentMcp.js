@@ -14,7 +14,7 @@ const { templatesDir, templateFile, readTemplate, listTemplates } = require("./M
 //   list_templates   - what has been captured
 //   paste_template   - place a template at a tile, rotated; dryRun reports without placing
 //
-// Templates are data in plugins/agent/data/templates/<name>.json, one file each, so a good
+// Templates are data in client/game/plugins/editmode/generation/templates/<name>.json, one file each, so a good
 // capture can be committed and reused like a preset.
 
 const MAX_TILES = 4096;
@@ -144,7 +144,7 @@ module.exports = function registerEditTemplateTools(ctx, { build, terrain }) {
 
   tool(
     "capture_template",
-    "Copy a structure that stands in the world into a reusable template: every loc in the rectangle on the chosen planes (cache scenery and placed objects alike), plus its terrain (floor overlays, underlays, heights, flags) unless terrain is false. Saved as plugins/agent/data/templates/<name>.json; paste_template places it anywhere, rotated. Draw the rectangle tight round one building so neighbours and loose scenery stay out.",
+    "Copy a structure that stands in the world into a reusable template: every loc in the rectangle on the chosen planes (cache scenery and placed objects alike), plus its terrain (floor overlays, underlays, heights, flags) unless terrain is false. Saved as client/game/plugins/editmode/generation/templates/<name>.json; paste_template places it anywhere, rotated. Draw the rectangle tight round one building so neighbours and loose scenery stay out.",
     {
       name: z.string().describe("Template name: lowercase letters, digits, - or _"),
       x1: z.number().int().describe("Rectangle corner x"),

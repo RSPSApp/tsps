@@ -521,3 +521,38 @@ test('Temple of Ikov ordinary return remains available after removing the suppli
     await bootsWalkToReturn(f); await f.click(f.up, 'Climb-up', 12);
     assert.deepEqual(bootsWhere(f.player), [2649, 9805, 0], 'exact return remains available without light');
 });
+
+test('editor inspects the Edgeville ladder using the game climb resolver without changing it', () => {
+    const { ObjectDefinition } = require('../dist/game/definition/ObjectDefinition');
+    RegionManager.loadMapFiles(3083, 3513);
+    const objects = MapObjects.mapObjects.get(MapObjects.getHash(3083, 3513, 0)) ?? [];
+    const ladder = objects.find(object => ObjectDefinition.forId(object.getId()).getName() === 'Ladder');
+    assert.ok(ladder, 'the reported ladder exists in the cache');
+    let endpoint;
+    require('../plugins/world/EditModeApi.plugin').register({
+        core: { RegionManager, MapObjects, Location, ObjectDefinition },
+        registerContentEndpoint: (name, handler) => { if (name === 'editor-travel') endpoint = handler; },
+    });
+    const query = new URLSearchParams({ id: String(ladder.getId()), x: '3083', y: '3513', z: '0' });
+    assert.ok(endpoint, 'travel lookups use the public HTTP/WebRTC content API');
+    assert.equal(endpoint(query, ['npc-spawns']), undefined, 'travel API cannot expose editor-only world resources');
+    const registered = new Set();
+    const production = Server.PRODUCTION;
+    try {
+        Server.PRODUCTION = true;
+        require('../plugins/world/EditModeApi.plugin').register({
+            core: {}, registerContentEndpoint: name => registered.add(name),
+        });
+        assert.deepEqual([...registered], ['editor-travel'], 'only public travel inspection is available in production');
+    } finally { Server.PRODUCTION = production; }
+    const result = endpoint(query, ['object-travel']);
+    const up = result.find(route => /climb.up/i.test(route.actionLabel));
+    assert.ok(up, 'existing Climb-up action has a resolved destination');
+    assert.equal(up.destinations[0].to[2], 1, 'the ladder goes to the first floor');
+    assert.deepEqual(up.destinations[0].to, lands(ladder, ClimbLinks.UP, ladder.getLocation()));
+    assert.equal(up.op, ObjectDefinition.forId(ladder.getId()).getInteractions().indexOf(up.actionLabel) + 1);
+    assert.equal(up.mapDerived, true);
+    assert.equal(MapObjects.get(ladder.getId(), ladder.getLocation(), null), ladder, 'inspection never replaces the source object');
+    assert.throws(() => endpoint(new URLSearchParams('id=1&x=-1&y=3513&z=0'), ['object-travel']), /Invalid/);
+    assert.throws(() => endpoint(new URLSearchParams('id=1&x=3083&y=3513&z=4'), ['object-travel']), /Invalid/);
+});

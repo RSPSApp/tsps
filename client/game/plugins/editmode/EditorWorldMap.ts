@@ -162,6 +162,10 @@ export class EditorWorldMap {
     private zoneTypeSelect?: HTMLSelectElement;
     private deleteZoneButton?: HTMLButtonElement;
 
+    loadMinimap(tile: EditModeTile): Promise<Blob | undefined> {
+        return this.loadRawTile?.(tile.tileX >> 6, tile.tileY >> 6, tile.plane) ?? Promise.resolve(undefined);
+    }
+
     constructor(
         private readonly client: EditorWorldMapClient,
         private readonly onNavigate: (tile: EditModeTile) => void,
@@ -795,7 +799,7 @@ export class EditorWorldMap {
         window.addEventListener("keydown", (event) => {
             if (event.key !== "Escape") return;
             const target = event.target as HTMLElement | null;
-            if (this.mode && (event.defaultPrevented || target?.closest?.('[data-map-editor="ghost-tool-finder"]'))) return;
+            if (this.mode && (event.defaultPrevented || target?.closest?.('[data-map-editor="tool-finder"]'))) return;
             event.preventDefault();
             if (this.mode) event.stopPropagation();
             this.close();

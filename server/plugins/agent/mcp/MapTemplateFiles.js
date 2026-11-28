@@ -1,10 +1,11 @@
+const { editorGenerationPath } = require("../../world/EditorGeneration");
 const fs = require("fs");
 const path = require("path");
 
 const NAME = /^[a-z0-9][a-z0-9_-]{0,47}$/;
 
 function templatesDir() {
-  return process.env.AGENT_MCP_TEMPLATES_DIR ?? path.resolve(__dirname, "..", "data", "templates");
+  return process.env.AGENT_MCP_TEMPLATES_DIR ?? editorGenerationPath("templates");
 }
 
 function templateFile(name) {

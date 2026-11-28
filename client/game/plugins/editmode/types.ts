@@ -143,13 +143,17 @@ export interface EditModePluginConfig {
     renderAllHeightLevels: boolean;
     /** Overrides automatic roof hiding when inspecting upper floors. */
     floorView?: "up-to" | "one-above" | "all";
-    ghostUi?: boolean;
     brushTiming?: import("./TerrainBrush").BrushTiming;
     /** A tile distance for this editor only. Undefined uses the game's default. */
     renderDistance?: number;
     saveObjectSpawns: boolean;
     /** Draw selectable map-function sprites at their floor tiles. */
     showMapIcons: boolean;
+    showUnwalkableFlags: boolean;
+    showBridgeFlags: boolean;
+    showRemoveRoofFlags: boolean;
+    showLowerZFlags: boolean;
+    showDisableRenderFlags: boolean;
     showPvpZones: boolean;
     showDuelZones: boolean;
     showSafeZones: boolean;
@@ -230,6 +234,7 @@ export interface EditModeHost {
     setAudioMuted?(muted: boolean): void;
     /** Tile under the pointer, in world coordinates. */
     getPointerTile(): EditModeTile | undefined;
+    loadMinimap?(tile: EditModeTile): Promise<Blob | undefined>;
     getCameraTile?(): EditModeTile | undefined;
     /** Menu entries for the current hover, used to identify the loc being pointed at. */
     getPointerLoc(): { locId: number; locName: string } | undefined;
@@ -284,6 +289,7 @@ export interface EditModeHost {
     frameLandscape?(tile: EditModeTile, span: number): void;
     removeNewRegion?(regionId: number): void;
     isRegionOccupied?(id: number): boolean;
+    landscapeData?(part?: string): Promise<any>;
     loadTemplateCatalog?(): Promise<Array<{ name: string; width: number; height: number }>>;
     loadTemplate?(name: string): Promise<unknown>;
     loadMapPlans?(): Promise<{
@@ -322,6 +328,7 @@ export interface EditModeHost {
         exteriors: Array<{ name: string; label: string }>;
     }>;
     previewMapPlan?(query: URLSearchParams): Promise<unknown>;
+    loadObjectTravel?(object: EditModeSelection): Promise<unknown>;
     loadTravel?(kind: "game-warps" | "map-warps"): Promise<unknown>;
     getLocActions?(id: number): readonly (string | undefined)[];
     loadGroundItems?(): Promise<unknown>;
@@ -363,7 +370,8 @@ export interface EditModeHost {
     getTerrainOverlay?(tile: EditModeTile): number | undefined;
     getTerrainHeight?(tile: EditModeTile): number | undefined;
     getTerrainFlags?(tile: EditModeTile): number | undefined;
-    showBlockedTiles?(tiles: readonly EditModeTile[]): void;
+    showTileFlagTiles?(flag: number, tiles: readonly EditModeTile[]): void;
+    getVisibleRegionIds?(): readonly number[];
     getBaseRegionFlags?(regionId: number): Uint8Array | undefined;
     showTravelMarkers?(sources: readonly EditModeTile[], arrivals: readonly EditModeTile[]): void;
     /** Overlay, shape and rotation of every tile in a region with the edits applied; undefined when it is not loaded. */

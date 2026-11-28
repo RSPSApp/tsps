@@ -58,7 +58,8 @@ function listFilesWithGit(repositoryRoot, paths) {
         ], { cwd: repositoryRoot, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
         const listed = files.split("\0").filter(Boolean);
         // Nothing listed: not this project's repository (a zip unpacked inside another checkout).
-        return listed.length ? listed : undefined;
+        // The index still lists tracked files deleted in the working tree.
+        return listed.length ? listed.filter(path => existsSync(resolve(repositoryRoot, path))) : undefined;
     } catch {
         // git is not installed, or this is a zip download rather than a clone.
         return undefined;

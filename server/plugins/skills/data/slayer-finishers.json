@@ -1,22 +1,22 @@
 {
-  "_description": "Monsters that can't die to ordinary hits: at 0 hitpoints they wait to be finished with an item used on them once at or below `threshold` (Wiki, each monster's page). With the matching unlock (slayer_unlock bit) and an item in the inventory, the killing hit finishes them on its own. `consumed` items are used up; with `wastedEarly` also when used above the threshold (Wiki: a bag of salt or ice cooler used too early is consumed with no effect); a fungicide spray loses a charge. Messages: the gargoyle's, zygomite's and the Guardians' are captured (rsprox captures), the others the Wiki's.",
+  "_description": "Monsters that can't die to ordinary hits: at 0 hitpoints they wait to be finished with an item used on them once at or below `threshold` (Wiki, each monster's page). With the matching unlock (slayer_unlock bit) and an item in the inventory, the killing hit finishes them on its own; an `equipped` item (the granite hammer) finishes them on the killing hit without the unlock. `consumed` items are used up; with `wastedEarly` also when used above the threshold (Wiki: a bag of salt or ice cooler used too early is consumed with no effect); a fungicide spray loses a charge. Messages: the gargoyle's, zygomite's and the Guardians' are captured (rsprox captures), the others the Wiki's.",
   "finishers": [
     {
       "names": ["Gargoyle", "Marble gargoyle"], "threshold": 9, "unlockBit": 0,
-      "items": [4162, 21742], "consumed": [21754], "animation": 401,
+      "items": [4162, 21742], "consumed": [21754], "equipped": [21742], "animation": 401,
       "finished": "The gargoyle cracks apart.",
       "tooStrong": "The gargoyle isn't weak enough to be affected by the rock hammer."
     },
     {
       "names": ["Dusk"], "threshold": 9, "unlockBit": 0,
-      "items": [4162, 21742], "consumed": [21754], "animation": 401,
+      "items": [4162, 21742], "consumed": [21754], "equipped": [21742], "animation": 401,
       "_messages": "rsprox recordings of the roof (PR #976 review)",
       "finished": "Dusk cracks apart.",
       "tooStrong": "Dusk isn't weak enough to be harmed by the hammer."
     },
     {
       "names": ["Dawn"], "threshold": 9, "unlockBit": 0,
-      "items": [4162, 21742], "consumed": [21754], "animation": 401,
+      "items": [4162, 21742], "consumed": [21754], "equipped": [21742], "animation": 401,
       "_messages": "finished from the rsprox recordings; tooStrong follows Dusk's captured line",
       "finished": "Dawn cracks apart.",
       "tooStrong": "Dawn isn't weak enough to be harmed by the hammer."

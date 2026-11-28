@@ -603,8 +603,8 @@ test("in single-combat, a hunter that took the player on an earlier tick still h
   assert.equal(second.getCombat().getTarget(), s.player, "once the first dies, the next one engages");
 });
 
-// Review of #6938: a hunter that never reaches the player (behind a rock) must not keep every other
-// hunter off them; the hold lasts the PJ timer's 8 ticks from when it took them.
+// A hunter that never reaches the player (behind a rock) must not keep every other hunter off them; the hold
+// lasts the PJ timer's 8 ticks from when it took them.
 test("in single-combat, a hunter that cannot reach the player holds them for 8 ticks only", (t) => {
   const at = (dx, dy) => new core.Location(FIELD.x + dx, FIELD.y + dy, 0);
   const s = scene(t, { spawn: at(0, 3) });

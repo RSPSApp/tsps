@@ -19,6 +19,7 @@ const { Skill } = require("../dist/game/model/Skill");
 
 const Slayer = require("../plugins/skills/Slayer.plugin");
 const Contact = require("../plugins/skills/slayer/Contact.Slayer");
+const Data = require("../plugins/skills/slayer/Data.Slayer");
 const Masters = require("../plugins/skills/slayer/Masters.Slayer");
 const State = require("../plugins/skills/slayer/State.Slayer");
 const Transcripts = require("../data/definitions/npc-dialogues.json");
@@ -26,6 +27,8 @@ const Transcripts = require("../data/definitions/npc-dialogues.json");
 const core = PluginManager.getCoreApi();
 const handlers = { events: new Map() };
 const emitted = [];
+/** "quest:is-complete"/"quest:is-started" answers by quest key; a key with no entry is unanswered. */
+const questAnswers = new Map();
 Slayer.register({
   core,
   persistAttribute() {},
@@ -58,6 +61,10 @@ Slayer.register({
   onCustomEvent: (name, fn) => handlers.events.set(name, [...(handlers.events.get(name) ?? []), fn]),
   emitCustomEvent: (name, payload) => {
     emitted.push([name, payload]);
+    // Quest answers, as QuestRuntime gives them. An unrecorded key stays null, which is what
+    // Tasks.meetsQuests (and Contact's ladder) read as "no plugin here has that quest: don't block".
+    if (name === "quest:is-complete" && payload?.key) payload.complete = questAnswers.get(payload.key)?.complete ?? null;
+    if (name === "quest:is-started" && payload?.key) payload.started = questAnswers.get(payload.key)?.started ?? null;
     for (const fn of handlers.events.get(name) ?? []) fn(payload);
   },
 });
@@ -118,6 +125,37 @@ test("the ring reaches the most advanced master the player may take tasks from",
   }
 });
 
+test("a rung whose quest is missing is skipped for the one below it (Wiki, Slayer Master)", () => {
+  const reach = (combat, slayer) => Contact.contactMaster(createPlayer({ combat, slayer })).id;
+  const set = (answers) => {
+    questAnswers.clear();
+    for (const [key, answer] of Object.entries(answers)) questAnswers.set(key, answer);
+  };
+  try {
+    // The Wiki's table: Mazchna needs Priest in Peril, Chaeldar Lost City, Duradel Shilo Village,
+    // Mortimer partial Fallen From Grace. One gate closed at a time, the rest unanswered.
+    set({ priest_in_peril: { complete: false } });
+    assert.equal(reach(20, 1), 1, "20 combat without Priest in Peril stops at Turael");
+    set({ lost_city: { complete: false } });
+    assert.equal(reach(70, 1), 3, "70 combat without Lost City stops at Vannaka");
+    set({ shilo_village: { complete: false } });
+    assert.equal(reach(100, 50), 6, "100/50 without Shilo Village stops at Nieve");
+    set({ fallen_from_grace: { started: false } });
+    assert.equal(reach(100, 70), 5, "100/70 without Fallen From Grace started stops at Duradel");
+
+    set({
+      priest_in_peril: { complete: true }, lost_city: { complete: true },
+      shilo_village: { complete: true }, fallen_from_grace: { started: true },
+    });
+    assert.equal(reach(20, 1), 2, "with Priest in Peril: Mazchna");
+    assert.equal(reach(70, 1), 4, "with Lost City: Chaeldar");
+    assert.equal(reach(100, 50), 5, "with Shilo Village: Duradel");
+    assert.equal(reach(100, 70), 10, "with Fallen From Grace started: Mortimer");
+  } finally {
+    questAnswers.clear();
+  }
+});
+
 test("with a task the ring reaches the master who assigned it, not the most advanced", () => {
   const assigned = createPlayer({ combat: 82, task: true }); // its task is Konar's (master 8)
   assert.equal(Contact.contactMaster(assigned).id, 8);
@@ -126,13 +164,30 @@ test("with a task the ring reaches the master who assigned it, not the most adva
   assert.equal(Contact.contactMaster(createPlayer({ combat: 82 })).id, 8, "without one: Konar");
 });
 
-test("Konar's line fills the area, and drops it for a task that has none", () => {
+test("Konar's line fills the area once, and the tally from the points, not the kills", () => {
   const line = (player) => {
     const request = { player, definition: { getName: () => "Konar quo Maten" },
-      text: "You're currently assigned to bring balance to [monster] in [area]; you have [amount] more to go." };
+      text: "You're currently assigned to bring balance to [monster] in [area]; you have [amount] more to go. Your reward point tally is [amount]." };
     Masters.fillLine(request);
     return request.text;
   };
+  const areas = [...Data.get().areas.values()];
+  const player = createPlayer({ combat: 82, task: true });
+  setVarbit(player, "slayer_points", 345);
+
+  // The cache's area text carries its own preposition ("in the Crypt of Tonali"), and the
+  // transcript writes "in [area]", so the fill must take the transcript's " in" with the blank.
+  const inside = areas.find((area) => area.text.startsWith("in "));
+  setVarp(player, "slayer_area", inside.id);
+  assert.equal(line(player),
+    `You're currently assigned to bring balance to monkeys ${inside.text}; you have 10 more to go. Your reward point tally is 345.`,
+    "one preposition, and the tally is the points");
+
+  const upon = areas.find((area) => area.text.startsWith("on "));
+  setVarp(player, "slayer_area", upon.id);
+  assert.ok(line(player).includes(`monkeys ${upon.text};`), `an "on" area reads the same way: ${upon.text}`);
+  assert.equal(line(player).includes("tally is 10"), false, "the kills left are not the point tally");
+
   const noArea = line(createPlayer({ combat: 82, task: true }));
   assert.match(noArea, /bring balance to monkeys; you have 10 more to go\./, "no dangling area");
 });

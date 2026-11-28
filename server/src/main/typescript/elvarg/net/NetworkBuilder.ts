@@ -937,6 +937,12 @@ export class ClientConnection {
           }
           continue;
         case "inventory_move":
+          if (this.player) {
+            // "player:inventory-move" { player, packet, handled }: a plugin can refuse the move.
+            const inventoryMove = { player: this.player, packet, handled: false };
+            PluginManager.emitCustomEvent("player:inventory-move", inventoryMove);
+            if (inventoryMove.handled) continue;
+          }
           if (this.player) SwitchItemSlotPacketListener.move(
             this.player, packet.widgetId ?? 3214, packet.from, packet.to
           );

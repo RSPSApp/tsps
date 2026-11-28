@@ -736,7 +736,7 @@ test('X Marks ending waits for its completion scroll close and resumes only once
 
 test("Zembo only offers the canonical Barcrawl choice during native progress1", () => {
   const q = register('PiratesTreasure', 'pirates_treasure'), p = player();
-  const option = require('../data/definitions/npc-dialogues.json').Zembo.steps[2].options[2];
+  const option = require('../data/definitions/npc-dialogues.json').Zembo.steps.find((step) => step.type === 'choice').options[2];
   const answer = q.hooks.get('onNpcDialogueCondition')[0];
   for (const progress of [0, 1, 2, 3]) {
     p.getPacketSender().sendVarbit(13714, progress);

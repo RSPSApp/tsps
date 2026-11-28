@@ -58,7 +58,9 @@ export class CombatPoisonEffect extends Task {
     const player = this.entity.isPlayer() ? this.entity.getAsPlayer() : null;
     const clock = player?.getCombat().getPoisonClock();
     const afflicted = this.entity.isPoisoned();
-    const modal = player?.hasBlockingInterface() ?? false;
+    // osrs-docs (Timers, Delays): a normal timer like a toxin's halts at 0 while a modal is open or
+    // the player is delayed, and runs when that ends.
+    const modal = (player?.hasBlockingInterface() || player?.isDelayed()) ?? false;
     if (clock && (!modal || afflicted)) {
       const reduction = clock.takeReduction();
       if (reduction && !afflicted && player) {

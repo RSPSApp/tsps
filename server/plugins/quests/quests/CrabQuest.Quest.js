@@ -4,7 +4,7 @@
  * The words come from the "Crab Quest" transcript page (OSRS Wiki); the places, ids, order
  * and timing from a full live run (RSProx capture 20261103T014803-ee79c12, revision 241).
  *
- * Stages (varbit 15842 "crab_main", varp 5739 bits 0-6), as live sends them and as
+ * Stages (varbit 15842 "crab_main", varp 5739 bits 0-5), as live sends them and as
  * Quest Helper's loadSteps keys on them:
  *   0 not started, 5 drank from the bottle, 10/15/20 the crab's explanation,
  *   25 gathering shells, 30 seven shells handed in, 35/37 gathering the floatsam,

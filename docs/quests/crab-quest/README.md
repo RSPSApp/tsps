@@ -67,6 +67,15 @@ collection's own options and the band's practice animations are not done.
   `crab_partial_complete` 15881 is 1 and the player says "Unless I really like talking to
   crabs...". "Wait for leaders to turn up." gives stage 50 and every `crab_bandmate_N` bit;
   the `crab_recruited_bandmate_N` bits stay as recruited (`crab_band` 2047).
+- **The instrument's name and the bass loc:** "A disaster." (sub=1 of "A disaster.|A bass.|I
+  don't actually know.") sets `crab_bassname` 15843 to 1 (tick 6200). `crab_bass` 15887
+  (varp 5741 bits 0-7, with `crab_main_temp` 15885 and `crab_bassname_temp` 15886) is
+  `crab_main` + 64 * `crab_bassname` at every stage change: 5, 10, ... 45, then 109, 111, 114,
+  119, 124, 127. It dresses `crab_bass_multi_quest` 62459 beside the practising crab (cache:
+  Thing 62455, Disaster 62458, Bass guitar 62456, Banjo 62457).
+- **Talk-to on a band crab** (tick 6547, stage 50): the crab at 3054,2637, which joined by
+  waiting, answers with the main crab's conversation and chathead (`crab_maincrab_practising`),
+  starting "The whole band is complete! Thanks for your help.".
 - **The dance** (stage 55) is in the dream under `cam_skybox` 61359 with the sand circles
   62479/62480 (finals 62481/62482) at 3062,2641/3062,2642 and a sand-circle frame
   (14511-14518) on each line.
@@ -97,7 +106,14 @@ collection's own options and the band's practice animations are not done.
   op 2) is not implemented.
 - **open** The band's practice rhythm (`horror_crab_attack`/`defend` every few ticks) is not
   played.
-- **open** Talking to a band crab at stage 50 does nothing; live plays the main crab's lines.
+- **fixed** (issue 6916) Talk-to on a crab at practice asked "Start Crab Quest?": nothing
+  handled `crab_bandcrab` 16483, so the generic dialogue played the transcript's first variant.
+  A recruited crab now plays its Wiki "talking to the crab at practice" lines; one that joined
+  by waiting answers with the main crab, as captured. The shy crab by the chest plays her Wiki
+  conversation. Ours (Wiki-only): "present" in those lines means at practice (recruited, or
+  any crab once the band is complete).
+- **fixed** (issue 6916) The practising crab had no instrument: `crab_bassname` and
+  `crab_bass` were never sent, so 62459 resolved to nothing.
 - **fixed** Five Wiki Flotsam spawns stood on the real beach; live has none there (the floatsam is
   the dream's). They are removed and marked plugin-spawned in `npc-spawn-sync.json`.
 - **fixed** The screen stayed black after the ceremony, and a logout in its first two ticks left it
@@ -110,6 +126,17 @@ collection's own options and the band's practice animations are not done.
   stage 50.
 
 ## Runs
+
+### 2026-11-28 · agent · claude-opus-5-5 (issue 6916)
+
+- **Start:** fresh account, `::master`, Pandemonium completed, `::quest crab quest 45`, into the
+  dream by the bottle (re-entered after each `::quest`, which does not rebuild it).
+- **Result:** `crab_bass` 45 at stage 45, 47 and 50 after; the western-most palm crab recruited
+  and, at practice, played its "The crab viciously attacks your foot." lines; at stage 50 the
+  crab at 3054,2637 played "The whole band is complete! Thanks for your help." and on, as
+  captured. A vision screenshot shows the instrument loc beside the practising crab.
+- **Not checked:** naming the instrument in game (the hand-in needs the fished materials; the
+  tests cover 109/111 and the bass/banjo values).
 
 ### 2026-11-09 · agent · claude-opus-5-5 (cache 242 check)
 

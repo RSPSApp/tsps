@@ -63,6 +63,10 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   // loc, so the cache scan cannot pair it (#6912). Its click is a pass-through gate, which puts
   // this leaf on the tile outside (1382,3816).
   FORSAKEN_TOWER_DOOR_OPEN: 33492,
+  // Creature of Fenkenstrain's locked doors open into these actionless leaves (pass-through gates).
+  FENK_MAUSOLEUM_DOOR_OPEN: 5171, // fenk_mausoleum_door_open
+  FENK_TOWER_DOOR_OPEN: 5173, // fenk_tower_door_open
+  FENK_SHED_DOOR_OPEN: 5175, // fenk_shed_door_open
   PLAGUE_HOUSE_DOOR: 37321, // plagueelenadoorshut, a multi (varbit 9016) with no name of its own
   PLAGUE_HOUSE_DOOR_OPEN: 37322, // plagueelenadooropen
   LARGE_DOOR_100_OPEN: 39252, // Sins of the Father Arboretum; capture 1637
@@ -1261,6 +1265,49 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
         [NAMELESS_DOOR_LEAF_IDS.FORSAKEN_TOWER_DOOR_OPEN, 1382, 3816, 0, 0],
       ],
       crossY: 3817,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 71,
+    }),
+    // Creature of Fenkenstrain's three locked doors (the user's revision 243 capture): each puts
+    // inviswall on its doorway and its actionless open leaf on the tile across, the player steps
+    // through on the same tick and the door is back two ticks later. The quest's key and unlocked
+    // checks run first (door:toggle, and the mausoleum's Open, which is an "Entrance").
+    // The mausoleum's door in the Experiment cave (5170, east edge, face 2, at 3510,9957; the
+    // mausoleum is west): ticks 1081-1083 (in) and 1254-1256 (out), iron_door_open (71).
+    Object.freeze({
+      closed: [[O.ENTRANCE_7, 3510, 9957, 0, 2]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3510, 9957, 0, 2],
+        [NAMELESS_DOOR_LEAF_IDS.FENK_MAUSOLEUM_DOOR_OPEN, 3511, 9957, 0, 3],
+      ],
+      crossX: 3511,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 71,
+    }),
+    // The gardener's shed (5174, west edge, face 0, at 3548,3565; the shed is west): ticks 1515-1517
+    // (in) and 1525-1527 (out), door_open (62).
+    Object.freeze({
+      closed: [[O.DOOR_139, 3548, 3565, 0, 0]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3548, 3565, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.FENK_SHED_DOOR_OPEN, 3547, 3565, 0, 1],
+      ],
+      crossX: 3548,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
+    // The tower's door on the first floor (5172, north edge, face 1, at 3548,3551,1; the tower is
+    // north): ticks 1927-1929 (in), 2176-2178 (out), 2311 and 2356, iron_door_open (71).
+    Object.freeze({
+      closed: [[O.DOOR_138, 3548, 3551, 1, 1]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3548, 3551, 1, 1],
+        [NAMELESS_DOOR_LEAF_IDS.FENK_TOWER_DOOR_OPEN, 3548, 3552, 1, 2],
+      ],
+      crossY: 3552,
       walkOver: true,
       closeTicks: 2,
       openSoundId: 71,

@@ -1,8 +1,9 @@
 // Run after `yarn build`: node --test tests/fenkenstrain-silver-furnace.test.cjs
-// Creature of Fenkenstrain casts the lightning conductor from a silver bar on a furnace with the conductor mould.
+// Creature of Fenkenstrain's conductor is cast from a silver bar on a furnace with the conductor mould, through the
+// silver crafting menu (Crafting's), as the revision 243 capture has it.
 // Its hook took every silver bar used on a furnace while the quest was in progress, so without the conductor mould a
 // tiara, holy symbol or any silver jewellery answered "You need a conductor mould to cast anything useful." until the
-// quest was done. Only the conductor mould makes it the quest's cast now.
+// quest was done.
 // Real engine: every plugin loaded, a real Player, item-on-object through PluginManager.emitItemOnObject.
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -44,7 +45,7 @@ function setup(t, stage, items) {
   const messages = [];
   t.mock.method(p.getPacketSender(), "sendMessage", (m) => { messages.push(m); return p.getPacketSender(); });
   const use = () => {
-    const object = { getId: () => furnace, getType: () => 10, getLocation: () => p.getLocation(), getDefinition: () => null };
+    const object = { getId: () => furnace, getType: () => 10, getLocation: () => p.getLocation(), getDefinition: () => core.ObjectDefinition.forId(furnace) };
     const event = { player: p, itemId: I.SILVER_BAR, item: p.getInventory().getItems().find((i) => i?.getId() === I.SILVER_BAR),
       slot: 0, objectId: furnace, object, location: p.getLocation(), handled: false };
     PM.emitItemOnObject(event);
@@ -61,10 +62,14 @@ test("mid-quest, a silver bar on a furnace with a tiara mould is not taken by th
   assert.equal(p.getInventory().getAmount(I.CONDUCTOR), 0);
 });
 
-test("mid-quest, the conductor mould still casts the lightning conductor", (t) => {
-  const { p, messages, use } = setup(t, 1, [I.CONDUCTOR_MOULD]);
-  use();
-  assert.equal(p.getInventory().getAmount(I.CONDUCTOR), 1, `cast: ${JSON.stringify(messages)}`);
+test("mid-quest, the conductor mould opens the silver menu and its lightning rod is the conductor (capture ticks 1652-1657)", (t) => {
+  const { p, use } = setup(t, 1, [I.CONDUCTOR_MOULD]);
+  const event = use();
+  assert.equal(event.handled, true);
+  assert.equal(p.getInterfaceId(), 6, "silver_crafting, as live opens it (Crafting's menu; the quest no longer casts it itself)");
+  PM.emitInterfaceActionClick({ player: p, buttonId: (6 << 16) | 26, action: 1, handled: false });
+  for (let i = 0; i < 4; i++) core.TaskManager.process();
+  assert.equal(p.getInventory().getAmount(I.CONDUCTOR), 1);
   assert.equal(p.getInventory().getAmount(I.SILVER_BAR), 0);
-  assert.equal(p.getInventory().getAmount(I.CONDUCTOR_MOULD), 0);
+  assert.equal(p.getInventory().getAmount(I.CONDUCTOR_MOULD), 1, "the mould is a tool and is kept (tick 1657)");
 });

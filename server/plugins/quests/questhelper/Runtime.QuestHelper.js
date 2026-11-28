@@ -208,7 +208,11 @@ class QuestHelperRuntime {
    if(q.varbitId!==undefined)snapshot.varbits[q.varbitId]=q.varbitValue(stage,player);
    else if(q.varpId!==undefined)snapshot.varps[q.varpId]=q.varpValue(stage,player);
   }
-  Object.assign(snapshot.varbits,this.projectState?.(player)?.varbits||{});
+  // A quest whose guide keys on more than its registered var (Creature of Fenkenstrain's varp 399)
+  // projects it here; the browser sends the client's own varps instead.
+  const projected=this.projectState?.(player)||{};
+  Object.assign(snapshot.varps,projected.varps||{});
+  Object.assign(snapshot.varbits,projected.varbits||{});
   snapshot.varbitDefinitions={...(record(raw.varbitDefinitions)?raw.varbitDefinitions:{})};
   for(const [id,value] of Object.entries(snapshot.varbits)){
    const definition=this.varbitDefinition?.(Number(id));if(!definition)continue;

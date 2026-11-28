@@ -357,11 +357,15 @@ function atGrave(t, tile) {
 async function dig(f) {
   f.messages.length = 0;
   await send(f, { type: "inventory_action", slot: 0, itemId: I.SPADE, widgetId: 3214, option: "Dig" });
-  ticks(f, 2);
+  // The dig takes 6 ticks, then the find's box (continued here) or the empty grave.
+  ticks(f, 8);
+  f.p.getDialogueManager().reset?.();
+  f.p.getPacketSender().sendInterfaceRemoval?.();
 }
 
-const TORSO_GRAVE = [3502, 3576];
-const EMPTY = "...but the grave is empty.";
+// The tile beside the torso's grave (3502,3576) that live digs on (capture CreatureOfFenkenstrain+Unlock, tick 1140).
+const TORSO_GRAVE = [3503, 3576];
+const EMPTY = "... but the grave is empty.";
 
 test("Fenkenstrain: a grave refuses a full bag and gives the part once there is room", async (t) => {
   const f = atGrave(t, TORSO_GRAVE);
@@ -386,12 +390,12 @@ test("Fenkenstrain: a dropped part comes back; one held or handed in doesn't", a
   assert.equal(f.inv.getAmount(I.TORSO), 1, "a dropped part comes back");
 
   const given = atGrave(t, TORSO_GRAVE);
-  given.p.setAttribute("quest.creature_of_fenkenstrain.parts_given", 2);
+  given.p.setAttribute("creature-of-fenkenstrain:state", 1 << 2); // varp 400 fenk_torso
   await dig(given);
   assert.equal(given.inv.getAmount(I.TORSO), 0, "handed in: none");
   assert.ok(given.messages.includes(EMPTY), JSON.stringify(given.messages));
 
-  const head = atGrave(t, [3608, 3491]);
+  const head = atGrave(t, [3608, 3490]);
   put(head, I.DECAPITATED_HEAD_2, 1);
   await dig(head);
   assert.equal(head.inv.getAmount(I.DECAPITATED_HEAD), 0, "the head with its brain counts as the head");

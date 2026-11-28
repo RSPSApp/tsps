@@ -308,6 +308,8 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
 
   function buyLinen(player) {
     if (stage(player) !== STAGE.PREPARATIONS || !common.held(player, ITEM.COINS, 30)) return;
+    // Room first: the coins only go when the linen fits (a stack of exactly 30 coins frees its own slot).
+    if (common.freeSlots(player) < 1 && player.getInventory().getAmount(ITEM.COINS) !== 30) return;
     common.take(player, ITEM.COINS, 30);
     player.getInventory().adds(ITEM.LINEN, 1);
   }
@@ -494,8 +496,8 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
   }
 
   /**
-   * The city's gates during the quarantine (t672-t694: the gate priest's "Sorry, but Sophanem is under quarantine..."):
-   * shut until the High Priest lets the player come and go (stage 15, t2254 the gate opens; Wiki: partial completion).
+   * The city's gates during the quarantine (t672-t694: the gate priest's "Sorry, but Sophanem is under quarantine..."; open again at t2696):
+   * shut until the High Priest lets the player come and go (stage 15; Wiki: partial completion).
    */
   const SOPHANEM_GATES = new Set([44036, 44038, 44040]); // sophanem_gate_left/right, sophanem_gate_small
   function gateToggle(request) {

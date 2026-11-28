@@ -141,7 +141,7 @@ function createCeremony(api, state, common, { STAGE, VARBIT, JARS, pyramid, getQ
   /** The eastern door at 19 (the cutscene) and 24 (the last flashback). */
   const playing = new WeakSet();
   /** A scene a logout broke can start again (Pyramid puts the stage back to 19). */
-  function sceneLeft({ player }) { playing.delete(player); }
+  function sceneLeft({ player }) { playing.delete(player); inLastFlashback.delete(player); }
 
   function eastDoor(request) {
     const { player } = request;
@@ -256,7 +256,15 @@ function createCeremony(api, state, common, { STAGE, VARBIT, JARS, pyramid, getQ
   // The last flashback (t3298-t3333)
   // ---------------------------------------------------------------------------
 
+  /** Closing the chatbox in a scene doesn't end it: the scene's own lines do (both scenes hold the player). */
+  const inLastFlashback = new WeakSet();
+  function protectScene(event) {
+    if (playing.has(event.player) || inLastFlashback.has(event.player)) event.handled = true;
+  }
+
   function lastFlashback(player) {
+    if (!pyramid.startPending(player, 3)) return;
+    inLastFlashback.add(player);
     common.mesbox(player, "All of a sudden, a final sense of deja-vu sweeps over you...");
     common.later(player, 3, () => {
       common.release(player);
@@ -279,6 +287,7 @@ function createCeremony(api, state, common, { STAGE, VARBIT, JARS, pyramid, getQ
 
   /** "The flashback ends" (t3325): stage 25, out to the door, the last line. */
   function lastFlashbackEnds(player, event) {
+    inLastFlashback.delete(player);
     if (stage(player) !== STAGE.ICTHLARIN_NEXT) return;
     state.setStage(player, STAGE.FINISH);
     common.sfx(player, "hypnotise");
@@ -333,7 +342,7 @@ function createCeremony(api, state, common, { STAGE, VARBIT, JARS, pyramid, getQ
 
   return {
     collectWater, bucketOnWater, useSuntrap, saltwaterOnSuntrap, knifeOnTree, sceneLeft, emptyBucket, ceremonySetup, eastDoor, sceneLine,
-    priestDied, priestDrops, finish, clearQuestItems, handleAction, WATER, SUNTRAP, EVERGREEN, NPC,
+    priestDied, priestDrops, protectScene, finish, clearQuestItems, handleAction, WATER, SUNTRAP, EVERGREEN, NPC,
   };
 }
 

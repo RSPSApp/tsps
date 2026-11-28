@@ -115,7 +115,7 @@ function migratedStage(old) {
   return table[old] ?? STAGE.NOT_STARTED;
 }
 
-/** The varbits a stage implies (a migrated save or a `::quest` jump); play sets each on its action. */
+/** The varbits a stage implies (a migrated save); play sets each on its action. */
 function impliedVarbits(stage, jar) {
   const vars = {};
   const at = (value, varbit, set) => { if (stage >= value) vars[varbit] = set; };
@@ -229,14 +229,6 @@ function createState(api, getQuest) {
     for (const key of Object.keys(saved)) sender.sendVarbit(Number(key), 0);
   }
 
-  /** Brings the varbits in line with a stage set from outside play (`::quest`), keeping the jar. */
-  function align(player, value) {
-    const keepJar = get(player, VARBIT.JAR);
-    const next = impliedVarbits(value, keepJar);
-    player.setAttribute(VARS_ATTRIBUTE, next);
-    resend(player);
-  }
-
   /** Maps a save from the old plugin once. */
   function migrate(player) {
     if (Number(player.getAttribute(SAVE_VERSION_ATTRIBUTE)) >= SAVE_VERSION) return;
@@ -258,7 +250,7 @@ function createState(api, getQuest) {
   api.persistAttribute(LEGACY_BITS_ATTRIBUTE, 0);
   api.persistAttribute(LEGACY_JAR_ATTRIBUTE, "");
 
-  return { get, set, stage, setStage, jar, resend, clear, align, migrate };
+  return { get, set, stage, setStage, jar, resend, clear, migrate };
 }
 
 module.exports = {

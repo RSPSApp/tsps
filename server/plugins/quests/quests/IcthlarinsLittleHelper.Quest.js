@@ -155,6 +155,7 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
   api.onCustomEvent("door:toggle", talk.gateToggle);
   api.onCustomEvent("icthlarins-little-helper:east-door", ceremony.eastDoor);
   api.onCustomEvent("icthlarins-little-helper:pyramid-left", ceremony.sceneLeft);
+  api.onCustomEvent("interface:close", ceremony.protectScene);
   api.onObjectInteraction(objectClickedEvent);
   api.onItemOnObject(itemOnObject);
   api.onItemOnObject("Knife", ceremony.EVERGREEN, ceremony.knifeOnTree);

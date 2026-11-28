@@ -65,6 +65,7 @@ function createPyramid(api, state, common, { STAGE, VARBIT, JARS }) {
   const PIT_SECRET_DOOR = 1997; // ics_pit_secret_door
   const DOOR_OPENS = 2000; // icthalarins_door_opens
   const DOOR_CLOSES = 1999; // icthalarins_door_closes
+  const IGNORE_CLIPPING = "movement:ignore-clipping";
   const TELEPORT_BLOCKED = "An outside force seems to be blocking your teleport.";
 
   // ---------------------------------------------------------------------------
@@ -132,6 +133,9 @@ function createPyramid(api, state, common, { STAGE, VARBIT, JARS }) {
   /** Back to the real map at the door (logout, death, the ladder), with the present's item back. */
   function sceneEnded(player, scene, logout) {
     if (scene?.name !== "klenter's pyramid") return;
+    // A door's step-through may not have finished: its clipping exemption never outlives the copy (or the save).
+    player.removeFlag?.(IGNORE_CLIPPING);
+    pending.delete(player);
     const v = visits.get(player);
     visits.delete(player);
     restorePresent(player, v);
@@ -153,6 +157,8 @@ function createPyramid(api, state, common, { STAGE, VARBIT, JARS }) {
   /** The item the past self carries instead (the unholy symbol), in the present one's slot. */
   function swapToPast(player, presentId) {
     const v = visit(player) ?? {};
+    // Already the past's: a second trigger must not overwrite where the present's item went.
+    if (v.swapped) return;
     let slot = presentId ? common.slotOf(player, presentId) : -1;
     if (slot < 0) {
       slot = player.getInventory().getItems().findIndex((item) => !item || item.getId() === -1);
@@ -281,7 +287,17 @@ function createPyramid(api, state, common, { STAGE, VARBIT, JARS }) {
   }
 
   /** "As you touch the pyramid door, a sense of deja-vu sweeps over you..." and flashback 1 (t1033-t1046). */
+  /** A deja-vu under way: a second click on the door or pit in its wait starts nothing. */
+  const pending = new WeakSet();
+  function startPending(player, ticks) {
+    if (pending.has(player)) return false;
+    pending.add(player);
+    common.later(player, ticks + 6, () => pending.delete(player));
+    return true;
+  }
+
   function touchDoor(player) {
+    if (!startPending(player, 3)) return;
     common.pickUpCat(player);
     common.mesbox(player, "As you touch the pyramid door, a sense of deja-vu sweeps over you...");
     common.later(player, 3, () => {
@@ -403,6 +419,7 @@ function createPyramid(api, state, common, { STAGE, VARBIT, JARS }) {
       player.sendMessage("You don't have enough inventory space to do that.");
       return true;
     }
+    if (!startPending(player, 5)) return true;
     common.pickUpCat(player);
     common.mesbox(player, "As you go to make the jump, another sense of deja-vu sweeps over you...");
     common.later(player, 5, () => {
@@ -499,13 +516,13 @@ function createPyramid(api, state, common, { STAGE, VARBIT, JARS }) {
     common.later(player, 1, () => {
       player.getPacketSender().sendObjectAnimation(object, { id: DOOR_OPENS });
       common.sfx(player, "scrape");
-      player.setFlag?.("movement:ignore-clipping", true);
+      player.setFlag?.(IGNORE_CLIPPING, true);
       const queue = player.getMovementQueue();
       queue.reset();
       queue.addSteps?.(Scenes.tileFor(player, to)) ?? Scenes.walk(player, to);
       common.later(player, 1, () => {
         player.getPacketSender().sendObjectAnimation(object, { id: DOOR_CLOSES });
-        common.later(player, 1, () => player.removeFlag?.("movement:ignore-clipping"));
+        common.later(player, 1, () => player.removeFlag?.(IGNORE_CLIPPING));
       });
     });
   }
@@ -714,6 +731,7 @@ function createPyramid(api, state, common, { STAGE, VARBIT, JARS }) {
   /** A logout inside the copy: out at the door with the present's item back (Wiki, Flashback Mechanics). */
   function logout({ player }) {
     if (inPyramid(player)) Scenes.end(player, true);
+    player.removeFlag?.(IGNORE_CLIPPING);
   }
 
   /** Wiki (Flashback Mechanics): dying in a flashback costs the cat. */
@@ -735,7 +753,7 @@ function createPyramid(api, state, common, { STAGE, VARBIT, JARS }) {
     LOC, Scenes, build, inPyramid, inFlashback, visit, syncJarTable, enterFlashback, leaveFlashback, toTown,
     pyramidDoor, catOpensDoor, ladder, leaveFlashbackEarly, pit, westDoor, eastDoor, jarClicked, apparitionDied,
     sarcophagus, symbolOnSarcophagus, symbolOnTable, dropJar, died, logout, setPuzzle, setCeremonySetup, onlyLines,
-    restorePresent, stepThrough, EXIT, ENTRY, SOUTH_OF_PIT, EAST_ROOM, EAST_DOOR,
+    restorePresent, stepThrough, startPending, EXIT, ENTRY, SOUTH_OF_PIT, EAST_ROOM, EAST_DOOR,
     _test: { jumpChance, resumeAt, TELEPORT_BLOCKED, MUMMIES, SCARAB_ZONE, RECOVERY_ATTRIBUTE },
   };
 }

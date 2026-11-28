@@ -871,7 +871,7 @@ test('the pit jump: 20% run energy (Wiki), the recorded 15% drain on landing, li
   assert.ok(f.log.some((e) => e[1] === 'sendSoundEffect' && e[2] === 1174), 'pit_land');
 });
 
-test('the gates during the quarantine: the gate priest\'s refusal until stage 15 (t672-t694), open from then (t2254)', async (t) => {
+test('the gates during the quarantine: the gate priest\'s refusal until stage 15 (t672-t694), open from then (t2696)', async (t) => {
   // Doors' pass-through routing needs the world's whole turn (tests/camelot-gate.test.cjs drives it); the gate's
   // door:toggle, which Doors raises first, is what this quest answers.
   const f = fixture(t, [3284, 2808, 0]);
@@ -1055,4 +1055,52 @@ test('after the quest: the carpenter\'s and embalmer\'s own pages, and no jar me
   withCat(g);
   await g.clickLoc(6614, 3294, 2778);
   assert.ok(!texts(await g.talk()).some((x) => x.startsWith('You notice an oddly familiar')));
+});
+
+test('review fixes: no saved clipping flag after a logout mid-step, one flashback for a double click, the chatbox can\'t end a scene, Raetul keeps the coins with a full pack', async (t) => {
+  // A logout while stepping through the western door.
+  const a = fixture(t, [3294, 2779, 0]);
+  a.give(4679);
+  await enterPyramid(a, 14);
+  place(a, 3280, 9200);
+  await clickIn(a, 44059, 3280, 9199);
+  a.step(2);
+  PM.emitPlayerLogout({ player: a.p, username: a.p.getUsername() });
+  assert.equal(a.p.hasFlag?.('movement:ignore-clipping') ?? false, false);
+
+  // Two clicks on the door a tick apart: one flashback, one unholy symbol, the jar back on leaving.
+  const b = fixture(t, [3294, 2779, 0]);
+  setStage(b, 3);
+  b.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2, [VARBIT.KLENTER]: 1 });
+  b.give(4679);
+  await b.clickLoc(6614, 3294, 2778);
+  b.step();
+  await b.clickLoc(6614, 3294, 2778);
+  b.step(2 + 3 + 2 + 4);
+  assert.equal(b.has(I().UNHOLY_SYMBOL_3), 1);
+  PM.emitPlayerLogout({ player: b.p, username: b.p.getUsername() });
+  assert.equal(b.has(4679), 1);
+  assert.equal(b.has(I().UNHOLY_SYMBOL_3), 0);
+
+  // interface_close during the ceremony scene: taken, the scene plays on.
+  const c = fixture(t, [3294, 2779, 0]);
+  c.give(I().HOLY_SYMBOL_3);
+  await enterPyramid(c, 19, { [VARBIT.PRIESTS]: 1 });
+  place(c, 3306, 9200);
+  await clickIn(c, 44060, 3306, 9199);
+  assert.ok(until(c, () => stage(c) === 21 && !!c.read()) >= 0);
+  const request = { player: c.p, handled: false };
+  PM.emitCustomEvent('interface:close', request);
+  assert.equal(request.handled, true);
+
+  // Raetul with a full pack and more than 30 coins.
+  const d = fixture(t, [3311, 2788, 0]);
+  setStage(d, 15);
+  d.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2, 399: 1 });
+  d.give(I().COINS, 100);
+  while (d.p.getInventory().getFreeSlots() > 0) d.give(I().WILLOW_LOGS);
+  const raetul = d.npc(4204, [3311, 2786, 0]);
+  await d.clickNpc(raetul);
+  await d.talk();
+  assert.equal(d.has(I().COINS), 100);
 });

@@ -384,9 +384,9 @@ function openJournal(player, quest, row = questMetadata(quest, coreApi?.CacheDef
       openOverview(player, { name: row.displayname?.[0] ?? quest.name }, row, start);
       return;
     }
-    // No start text and no journal yet (The Enchanted Key before Making History): nothing to open,
-    // rather than an empty journal.
-    if (lines.length === 0) return;
+    // A quest that asks for it (`hideEmptyJournal`: The Enchanted Key before Making History) opens
+    // nothing while it has no start text and no journal lines, rather than an empty journal.
+    if (quest.hideEmptyJournal && lines.length === 0) return;
   }
   const packet = player.getPacketSender();
   const updater = player.getFrameUpdater?.();
@@ -841,6 +841,7 @@ function sendQuestVarps({ player }) {
  *               rewardOrder? (the scroll's groups after the points: "xp", "item", "other"),
  *               scrollItemId? (item id or function of player),
  *               buildJournal?(player, quest, { row }?), onReward?(player, quest),
+ *               hideEmptyJournal? (open nothing while not started with no start text or journal lines),
  *               varpValue?(stage, player) }
  */
 function registerQuest(api, def) {

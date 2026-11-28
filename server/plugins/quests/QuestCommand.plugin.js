@@ -199,7 +199,10 @@ function questCommand({ player, parts }) {
   }
   const [quest] = matches;
   if (action === "complete") {
-    if (!quest.complete(player)) player.sendMessage(`${quest.name} is already complete.`);
+    if (!quest.complete(player)) {
+      // A quest that can't be completed yet (a miniquest whose parent quest isn't done) says so.
+      player.sendMessage(quest.isComplete(player) ? `${quest.name} is already complete.` : `${quest.name} can't be completed yet.`);
+    }
   } else if (action === "reset") {
     // A quest that hands something out (a port task's crate) clears it here, so the reset leaves
     // nothing behind that its own flow can no longer reach.

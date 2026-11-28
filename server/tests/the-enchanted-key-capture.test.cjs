@@ -438,3 +438,40 @@ test("closing the last treasure's box without its continue still counts the mini
   assert.equal(varbit(f, 12393), 0);
   assert.equal(varbit(f, MINIQUESTS), before + 1);
 });
+
+test("only the miniquest hides an empty unstarted journal: Watchtower's row still opens its journal", async (t) => {
+  const f = actor(t, { makingHistory: false });
+  const watchtower = h.quest("watchtower");
+  assert.ok(watchtower && !watchtower.isStarted(f.player));
+  const from = f.calls.length;
+  h.QuestRuntime.openJournal(f.player, watchtower);
+  assert.ok(f.calls.slice(from).some((c) => c.name === "sendSubInterface" && c.args.includes(119)));
+});
+
+test("::quest: complete before Making History says so; reset-all clears the route with Making History", async (t) => {
+  const QuestCommand = require("../plugins/quests/QuestCommand.plugin");
+  const f = actor(t, { makingHistory: false });
+  const run = (text) => QuestCommand._test.questCommand({ player: f.player, parts: text.split(" ") });
+  const from = f.messages.length;
+  run("quest the enchanted key complete");
+  assert.ok(f.messages.slice(from).some((m) => m.text === "The Enchanted Key can't be completed yet."));
+  assert.equal(miniquest().isStarted(f.player), false);
+
+  h.quest().setStage(f.player, h.quest().completionValue);
+  f.player.setAttribute(ORDER, ROUTE);
+  f.player.setAttribute(FOUND, 11);
+  assert.equal(miniquest().isComplete(f.player), true);
+  QuestCommand._test.adminQuestRequest({ player: f.player, action: "reset-all" });
+  assert.equal(f.player.getAttribute(FOUND), 0);
+  assert.deepEqual(f.player.getAttribute(ORDER), []);
+  h.quest().setStage(f.player, h.quest().completionValue);
+  assert.equal(miniquest().isStarted(f.player), true);
+  assert.equal(miniquest().isComplete(f.player), false, "played again, not complete at once");
+  assert.equal(varbit(f, STATUS), 1);
+
+  // ::quest <name> reset clears it directly too.
+  f.player.setAttribute(ORDER, ROUTE);
+  f.player.setAttribute(FOUND, 5);
+  run("quest the enchanted key reset");
+  assert.equal(f.player.getAttribute(FOUND), 0);
+});

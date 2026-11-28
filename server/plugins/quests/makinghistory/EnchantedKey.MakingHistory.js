@@ -202,8 +202,16 @@ function finishDissolveBox(player) {
 function dissolveBoxClosed({ player }) { if (player) finishDissolveBox(player); }
 function resetComparison({ player }) { LAST_DISTANCE.delete(player); DISSOLVE_BOX.delete(player); }
 /** Making History finished (or reset): the miniquest's row starts (or goes back) at once, not at the next login. */
-function parentStageChanged({ player, key }) {
+function parentStageChanged({ player, key, stage: parentStage }) {
   if (key !== quest.key || !player) return;
+  // Making History reset (::quest reset, reset-all): the route goes with it, so the miniquest is
+  // played again once Making History is (mainly admin; reset-all skips the miniquest at stage 0).
+  if (parentStage === 0 && (found(player) !== 0 || (player.getAttribute(ORDER_ATTRIBUTE)?.length ?? 0) > 0)) {
+    player.setAttribute(FOUND_ATTRIBUTE, 0);
+    player.setAttribute(ORDER_ATTRIBUTE, []);
+    LAST_DISTANCE.delete(player);
+    player.getPacketSender().sendVarbit(LOCSTATUS_VARBIT, 0);
+  }
   player.getPacketSender().sendVarbit(STATUS_VARBIT, stage(player));
   sync({ player });
   QuestRuntime.refreshQuestList(player);
@@ -266,11 +274,14 @@ function registerMiniquest() {
     completionValue: 2,
     questPoints: 0,
     journalAsSent: true,
+    hideEmptyJournal: true,
     buildJournal,
   });
   miniquest.getStage = stage;
   miniquest.setStage = setStageForCommand;
   miniquest.complete = completeRoute;
+  // ::quest <name> reset clears the route whatever Making History's stage.
+  miniquest.onReset = (player) => setStageForCommand(player, 0);
 }
 
 module.exports = function attach(pluginApi, makingHistory) {

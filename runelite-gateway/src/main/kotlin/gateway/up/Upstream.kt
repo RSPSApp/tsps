@@ -177,8 +177,8 @@ class Upstream(
             is OpNpc6 -> send(TspsClientPacket.examineNpc(message.id))
             // Revision 242 added V3 (OPLOC*_V3, OPLOC6_V2, OPLOCT_V2) with three-byte loc ids; the live
             // client sends those, and the V1/V2 forms decode the same fields.
-            is OpLocV2 -> if (message.op in 1..5) send(WorldOps.loc(message.op, message.id, message.x, message.z, message.controlKey)) else DropCounter.up(message)
-            is OpLocV3 -> if (message.op in 1..5) send(WorldOps.loc(message.op, message.id, message.x, message.z, message.controlKey)) else DropCounter.up(message)
+            is OpLocV2 -> if (message.op in 1..5) locOp(message.op, message.id, message.x, message.z, message.subop.toInt(), message.controlKey) else DropCounter.up(message)
+            is OpLocV3 -> if (message.op in 1..5) locOp(message.op, message.id, message.x, message.z, message.subop.toInt(), message.controlKey) else DropCounter.up(message)
             is OpLoc6V1 -> send(WorldOps.examineLoc(message.id))
             is OpLoc6V2 -> send(WorldOps.examineLoc(message.id))
             is OpObjV2 -> if (message.op in 1..5) send(WorldOps.obj(message.op, message.id, message.x, message.z, message.controlKey)) else DropCounter.up(message)
@@ -213,6 +213,11 @@ class Upstream(
             else -> DropCounter.up(message)
         }
     }
+
+    /** A loc op; a sub-menu row (the cache's 1-based sub-op) goes as LOC_INTERACT instead. */
+    private fun locOp(op: Int, id: Int, x: Int, z: Int, subop: Int, controlKey: Boolean) =
+        if (subop > 0) send(WorldOps.locSub(op, id, x, z, subop))
+        else send(WorldOps.loc(op, id, x, z, controlKey))
 
     /** OSRS sends item use and spells on a loc as one `T` packet; tsps has one for each. */
     private fun locT(id: Int, x: Int, z: Int, selectedCombinedId: Int, selectedSub: Int, selectedObj: Int, controlKey: Boolean) =

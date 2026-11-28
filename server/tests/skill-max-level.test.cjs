@@ -347,17 +347,17 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     for(const task of Rumours.tasks)assert.ok(Number.isInteger(I[task.part]),task.part);
     assert.equal(Crabs.bases.size,20);assert.equal(Drift.bases.size,2);
 
-    // Moths use their published distinct net/barehand curves, with current levels on tick two.
+    // Moths use their published distinct net/barehand curves; a net throw resolves on the click's tick.
     q.levels.set(Skill.HUNTER,75);q.equipment.set(core.Equipment.WEAPON_SLOT,I.MAGIC_BUTTERFLY_NET);
     q.counts.set(I.BUTTERFLY_JAR,1);
     const moth=prey(core.NpcIdentifiers.MOONLIGHT_MOTH,q.getLocation());
     Math.random=()=>0.85;
-    Catching.catchNpc({player:q,npc:moth,npcId:moth.getId()});advance(2);
+    Catching.catchNpc({player:q,npc:moth,npcId:moth.getId()});
     assert.equal(q.counts.get(I.MOONLIGHT_MOTH_2),1,"magic net uses the improved moonlight-moth curve");
     assert.equal(moth.isVisible(),true,"butterflies remain available to other hunters");
-    q.counts.set(I.BUTTERFLY_JAR,1);q.levels.set(Skill.HUNTER,75);
-    Catching.catchNpc({player:q,npc:moth,npcId:moth.getId()});q.levels.set(Skill.HUNTER,74);advance(2);
-    assert.equal(q.counts.get(I.BUTTERFLY_JAR),1,"level drain during the catch preserves the jar");
+    q.counts.set(I.BUTTERFLY_JAR,1);q.levels.set(Skill.HUNTER,74);
+    Catching.catchNpc({player:q,npc:moth,npcId:moth.getId()});
+    assert.equal(q.counts.get(I.BUTTERFLY_JAR),1,"a drained level preserves the jar");
     q.levels.clear();q.equipment.clear();q.counts.clear();Math.random=()=>0.5;
 
     // Implings (rsprox captures 1342/1389/1510/2520 + Leagues; Wiki Implings): the catch lands on the

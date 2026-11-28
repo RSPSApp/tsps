@@ -30,6 +30,12 @@ const RELEASE_SOUND = 7870;
 const RELEASE_DELAY = 45;
 const RELEASE_HEIGHT = 190;
 const RELEASED_TICKS = 1;
+// A miss on a butterfly or moth is followed by another try this many ticks later (reported for net
+// throws in rsprox capture 1001961, rev 242; ours: barehanded misses wait the same).
+const RETRY_TICKS = 4;
+// Ours: clicking again throws the net no sooner than this after the last throw.
+const NET_THROW_TICKS = 2;
+const lastNetThrow = new WeakMap();
 // The falcon's own graphics (cache gamevals falcon_launch_anim, falcon_travel_anim, falcon_hit_anim) with
 // the numbers rsprox capture 3414 records for the Falconry grounds' falconers: spotanim 918 at height 150
 // on the sender, then falcon_travel_anim 922 starting at client cycle 24 and flying 8 cycles per tile
@@ -197,27 +203,56 @@ function catchNpc({ player, npc, npcId }) {
     player.sendMessage(`You need a Hunter level of at least ${required} to catch this ${name.endsWith(" moth") ? "moth" : "butterfly"}${net ? "" : " barehanded"}.`);
     return true;
   }
-  if (!net) { catchBarehanded(player, npc, npcId, def, name); return true; }
-  const jar = I.BUTTERFLY_JAR;
-  const jarred = player.getInventory().contains(jar);
-  const inputs = jarred ? [[jar, 1]] : [];
-  const outputs = jarred ? [[def.jar, 1]] : [];
-  if (!exchange(player, inputs, outputs, false)) { player.getInventory().full(); return true; }
-  begin(player, 2, weapon === I.MAGIC_BUTTERFLY_NET ? ANIM.NET : ANIM.BUTTERFLY, () => {
-    if (!available(npc) || !nearby(player, npc) || !requireLevel(player, required)
-      || player.getEquipment().get(H.core.Equipment.WEAPON_SLOT).getId() !== weapon) return;
-    const improved = weapon === I.MAGIC_BUTTERFLY_NET;
-    const curve = improved && def.handsLow !== undefined ? { ...def, low: def.handsLow, high: def.handsHigh } : def;
-    const catchBonus = improved && (def.handsLow === undefined || def.boost === "restore") ? 20 / 256 : 0;
-    if (!chance(player, curve, catchBonus, required)) {
-      player.sendMessage("The creature slips away."); return;
-    }
-    if (!exchange(player, inputs, outputs)) return;
-    xp(player, def.xp, "butterfly", npcId);
-    if (!jarred) freed(player, def);
-    player.sendMessage(jarred ? "You catch the creature in a jar." : "You catch the creature in your net and release it.");
-  });
+  if (!net) catchBarehanded(player, npc, npcId, def, name);
+  else catchNetted(player, npc, npcId, def, weapon);
   return true;
+}
+
+/**
+ * A net throw resolves on the tick the player reaches the creature, as implings do: animation, outcome
+ * and XP together.
+ */
+function catchNetted(player, npc, npcId, def, weapon) {
+  if (!active(player) || player.busy()) return;
+  const wait = (lastNetThrow.get(player) ?? -Infinity) + NET_THROW_TICKS - H.tick;
+  if (wait > 0) { tryAgain(player, npc, npcId, wait); return; }
+  const I = H.core.ItemIdentifiers;
+  const jarred = player.getInventory().contains(I.BUTTERFLY_JAR);
+  const inputs = jarred ? [[I.BUTTERFLY_JAR, 1]] : [];
+  const outputs = jarred ? [[def.jar, 1]] : [];
+  if (!exchange(player, inputs, outputs, false)) { player.getInventory().full(); return; }
+  C.cancel(player);
+  player.getSkillManager().stopSkillable();
+  const improved = weapon === I.MAGIC_BUTTERFLY_NET;
+  player.performAnimation(new H.core.Animation(improved ? ANIM.NET : ANIM.BUTTERFLY));
+  lastNetThrow.set(player, H.tick);
+  const curve = improved && def.handsLow !== undefined ? { ...def, low: def.handsLow, high: def.handsHigh } : def;
+  const catchBonus = improved && (def.handsLow === undefined || def.boost === "restore") ? 20 / 256 : 0;
+  if (!chance(player, curve, catchBonus, def.level)) {
+    player.sendMessage("The creature slips away.");
+    tryAgain(player, npc, npcId, RETRY_TICKS);
+    return;
+  }
+  if (!exchange(player, inputs, outputs)) return;
+  xp(player, def.xp, "butterfly", npcId);
+  if (!jarred) freed(player, def);
+  player.sendMessage(jarred ? "You catch the creature in a jar." : "You catch the creature in your net and release it.");
+}
+
+/**
+ * The next try at a butterfly or moth that got away: up to it, wherever it has flown, and Catch again.
+ * A walk or another interaction cancels the wait and a teleport drops the interaction, as for a repeating
+ * pickpocket; it also ends once the creature is gone, the weapon changes or the player is busy or fighting.
+ */
+function tryAgain(player, npc, npcId, ticks) {
+  const slot = H.core.Equipment.WEAPON_SLOT;
+  const weapon = player.getEquipment().get(slot).getId();
+  H.core.TaskManager.submit(new H.core.CountdownTask(player.getIndex(), ticks, () => {
+    if (player.getInteractingMobile() !== npc || !active(player) || player.busy() || !available(npc)
+      || player.getCombat().getTarget() || player.getCombat().getAttacker()
+      || player.getEquipment().get(slot).getId() !== weapon) return;
+    player.getMovementQueue().walkToEntity(npc, () => catchNpc({ player, npc, npcId }));
+  }));
 }
 
 /** "snowy knight butterfly", "moonlight moth": the creature as catch lines name it. */
@@ -233,7 +268,9 @@ function catchBarehanded(player, npc, npcId, def, name) {
   player.performAnimation(new H.core.Animation(ANIM.IMPLING_HANDS));
   const curve = def.handsLow !== undefined ? { ...def, low: def.handsLow, high: def.handsHigh } : def;
   if (!chance(player, curve, def.handsLow === undefined ? 20 / 256 : 0, def.hands)) {
-    player.sendMessage("The creature slips away."); return;
+    player.sendMessage("The creature slips away.");
+    tryAgain(player, npc, npcId, RETRY_TICKS);
+    return;
   }
   const graphic = H.core.CacheDefinitions.getSpotanimId(def.release);
   if (graphic != null) player.performGraphic(new H.core.Graphic(graphic, RELEASE_DELAY, RELEASE_HEIGHT));

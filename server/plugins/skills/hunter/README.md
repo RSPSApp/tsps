@@ -119,6 +119,12 @@ butterflies and moths 95, 1634, 3279, 4051; herbiboar 127, 552, 554, 1858; bird 
   trap.` (the user's rev 242 recording 20261112T001359 tick 36; 1108 ticks 17710, 18947).
 - Barehanded butterflies and moths resolve on arrival: `hunting_impling_catch`, the creature's
   `_out_spot_anim` graphic and sound 7870 (45 cycles late), `You catch and release the <name>.`
+- Netted butterflies and moths resolve on arrival too, as impling net throws do (95, 1757, 1858: swing,
+  sound and XP on one tick). A miss follows the creature and tries again 4 ticks later until it is
+  caught, the creature is gone or the player does something else; the timing is as reported for capture
+  1001961 (rev 242). No capture in the public index shows a missed throw. Ours: barehanded misses retry
+  the same way, clicking again throws no sooner than 2 ticks after the last throw, and the miss line
+  `The creature slips away.` is uncaptured.
 - Herbiboar trails: the bush-search animation, then the object's line two ticks later; the harvest is
   `pruning_high` with the herbiboar waking, then sound 1641, the herbs and two game messages.
 

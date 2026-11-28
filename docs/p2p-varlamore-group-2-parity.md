@@ -70,6 +70,8 @@ plus the delivery (11183/11184: 1 asked … 4 sent), recipe portion (11185-11188
 
 ## At First Light (ticks 5134-5763)
 
+Since aligned with the user's revision 243 capture of the whole quest: [docs/quests/at-first-light](quests/at-first-light/README.md) holds the current facts (Fox as live's world multinpcs, Apatura's first meeting, the journal and the captured expressions and sounds).
+
 The old stage numbering drifted from the capture from 4 on, and bushes could only be picked at
 stage 5 while talking to Fox moved the quest to 6, so the poultice was unreachable after
 meeting him. Stages now follow the capture (4 Wolf's pyre fox hint, 5 Fox found, 6 poultice,

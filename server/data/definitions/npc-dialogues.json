@@ -111778,7 +111778,7 @@
               ]
             },
             {
-              "player": "Well actually, I heard there might be something I could help you with?"
+              "player": "Well, actually, I heard there might be something I could help you with?"
             },
             {
               "type": "jump",
@@ -111988,7 +111988,7 @@
           ]
         },
         {
-          "player": "Well then I guess the first step is to work out what he went to get. Could I take a look at Kiko's bed?"
+          "player": "Well, then I guess the first step is to work out what he went to get. Could I take a look at Kiko's bed?"
         },
         {
           "type": "line",
@@ -112460,15 +112460,57 @@
                   "player": "I think I've got them both."
                 },
                 {
-                  "type": "line",
-                  "speaker": "Guild Hunter Fox",
-                  "text": "It doesn't look like you do... Who's the one with the head wound again?",
-                  "speaker_ids": [
-                    12931,
-                    12932,
-                    13400,
-                    13426
-                  ]
+                  "type": "condition",
+                  "text": "If the player has both leaves:",
+                  "steps": [
+                    {
+                      "type": "line",
+                      "speaker": "Guild Hunter Fox",
+                      "text": "Yay, Fox will be pleased. I'll let him know right now!",
+                      "speaker_ids": [
+                        12931,
+                        12932,
+                        13400,
+                        13426
+                      ]
+                    },
+                    {
+                      "player": "..."
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Guild Hunter Fox",
+                      "text": "He's very mean... He says you'll have to... tie them up with the cute little jerb tail.",
+                      "speaker_ids": [
+                        12931,
+                        12932,
+                        13400,
+                        13426
+                      ]
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "AW4lzO"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player does not have both leaves:",
+                  "steps": [
+                    {
+                      "type": "line",
+                      "speaker": "Guild Hunter Fox",
+                      "text": "It doesn't look like you do... Who's the one with the head wound again?",
+                      "speaker_ids": [
+                        12931,
+                        12932,
+                        13400,
+                        13426
+                      ]
+                    }
+                  ],
+                  "id": "U7Wq-I"
                 }
               ]
             },
@@ -112811,7 +112853,7 @@
         {
           "type": "line",
           "speaker": "Guild Hunter Fox",
-          "text": "Well it's your lucky day! Take this sample to a woman called Atza in Outer Fortis. She'll have exactly what we need.",
+          "text": "Well, it's your lucky day! Take this sample to a woman called Atza in Outer Fortis. She'll have exactly what we need.",
           "speaker_ids": [
             12931,
             12932,
@@ -112857,7 +112899,7 @@
           "steps": [
             {
               "type": "call",
-              "branch": "jump-0ea4e3fe1a419ffe"
+              "branch": "jump-72bc9495f9622c32"
             }
           ]
         }
@@ -113030,6 +113072,19 @@
             {
               "text": "I'd better be off."
             }
+          ]
+        }
+      ],
+      "fox-tracking-talking-to-guild-hunter-wolf-for-the-first-time-after-giving-fox-the-poultice": [
+        {
+          "player": "I've found Fox. He's been injured by something out in the savannah, but he's doing okay. He's got me doing a few things for him whilst he recuperates."
+        },
+        {
+          "type": "line",
+          "speaker": "Guild Hunter Wolf (Master)",
+          "text": "Ha! Now that's the Fox I know. I'll have to give him some odd jobs once he's back to make up for ones you're covering!",
+          "speaker_ids": [
+            13126
           ]
         }
       ],
@@ -113601,7 +113656,7 @@
             {
               "type": "line",
               "speaker": "Guild Hunter Kiko",
-              "text": "Well as much as I resent the trickery used, this bed is much comfier now.",
+              "text": "Well, as much as I resent the trickery used, this bed is much comfier now.",
               "speaker_ids": [
                 12934
               ]
@@ -113713,7 +113768,7 @@
           "type": "end"
         }
       ],
-      "jump-0ea4e3fe1a419ffe": [
+      "jump-72bc9495f9622c32": [
         {
           "type": "line",
           "speaker": "Guild Hunter Fox",
@@ -113794,7 +113849,7 @@
         {
           "type": "line",
           "speaker": "Guild Hunter Fox",
-          "text": "Well it's your lucky day! Take this sample to a woman called Atza in Outer Fortis. She'll have exactly what we need.",
+          "text": "Well, it's your lucky day! Take this sample to a woman called Atza in Outer Fortis. She'll have exactly what we need.",
           "speaker_ids": [
             12931,
             12932,

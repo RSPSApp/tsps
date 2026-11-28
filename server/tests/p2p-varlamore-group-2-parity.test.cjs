@@ -157,7 +157,7 @@ function player() {
   const packet = new Proxy({
     sendInterfaceScript(id, args) { require('../dist/net/protocol/ClientProtocol').encodeWidgetRunScript(id, args); log.push(['sendInterfaceScript', id, args]); return packet; },
     sendConfig(id, value) { configs.set(id, value); return packet; }, sendVarbit(id, value) { varbits.set(id, value); return packet; },
-    getVarbit: id => varbits.get(id) ?? 0, getVarp: id => configs.get(id) ?? 0,
+    getVarbit: id => varbits.get(id) ?? 0, getVarp: id => configs.get(id) ?? 0, getChatboxGroupId: () => -1,
     sendString(text, uid) { if ([6,3,2].some(child => [217,231,229,193].some(group => uid === (group << 16 | child)))) p.text = text; log.push(['text',uid,text]); return packet; },
     sendInterfaceRemoval() { p.manager.reset(); p.prompt = null; return packet; },
   }, { get: (t, key) => t[key] ?? ((...args) => { log.push([key, ...args]); return packet; }) });
@@ -624,7 +624,6 @@ test('AFL stages 1-4 as captured: Verity names Wolf (2), the mouse (3), Kiko dis
   p.manager.reset();
   talkAfl(h, p, 'Guild Hunter Wolf (Master)', N.GUILD_HUNTER_WOLF_MASTER_); h.continueUntil(p, () => p.text.startsWith('Why not?'));
   assert.equal(h.quest.getStage(p), 3); p.manager.advance(); assert.equal(h.quest.getStage(p), 4);
-  assert.ok(h.npcs.some(npc => npc.id === N.GUILD_HUNTER_FOX && !npc.removed), 'the injured Fox waits in the savannah');
 });
 
 test('AFL Fox: found at 5 (bushes pickable then), poultice 6, sample 7, Atza 8 with the pile, trimmed fur 9, report 10', () => {
@@ -639,14 +638,17 @@ test('AFL Fox: found at 5 (bushes pickable then), poultice 6, sample 7, Atza 8 w
   assert.match(p.text, /makeshift poultice/); p.manager.reset();
   talkAfl(h, p, 'Guild Hunter Fox', N.GUILD_HUNTER_FOX); h.continueUntil(p, () => /give the poultice/.test(p.text));
   assert.equal(h.quest.getStage(p), 6); assert.equal(p.items.get(I.MAKESHIFT_POULTICE), 0);
-  h.continueUntil(p, () => p.text.startsWith("Well it's your lucky day! Take")); assert.equal(h.quest.getStage(p), 7);
+  h.continueUntil(p, () => p.text.startsWith("Well, it's your lucky day! Take")); assert.equal(h.quest.getStage(p), 7);
   h.continueUntil(p, () => /fur sample/.test(p.text)); assert.equal(p.items.get(I.FUR_SAMPLE), 1); assert.equal(p.varbits.get(9842), 1);
   p.manager.reset();
   h.namedNpcs.get('Atza')['Talk-to']({ player: p, npcId: N.ATZA }); h.continueUntil(p, () => /give the fur sample/.test(p.text));
   assert.equal(h.quest.getStage(p), 8); h.continueUntil(p, () => p.text.startsWith("It's all in that pile")); assert.equal(p.varbits.get(9840), 1);
   p.manager.reset();
   objectClick(h, p, 50880); assert.ok(p.animations.includes(3676)); h.tick(2); assert.match(p.text, /^So anyway/);
-  h.continueUntil(p, () => p.text === 'All done!'); assert.equal(p.varbits.get(9840), 2);
+  // After each of the player's two lines the chat closes for two ticks of building (pauseTicks).
+  h.continueUntil(p, () => p.text.startsWith('Well, he actually')); p.manager.advance(); h.tick(2); assert.match(p.text, /^Shouldn't you/);
+  h.continueUntil(p, () => p.text.startsWith('Oh he')); p.manager.advance(); h.tick(2);
+  assert.equal(p.text, 'All done!'); assert.equal(p.varbits.get(9840), 2);
   h.continueUntil(p, () => /trimmed fur/.test(p.text)); assert.equal(h.quest.getStage(p), 9); assert.equal(p.items.get(I.TRIMMED_FUR), 1);
   p.manager.reset();
   talkAfl(h, p, 'Guild Hunter Fox', N.GUILD_HUNTER_FOX); h.continueUntil(p, () => /gives you a report/.test(p.text));

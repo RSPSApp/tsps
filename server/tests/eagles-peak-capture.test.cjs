@@ -323,7 +323,7 @@ test("the gold room: the capture's levers and feeds bring the birds round and th
   assert.equal(varbit(f, VARBIT.GOLD), 4, "lever3 down (t1402)");
   await feed(19939, 1966, 4890);
   assert.equal(varbit(f, VARBIT.GOLD), 260, "bird5 (t1526)");
-  assert.equal((removals[0] - launches[0].tick) * 30, launches[0].delay, "the bird stays until its projectile leaves (6943)");
+  assert.equal(removals[0] - launches[0].tick, 1, "the bird's loc goes the tick after its projectile is sent (t1526-1527)");
   await feed(19938, 1962, 4894);
   assert.equal(varbit(f, VARBIT.GOLD), 388, "bird4 (t1542)");
   await lever(19949, 1978, 4891);
@@ -434,8 +434,10 @@ test("Nickolaus in the nest: the disguise's box, 25 on its continue, the spare g
 test("the climbs to the eyries face up the mountain both ways (6943, capture 2821 t131-140)", async (t) => {
   const EAST = 1, SOUTH = 2;
   const climbs = [
-    { name: "up the Eagles' Peak rocks", from: [2322, 3502, 0], loc: [19849, [2322, 3501]], to: [2324, 3497, 0], face: SOUTH },
-    { name: "down them", from: [2324, 3497, 0], loc: [19849, [2324, 3498]], to: [2322, 3502, 0], face: SOUTH },
+    { name: "up the Eagles' Peak rocks", from: [2322, 3502, 0], loc: [19849, [2322, 3501]], to: [2324, 3497, 0], face: SOUTH,
+      animations: [[0, 4435], [7, 819]], lands: 8 },
+    { name: "down them", from: [2324, 3497, 0], loc: [19849, [2324, 3498]], to: [2322, 3502, 0], face: SOUTH,
+      animations: [[0, 820], [1, 740]], lands: 8 },
     { name: "up the Rellekka handholds", from: [2740, 3830, 1], loc: [19846, [2741, 3830]], to: [2744, 3830, 1], face: EAST },
     { name: "down them", from: [2744, 3830, 1], loc: [19847, [2743, 3830]], to: [2740, 3830, 1], face: EAST },
   ];
@@ -446,11 +448,20 @@ test("the climbs to the eyries face up the mountain both ways (6943, capture 282
     f.player.getSkillManager().setCurrentLevel?.(agility, 99);
     await H.objectOption(f, climb.loc[0], climb.loc[1]);
     let faced = null;
+    let landed = null;
     for (let i = 0; i < 20; i++) {
       faced ??= f.player.getForceMovement()?.getDirection?.() ?? null;
       H.tick(f);
+      if (landed === null && String(H.xy(f.player.getLocation())) === String(climb.to)) landed = f.tick;
     }
     assert.equal(faced, climb.face, climb.name);
+    if (climb.animations) {
+      // Ticks counted from the one the exact move starts on.
+      const first = f.animations.find((entry) => entry.id === climb.animations[0][1]).tick;
+      const played = f.animations.filter((entry) => entry.id > 0 && entry.id !== 65535 && entry.tick >= first).map((entry) => [entry.tick - first, entry.id]);
+      assert.deepEqual(played, climb.animations, climb.name);
+      assert.equal(landed - first, climb.lands, `${climb.name}: landed`);
+    }
     assert.deepEqual(H.xy(f.player.getLocation()), climb.to, climb.name);
   }
 });
@@ -480,20 +491,26 @@ test("the ferret lesson: a copy of the camp, the trap catches a ferret, 35 with 
   assert.deepEqual(H.xy(ferret.getPositionToFace()).slice(0, 2), [startX - 5, startY + 1], "it faces the trap, not a tile it passes");
   H.ticks(f, 11);
   await H.until(f, "Ha ha, there you go!");
+  // The talk runs the lesson's last step on the tick that processes the continue.
+  const continued = f.tick + 1;
+  const steps = [];
+  const record = () => {
+    const [x, y] = H.xy(f.player.getLocation());
+    const offset = [x - startX, y - startY];
+    if (String(offset) !== String(steps.at(-1)?.slice(1) ?? [0, 0])) steps.push([f.tick - continued, ...offset]);
+  };
   await H.continueLine(f);
-  // The first step is taken on the continue's own tick.
-  const walked = [f.player.getLocation().getX()];
-  for (let i = 0; i < 20; i++) {
+  record();
+  for (let i = 0; i < 7; i++) {
     H.tick(f);
-    walked.push(f.player.getLocation().getX());
-    if (walked.at(-1) === startX - 5) break;
+    record();
   }
-  assert.deepEqual([...new Set(walked)].filter((x) => x !== startX), [1, 2, 3, 4, 5].map((n) => startX - n),
-    "walks to the trap a tile a tick before dismantling it (6943)");
-  assert.equal(f.player.getLocation().getY(), startY);
-  H.ticks(f, 2);
+  assert.deepEqual(steps, [[2, 0, -1], [3, -1, -1], [4, -2, -1], [5, -3, -1], [6, -4, -1], [7, -5, 0]],
+    "two ticks on, round the blocked tiles to the trap (t2239-2244)");
   assert.equal(f.player.getMovementQueue().isMovementBlocked(), true, "held again at the trap");
-  H.ticks(f, 18);
+  H.ticks(f, 20);
+  assert.equal(f.animations.find((entry) => entry.id === 5212 && entry.tick > continued).tick - continued, 8, "the dismantle");
+  assert.equal(f.messages.find((entry) => entry.text === "You dismantle the trap.").tick - continued, 10, "its message");
   assert.equal(QUEST().getStage(f.player), 35);
   assert.equal(f.player.getRenderAnimations(), null, "stands up again");
   assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
@@ -655,7 +672,7 @@ test("interruption: a logout during the lesson's walk to the trap saves the play
   H.ticks(f, 14);
   await H.until(f, "Ha ha, there you go!");
   await H.continueLine(f);
-  H.ticks(f, 1);
+  H.ticks(f, 3);
   // The real logout: the area is left (the scene ends), then the hooks and the task sweep, which finish a forced walk.
   f.player.onLogout();
   assert.deepEqual(H.xy(f.player.getLocation()), [2314, 3510, 0]);

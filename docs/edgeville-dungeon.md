@@ -101,6 +101,26 @@ From the capture; stats and rules from the Wiki: 115 HP, max hits 16 (melee) and
   - With no axe: "You take a bronze axe from the logs." The axe grows back about 49 ticks later.
   - With an axe: "You already have an axe."
 
+## The members' gate to the Wilderness
+
+The gate between the zombies and the chaos druids (`membergatel` 1727 and `membergater` 1728 at
+3131-3132,9917) is a pass-through gate (`PASS_THROUGH_GATES` in `Doors.plugin.js`), from an rsprox capture
+(rev 243, ticks 132-146 going north and 398-401 coming back):
+
+1. On arrival both leaves become invisible walls (38848) and the actionless open leaves (1573, 1574) stand one
+   tile north, with `iron_door_open` (71).
+2. The player walks across on that tick, either way.
+3. Two ticks later the gate is shut.
+
+Going north, the Wilderness warning comes first (`WildernessGate.EdgevilleDungeon.js`, rsprox local 1002252 ticks
+2395-2404 and 1002220): warning 7's own screen, `wilderness_warningscreen` (475), with the gate shut.
+- **No** (pause button 475:1, sub 0) closes it and the gate stays shut; the next Open asks again.
+- **Yes** (sub 1) counts a showing (`cws_warning_7`, 3 to 4 recorded) and the gate opens the tick after.
+- Once shown 6 times the screen offers its toggle (475:13); toggled off, or going south, the gate opens at once.
+
+North of it, from y 9920, is the Wilderness (single-way). The chaos druids there are in
+[chaos-druids.md](chaos-druids.md).
+
 ## Giant bones
 
 - **Take:** "I don't think those will fit in my backpack..."

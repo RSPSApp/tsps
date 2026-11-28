@@ -1,5 +1,5 @@
 {
-  "$comment": "Warning screens (Wiki: Doomsayer), from the cache: interface and varbit cws_warning_<n>, doomsayerRow the cws_doomsayer (583) row enum 688 maps it to. 7 and 26 (the Wilderness ditch) use wilderness_warningscreen instead; 21 and 22 cannot be toggled. Notices only inform. tests/warning-screens.test.cjs checks every id against the cache.",
+  "$comment": "Warning screens (Wiki: Doomsayer), from the cache: interface and varbit cws_warning_<n>, doomsayerRow the cws_doomsayer (583) row enum 688 maps it to. 7 and 26 (the Wilderness ditch) use wilderness_warningscreen instead (pauseInterface: answered with a pause button, its message sent as live does; 7 only so far); 21 and 22 cannot be toggled. Notices only inform. tests/warning-screens.test.cjs checks every id against the cache.",
   "warnings": [
     {"warning": 1, "name": "Dagannoth Kings' Ladder", "interface": 574, "varbit": 3851, "doomsayerRow": 42},
     {"warning": 2, "name": "Contact Dungeon Ladder", "interface": 562, "varbit": 3852, "doomsayerRow": 48},
@@ -7,7 +7,7 @@
     {"warning": 4, "name": "Stronghold of Security Ladders", "interface": 579, "varbit": 3854, "doomsayerRow": 44},
     {"warning": 5, "name": "Player-Owned Houses", "interface": 563, "varbit": 3855, "doomsayerRow": 47},
     {"warning": 6, "name": "Dropped Items in Random Events", "interface": 566, "varbit": 3856, "doomsayerRow": 46},
-    {"warning": 7, "name": "Wilderness Ditch", "interface": null, "varbit": 3857, "doomsayerRow": 59},
+    {"warning": 7, "name": "Wilderness Ditch", "interface": null, "pauseInterface": 475, "varbit": 3857, "doomsayerRow": 59, "message": "If you go any further you will enter the Wilderness. This is a very dangerous area where other players can attack you!<br><br>The further north you go the more dangerous it becomes. An indicator at the bottom-right of the screen will show the current level of danger."},
     {"warning": 8, "name": "Trollheim Wilderness Entrance", "interface": 576, "varbit": 3858, "doomsayerRow": 58},
     {"warning": 9, "name": "Observatory Stairs", "interface": 560, "varbit": 3859, "doomsayerRow": 54},
     {"warning": 10, "name": "Shantay Pass", "interface": 565, "varbit": 3860, "doomsayerRow": 55},

@@ -456,7 +456,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `DorgeshKaanLamps` | DorgeshKaanLamps | areas | yes | Dorgesh-Kaan's broken lamps: ten per player, fixed with a light orb for Firemaking and Crafting XP (52 of each needed). (members only) |
 | `DorgeshuunGuides` | DorgeshuunGuides | areas | yes | Kazgar, Mistag and Dartog's guided travel through the Dorgeshuun tunnels. (members only) |
 | `DraynorGuardTree` | DraynorGuardTree | areas | yes | The Draynor Village tree with a guard hiding in it: Chop down gets a complaint instead of logs, Talk to and the stew he asks for. |
-| `EdgevilleDungeon` | EdgevilleDungeon | areas | yes | Edgeville Dungeon's brass key door and its achievement diary tasks. |
+| `EdgevilleDungeon` | EdgevilleDungeon | areas | yes | Edgeville Dungeon's brass key door, the Wilderness warning at its members' gate, and its achievement diary tasks. |
 | `EnchantedValley` | EnchantedValley | areas | yes | Enchanted Valley's trees: chopping wakes a level-scaled tree spirit instead of cutting the tree. (members only) |
 | `FeroxEnclave` | FeroxEnclave | areas | yes | Ferox Enclave: its barriers and safe ground, the Pools of Refreshment and the Clan Wars free-for-all arena behind the white portal. |
 | `ForthosDungeon` | ForthosDungeon | areas | yes | Forthos Dungeon: the Spider's Den's multi-combat room, the grubby gate's 57 Thieving unlock and the one-way east Temple Door. (members only) |
@@ -900,6 +900,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `CandleSeller` | CandleSeller | npcs | yes | The Candle seller by the Lumbridge Swamp Caves sells a lit candle for 1,000 coins through his Talk-to dialogue. (members only) |
 | `CanifisCitizens` | CanifisCitizens | npcs | yes | Turns Canifis citizens into werewolves when a player attacks them without a Wolfbane, keeping their remaining health. (members only) |
 | `Catablepon` | Catablepon | npcs | yes | Catablepons cast their weakening glare (Weaken) on players until 8% + 3 of their Strength is drained. |
+| `ChaosDruid` | ChaosDruid | npcs | yes | Chaos druids punch and cast their Bind-and-Confuse spell, holding the player for a tick and lowering their Attack, with the captured animations, projectile and sounds. (members only) |
 | `CivilianCats` | CivilianCats | npcs | yes | West Ardougne civilians buy adult, overgrown, wily, lazy and hell cats for 100 Death runes (200 after the Ardougne easy diary) when the cat is used on them; Talk-to offers the price. (members only) |
 | `DemonicGorillas` | DemonicGorillas | npcs | yes | Adds the Crash Site Cavern's demonic and tortured gorillas: style changes after misses, protection prayers, boulders and anti-safespot rules. (members only) |
 | `DormantNpcs` | DormantNpcs | npcs | yes | Makes disguised crabs, wyrms and Zanaris' zygomites lie dormant as scenery, rising and sinking when a player steps near, attacks or picks them. (members only) |

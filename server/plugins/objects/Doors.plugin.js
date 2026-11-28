@@ -620,6 +620,27 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
       closeTicks: 2,
       openSoundId: 62,
     }),
+    // The members' gate in the Edgeville Dungeon, between the zombies and the Wilderness chaos druids (rsprox
+    // capture rev 243, ticks 132-146 going north and 398-401 coming back): on arrival both leaves become
+    // invisible walls and the actionless open leaves (inacmetalgateopenl/r) stand one tile north, with
+    // iron_door_open (71); the player walks across on that tick and the gate is shut two ticks later.
+    Object.freeze({
+      closed: [
+        [core.CacheDefinitions.getLocId("membergatel"), 3131, 9917, 0, 1],
+        [core.CacheDefinitions.getLocId("membergater"), 3132, 9917, 0, 1],
+      ],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3131, 9917, 0, 1],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3132, 9917, 0, 1],
+        [core.CacheDefinitions.getLocId("inacmetalgateopenl"), 3131, 9918, 0, 0],
+        [core.CacheDefinitions.getLocId("inacmetalgateopenr"), 3132, 9918, 0, 2],
+      ],
+      crossY: 9918,
+      walkOver: true,
+      operateBeforeMovement: true,
+      closeTicks: 2,
+      openSoundId: 71,
+    }),
     // Gu'Tanoth's city gates (Watchtower capture Watchtower.bin, rev 242): the east gate opens with
     // two invisible walls in the doorway and its leaves swung south (t2228), the north-west gate with
     // its leaves swung west (t2319); sound 46 and back two ticks later. Who may pass is Watchtower's

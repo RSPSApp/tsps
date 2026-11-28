@@ -164,9 +164,40 @@ test("the notices (Icy Path Area, Death Plateau) only inform", () => {
   assert.ok(player.log.includes("sendVarbit 3872 1"));
 });
 
-test("a warning without a cws screen (the Wilderness ditch) is left to its caller", () => {
-  const event = show(createPlayer(), 7, { proceed: () => assert.fail("not ours") });
-  assert.notEqual(event.handled, true);
+// rsprox local 1002252 ticks 2398-2403 and 1002220: the Wilderness's own screen (475), answered with a pause button.
+test("the Wilderness warning (7) opens wilderness_warningscreen, answered with a pause button, counted on Yes", () => {
+  const player = createPlayer();
+  let went = 0, stayed = 0;
+  const answers = { proceed: () => { went++; }, stayOut: () => { stayed++; } };
+  const event = show(player, 7, answers);
+  assert.equal(event.handled, true);
+  for (const line of ["sendVarbit 14801 7", "sendInterface 475", `sendInterfaceDisplayState ${(475 << 16) | 13} true`,
+    `sendInterfaceFlagsRange ${(475 << 16) | 1} 0 1 1`, "sendInterfaceScript 2524 [-1,-1]"]) {
+    assert.ok(player.log.includes(line), line);
+  }
+  assert.ok(player.log.some((line) => line.startsWith("sendString If you go any further you will enter the Wilderness.")));
+  assert.equal(Shared.state(player, 7), 0, "not counted on opening");
+
+  const pause = (sub) => { const e = { player, groupId: 475, childId: 1, action: sub }; for (const h of hooks.clicks) h(e); return e; };
+  assert.equal(pause(0).handled, true);
+  assert.deepEqual([went, stayed], [0, 1], "sub 0 is No");
+  assert.equal(Shared.state(player, 7), 0, "No counts nothing");
+
+  show(player, 7, answers);
+  pause(1);
+  assert.deepEqual([went, stayed], [1, 1], "sub 1 is Yes");
+  assert.equal(Shared.state(player, 7), 1, "Yes counts the showing (recorded 3 -> 4)");
+
+  player.setAttribute(Shared.stateAttribute(7), 6);
+  player.log.length = 0;
+  show(player, 7, answers);
+  assert.ok(player.log.includes(`sendInterfaceDisplayState ${(475 << 16) | 13} false`), "shown enough: the toggle shows");
+  const toggle = { player, groupId: 475, childId: 13, action: 0 };
+  for (const h of hooks.clicks) h(toggle);
+  assert.equal(Shared.state(player, 7), Shared.OFF, "and turns it off");
+  let skipped = false;
+  show(player, 7, { proceed: () => { skipped = true; } });
+  assert.equal(skipped, true, "off: straight on");
 });
 
 test("login carries the old saves over: Shantay's 7 stays off, the Stronghold's count stops at 6 or its tick is off", () => {

@@ -9,6 +9,7 @@ import {
     animationRoleByName,
     animationWords,
     CombatAnimationRole,
+    isCastAnimationName,
     MOTION_WORDS,
     NON_COMBAT_WORDS,
 } from "../../CombatAnimationRoles";
@@ -298,6 +299,18 @@ export class NpcDefinitionLoader extends DefinitionLoader {
     }
 
     /**
+     * An NPC's observed animations with the casts moved to the style they fit: last for an NPC that
+     * attacks in melee (the Chaos druid's human_castentangle after its human_unarmedpunch), first for
+     * one that attacks with magic. Each role takes the first animation that has it, so a melee NPC
+     * whose list also holds its spell no longer swings with the cast. The order is otherwise kept.
+     */
+    public static byStyleFit(observed: number[], monster: any): number[] {
+        const magic = monster != null && NpcDefinitionLoader.resolveAttackType(monster.attack_type) === CombatType.MAGIC;
+        const fits = (id: number) => isCastAnimationName(CacheDefinitions.getSeqName(id)) === magic;
+        return [...observed.filter(fits), ...observed.filter((id) => !fits(id))];
+    }
+
+    /**
      * The melee style an NPC's hits roll against: the one of stab, slash and crush anywhere in its
      * attack types (Yama's "melee, slash, ..."). None, or more than one (Tekton's stab, slash and
      * crush), gives "", the best of the three.
@@ -405,14 +418,16 @@ export class NpcDefinitionLoader extends DefinitionLoader {
             if (!Array.isArray(observed) || observed.length === 0) continue;
             // An observed list has no order to trust: a role comes from the same animation's role
             // in a configured or captured entry, then from the animation's cache name, and only
-            // then by guess.
+            // then by guess. Where two animations could both be the attack, the one fitting the NPC's
+            // own style is looked at first (byStyleFit).
+            const fitted = NpcDefinitionLoader.byStyleFit(observed, monsters[npcId]);
             const inferred: NonNullable<CombatAnimation["anims"]> = {};
-            for (const animationId of observed) {
+            for (const animationId of fitted) {
                 const role = roleByAnimation.get(animationId);
                 if (role && inferred[role] === undefined) inferred[role] = animationId;
             }
             const namedRoles = new Map<number, CombatAnimationRole>();
-            for (const animationId of observed) {
+            for (const animationId of fitted) {
                 const role = animationRoleByName(CacheDefinitions.getSeqName(animationId));
                 if (role) namedRoles.set(animationId, role);
             }

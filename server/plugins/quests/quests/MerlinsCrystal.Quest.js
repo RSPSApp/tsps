@@ -122,8 +122,14 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   /** Thrantax stays this long after the wrong words (local 1001994 ticks 17490-17522). */
   const THRANTAX_ANGRY_TICKS = 32;
 
-  // The crate: a one-chunk copy of 2776,9848 while the player rides (rebuild_region, tick 928).
+  // The crate: a one-chunk copy of 2776,9848's ground plane while the player rides (rebuild_region,
+  // tick 928). Only plane 0 is copied; the source's upper planes hold the keep's walls and terrain,
+  // which live does not draw inside the crate (the view is black around the crate).
   const CRATE_SOURCE_CHUNK = [2776 >> 3, 9848 >> 3];
+  const CRATE_INSTANCE = {
+    sourceChunk: CRATE_SOURCE_CHUNK,
+    layout: { size: [1, 1], filler: [CRATE_SOURCE_CHUNK[0], CRATE_SOURCE_CHUNK[1], 0], chunks: [] },
+  };
   const CRATE_RIDE_TILE = [2777, 9849, 0];
   const CRATE_RIDE_BOUNDS = [[2776, 2783, 9848, 9855, 0]];
   const CRATE_START_TILE = [2801, 3443, 0]; // where the player climbed in (tick 928)
@@ -702,7 +708,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     player.getMovementQueue().reset().setBlockMovement(true);
     Scenes.later(player, CRATE_FADE_IN_TICKS, () => {
       Scenes.open(player, "crate", CRATE_RIDE_BOUNDS, { process: () => crateGuard(player) }, {
-        instance: { sourceChunk: CRATE_SOURCE_CHUNK, size: 1 },
+        instance: CRATE_INSTANCE,
         at: CRATE_RIDE_TILE,
         exit: CRATE_START_TILE,
       });

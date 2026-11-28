@@ -11,7 +11,8 @@ different reasons, and each has its own response and message.
 
 An NPC whose player target another is fighting gives it up too, but walks in first, as a player does on a
 fought NPC: it keeps following, untold, and drops the target the tick after it arrives in reach (at once if it
-already is). In an rsprox capture (rev 243, Edgeville Dungeon chaos druids, #6922), the player switched from one
+already is). One that stops short without reaching them (held back by its range from its spawn, or blocked) gives
+them up then. In an rsprox capture (rev 243, Edgeville Dungeon chaos druids, #6922), the player switched from one
 druid to another (tick 192); the new one cast on them at 193, and the first kept following them, was beside them
 at 198 and gave up at 199.
 

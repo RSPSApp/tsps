@@ -646,6 +646,19 @@ test("in single-combat, a hunter whose player another takes walks in and gives u
   assert.equal(s.player.getHitpoints(), s.player.getSkillManager().getMaxLevel(core.Skill.HITPOINTS), "without attacking");
 });
 
+test("in single-combat, a refused hunter that stops short of the player gives them up", (t) => {
+  const at = (dx, dy) => new core.Location(FIELD.x + dx, FIELD.y + dy, 0);
+  const s = scene(t, { spawn: at(0, 3) });
+  const other = secondHunter(t, MUGGER, at(5, 5));
+  s.player.getLocalNpcs = () => [s.npc];
+  NpcAggression.process(s.player);
+  assert.equal(s.npc.getCombat().getTarget(), s.player);
+  s.npc.getMovementQueue().setBlockMovement(true);
+  s.player.getCombat().setUnderAttack(other);
+  s.tick();
+  assert.equal(s.npc.getCombat().getTarget(), null, "it can't step, so it gives up instead of standing there");
+});
+
 test("in single-combat, an always-multi hunter still engages after a single-combat one", (t) => {
   const at = (dx, dy) => new core.Location(FIELD.x + dx, FIELD.y + dy, 0);
   const s = scene(t, { spawn: at(0, 2) });

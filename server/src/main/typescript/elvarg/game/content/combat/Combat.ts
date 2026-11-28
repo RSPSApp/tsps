@@ -594,7 +594,7 @@ export class Combat {
             // that arrived this cycle is answered on the next (live: the third line comes the
             // tick after arrival, rsprox 83 t18213, 1098 t4926).
             const stepped = this.character.getMovementQueue().didMoveThisCycle();
-            if (!this.walksInOnFoughtNpc(permission, target, method, stepped)) {
+            if (!this.walksInOnFoughtNpc(permission, target, method, stepped, true)) {
                 this.handleAttackDenied(permission, target, generation);
                 return;
             }
@@ -1316,14 +1316,16 @@ export class Combat {
      * An NPC whose player target another is fighting walks in the same way, untold, and gives the target
      * up the tick after it arrives, whatever its style: in reach at once it gives up at once (rsprox
      * capture rev 243, Edgeville Dungeon chaos druids, #6922: the druid the player switched from at tick
-     * 192 kept walking after them, was beside them at 198 and gave up at 199).
+     * 192 kept walking after them, was beside them at 198 and gave up at 199). One that stops short without
+     * reaching them gives up then.
      * True while the attacker keeps walking in.
      */
     private walksInOnFoughtNpc(
         permission: CanAttackResponse,
         target: Mobile,
         method: CombatMethod,
-        steppedThisCycle = false
+        steppedThisCycle = false,
+        afterMovement = false
     ): boolean {
         const npcOnPlayer = this.character.isNpc() && target.isPlayer();
         const playerOnNpc = this.character.isPlayer() && target.isNpc() && method.type() === CombatType.MELEE;
@@ -1332,7 +1334,9 @@ export class Combat {
         }
         // In reach without having stepped there this cycle: the refusal ends it here.
         if (!steppedThisCycle && CombatRange.canReach(this.character, method, target)) return false;
-        if (npcOnPlayer) return true;
+        // An NPC that took no step this cycle and still can't reach (held back by its range from its spawn, or
+        // blocked) is not walking in: it gives the target up too.
+        if (npcOnPlayer) return !(afterMovement && !steppedThisCycle);
         const cycle = World.getProcessCycle();
         if (this.foughtNpcNoticeGeneration !== this.generation || this.foughtNpcNoticeCycle === cycle) {
             this.foughtNpcNoticeGeneration = this.generation;

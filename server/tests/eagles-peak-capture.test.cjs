@@ -18,7 +18,7 @@ const HUNTER = 21;
 
 before(async () => {
   await H.boot();
-  for (const [x, y] of [[2607, 3265], [2318, 3505], [2328, 3494], [1994, 4983], [2003, 4948], [1974, 4908], [1947, 4868], [1956, 4907], [2022, 4982]]) {
+  for (const [x, y] of [[2607, 3265], [2318, 3505], [2328, 3494], [1994, 4983], [2003, 4948], [1974, 4908], [1947, 4868], [1956, 4907], [2022, 4982], [2742, 3830]]) {
     H.core.RegionManager.loadMapFiles(x, y);
   }
 });
@@ -269,12 +269,20 @@ test("the silver room: pedestal, two rocks, the opening's kebbit; a taunt drops 
   await H.until(f, "Taunt the kebbit.");
   await H.choose(f, "Taunt the kebbit.");
   await H.until(f, "Your mother was a hamster, and your father smelt of elderberries!");
+  const hops = [];
+  let moves = 0;
+  const inView = kebbit.teleportInView.bind(kebbit);
+  kebbit.teleportInView = (to) => { hops.push(H.xy(to)); return inView(to); };
+  const moveTo = kebbit.moveTo.bind(kebbit);
+  kebbit.moveTo = (to) => { moves++; return moveTo(to); };
   await H.continueLine(f);
   H.ticks(f, 12);
   assert.equal(varbit(f, VARBIT.TRACKING), 5);
   assert.ok(messages(f).includes("The kebbit scurries away..."));
   assert.ok(messages(f).includes("A feather drops from the kebbit's mouth as it escapes."));
   assert.equal(kebbit.isRegistered?.(), false, "it is gone into the tunnel");
+  assert.deepEqual(hops.at(-1), [...at(1971, 4885), 2], "it goes to the tunnel's mouth");
+  assert.equal(moves, hops.length, "every tile an in-view move, never a plain one that takes it out of view (6943)");
   const ground = H.core.ItemOnGroundManager.getGroundItem?.(f.player.getUsername(), ITEM.SILVER, new H.core.Location(...at(1971, 4885), 2));
   assert.ok(ground ?? true);
   await H.objectOption(f, 19456, at(1971, 4886));
@@ -292,6 +300,17 @@ test("the gold room: the capture's levers and feeds bring the birds round and th
     H.ticks(f, 2);
   }
   assert.equal(amount(f, ITEM.SEED), 6);
+  const sender = f.player.getPacketSender();
+  const launches = [];
+  const removals = [];
+  const sendProjectile = sender.sendProjectile.bind(sender);
+  sender.sendProjectile = (...args) => { launches.push({ tick: f.tick, delay: args[8] }); return sendProjectile(...args); };
+  const deregister = H.core.ObjectManager.deregister;
+  H.core.ObjectManager.deregister = (object, ...rest) => {
+    if (object.getId() === 19935) removals.push(f.tick);
+    return deregister.call(H.core.ObjectManager, object, ...rest);
+  };
+  t.after(() => { H.core.ObjectManager.deregister = deregister; });
   const lever = async (id, x, y, clickType = 1) => { await H.objectOption(f, id, at(x, y), clickType); H.ticks(f, 40); };
   /** Walks to the feeder (a long way round the rails, 67 ticks on live at t1757-1824), then waits out the flight. */
   const feed = async (id, x, y) => {
@@ -304,6 +323,7 @@ test("the gold room: the capture's levers and feeds bring the birds round and th
   assert.equal(varbit(f, VARBIT.GOLD), 4, "lever3 down (t1402)");
   await feed(19939, 1966, 4890);
   assert.equal(varbit(f, VARBIT.GOLD), 260, "bird5 (t1526)");
+  assert.equal(removals[0] - launches[0].tick, 1, "the bird's loc goes the tick after its projectile is sent (t1526-1527)");
   await feed(19938, 1962, 4894);
   assert.equal(varbit(f, VARBIT.GOLD), 388, "bird4 (t1542)");
   await lever(19949, 1978, 4891);
@@ -371,11 +391,20 @@ test("the eagle: the swipe without the disguise; with it, four tiles through it 
   place(f, [2007, 4953, 3]);
   f.player.getEquipment().setItem(H.core.Equipment.CAPE_SLOT, new H.core.Item(ITEM.CAPE, 1));
   f.player.getEquipment().setItem(H.core.Equipment.HEAD_SLOT, new H.core.Item(ITEM.BEAK, 1));
+  const poses = [];
+  const setSkillAnimation = f.player.setSkillAnimation.bind(f.player);
+  f.player.setSkillAnimation = (id) => { poses.push(id); return setSkillAnimation(id); };
   await H.talk(f, eagle);
   H.ticks(f, 8);
   assert.deepEqual(H.xy(f.player.getLocation()), [2007, 4957, 3]);
   assert.ok(messages(f).includes("You edge cautiously past the eagle; it doesn't seem to object."));
   assert.ok(f.animations.some((entry) => entry.id === 752) && f.animations.some((entry) => entry.id === 758));
+  assert.deepEqual(poses, [754, -1], "the sidestep walk the whole way through, then off (6943)");
+  poses.length = 0;
+  await H.talk(f, eagle);
+  H.ticks(f, 8);
+  assert.deepEqual(H.xy(f.player.getLocation()), [2007, 4953, 3]);
+  assert.deepEqual(poses, [756, -1], "the left-hand sidestep walk back");
 });
 
 test("Nickolaus in the nest: the disguise's box, 25 on its continue, the spare gone; out of the cave is 30 (t2023-2094)", async (t) => {
@@ -402,6 +431,41 @@ test("Nickolaus in the nest: the disguise's box, 25 on its continue, the spare g
   assert.equal(QUEST().getStage(f.player), 30);
 });
 
+test("the climbs to the eyries face up the mountain both ways (6943, capture 2821 t131-140)", async (t) => {
+  const EAST = 1, SOUTH = 2;
+  const climbs = [
+    { name: "up the Eagles' Peak rocks", from: [2322, 3502, 0], loc: [19849, [2322, 3501]], to: [2324, 3497, 0], face: SOUTH,
+      animations: [[0, 4435], [7, 819]], lands: 8 },
+    { name: "down them", from: [2324, 3497, 0], loc: [19849, [2324, 3498]], to: [2322, 3502, 0], face: SOUTH,
+      animations: [[0, 820], [1, 740]], lands: 8 },
+    { name: "up the Rellekka handholds", from: [2740, 3830, 1], loc: [19846, [2741, 3830]], to: [2744, 3830, 1], face: EAST },
+    { name: "down them", from: [2744, 3830, 1], loc: [19847, [2743, 3830]], to: [2740, 3830, 1], face: EAST },
+  ];
+  for (const climb of climbs) {
+    const f = eagles(t, { at: climb.from });
+    const agility = H.core.Skill.AGILITY;
+    f.player.getSkillManager().setMaxLevel?.(agility, 99);
+    f.player.getSkillManager().setCurrentLevel?.(agility, 99);
+    await H.objectOption(f, climb.loc[0], climb.loc[1]);
+    let faced = null;
+    let landed = null;
+    for (let i = 0; i < 20; i++) {
+      faced ??= f.player.getForceMovement()?.getDirection?.() ?? null;
+      H.tick(f);
+      if (landed === null && String(H.xy(f.player.getLocation())) === String(climb.to)) landed = f.tick;
+    }
+    assert.equal(faced, climb.face, climb.name);
+    if (climb.animations) {
+      // Ticks counted from the one the exact move starts on.
+      const first = f.animations.find((entry) => entry.id === climb.animations[0][1]).tick;
+      const played = f.animations.filter((entry) => entry.id > 0 && entry.id !== 65535 && entry.tick >= first).map((entry) => [entry.tick - first, entry.id]);
+      assert.deepEqual(played, climb.animations, climb.name);
+      assert.equal(landed - first, climb.lands, `${climb.name}: landed`);
+    }
+    assert.deepEqual(H.xy(f.player.getLocation()), climb.to, climb.name);
+  }
+});
+
 test("the ferret lesson: a copy of the camp, the trap catches a ferret, 35 with the box trap and the ferret (t2204-2255)", async (t) => {
   const f = eagles(t, { stage: 30, varbits: { TRACKING: 6, DOOR: 3, CHAT: 5 }, at: [2318, 3501, 0] });
   const nickolaus = spawnOnce(f, 2024, [2317, 3500, 0]);
@@ -419,12 +483,37 @@ test("the ferret lesson: a copy of the camp, the trap catches a ferret, 35 with 
   assert.notDeepEqual(H.xy(f.player.getLocation()), [2319, 3510, 0], "in the copy");
   await H.until(f, "Shhh, here comes something.");
   assert.equal(H.shown(f).npcId, 1485, "in the lesson's copy, 1485 (t2222)");
+  assert.deepEqual(f.player.getRenderAnimations(), [845, 844, 844, 844, 844, 844, 844], "crouched, as Nickolaus is (6943)");
+  const [startX, startY] = H.xy(f.player.getLocation());
   await H.continueLine(f);
-  H.ticks(f, 14);
+  H.ticks(f, 3);
+  const ferret = [...H.core.World.getNpcs()].find((npc) => npc?.getId?.() === 1505 && npc.getOwner?.() === f.player);
+  assert.deepEqual(H.xy(ferret.getPositionToFace()).slice(0, 2), [startX - 5, startY + 1], "it faces the trap, not a tile it passes");
+  H.ticks(f, 11);
   await H.until(f, "Ha ha, there you go!");
+  // The talk runs the lesson's last step on the tick that processes the continue.
+  const continued = f.tick + 1;
+  const steps = [];
+  const record = () => {
+    const [x, y] = H.xy(f.player.getLocation());
+    const offset = [x - startX, y - startY];
+    if (String(offset) !== String(steps.at(-1)?.slice(1) ?? [0, 0])) steps.push([f.tick - continued, ...offset]);
+  };
   await H.continueLine(f);
+  record();
+  for (let i = 0; i < 7; i++) {
+    H.tick(f);
+    record();
+  }
+  assert.deepEqual(steps, [[2, 0, -1], [3, -1, -1], [4, -2, -1], [5, -3, -1], [6, -4, -1], [7, -5, 0]],
+    "two ticks on, round the blocked tiles to the trap (t2239-2244)");
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), true, "held again at the trap");
   H.ticks(f, 20);
+  assert.equal(f.animations.find((entry) => entry.id === 5212 && entry.tick > continued).tick - continued, 8, "the dismantle");
+  assert.equal(f.messages.find((entry) => entry.text === "You dismantle the trap.").tick - continued, 10, "its message");
   assert.equal(QUEST().getStage(f.player), 35);
+  assert.equal(f.player.getRenderAnimations(), null, "stands up again");
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
   assert.ok(messages(f).includes("You dismantle the trap."));
   assert.deepEqual([amount(f, ITEM.BOX_TRAP), amount(f, ITEM.FERRET)], [1, 1]);
   assert.deepEqual(H.xy(f.player.getLocation()), [2314, 3510, 0], "back on the real camp");
@@ -565,6 +654,32 @@ test("interruption: a logout in the ferret lesson gives nothing and leaves 30, s
   assert.equal(QUEST().getStage(f.player), 30);
   assert.deepEqual([amount(f, ITEM.FERRET), amount(f, ITEM.BOX_TRAP)], [0, 0]);
   assert.deepEqual(H.xy(f.player.getLocation()), [2314, 3510, 0]);
+});
+
+test("interruption: a logout during the lesson's walk to the trap saves the player on the real camp, not in the copy (6943)", async (t) => {
+  const f = eagles(t, { stage: 30, at: [2318, 3501, 0] });
+  const nickolaus = spawnOnce(f, 2024, [2317, 3500, 0]);
+  await H.talk(f, nickolaus);
+  await H.until(f, "Well I was originally sent to find you because of a ferret.");
+  await H.choose(f, "Well I was originally sent to find you because of a ferret.");
+  await H.until(f, "That sounds good to me.");
+  await H.choose(f, "That sounds good to me.");
+  await H.until(f, "Come with me and I'll show you.");
+  await H.continueLine(f);
+  H.ticks(f, 12);
+  await H.until(f, "Shhh, here comes something.");
+  await H.continueLine(f);
+  H.ticks(f, 14);
+  await H.until(f, "Ha ha, there you go!");
+  await H.continueLine(f);
+  H.ticks(f, 3);
+  // The real logout: the area is left (the scene ends), then the hooks and the task sweep, which finish a forced walk.
+  f.player.onLogout();
+  assert.deepEqual(H.xy(f.player.getLocation()), [2314, 3510, 0]);
+  assert.equal(f.player.getRenderAnimations(), null);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+  H.ticks(f, 8);
+  assert.deepEqual(H.xy(f.player.getLocation()), [2314, 3510, 0], "the walk ends with the scene");
 });
 
 test("gating: before the quest nothing moves on; the ferret before the lesson does not finish it; the door stays shut", async (t) => {

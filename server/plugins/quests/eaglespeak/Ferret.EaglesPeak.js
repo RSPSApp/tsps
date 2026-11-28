@@ -5,19 +5,24 @@
  *   cutscene_status, the minimap off, the side tabs shut and menus hidden, the player at 2319,3510 facing the box
  *   trap (9380, 2314,3511), Nickolaus crouched (1483) at 2319,3511, the camera over the trap and the fade back
  *   ([0,0,0,255,50]); two ticks on the camera turns to 2317,3511. The talk carries on in the copy.
+ *   The player crouches as Nickolaus does (human_crawling and its ready pose) until the scene ends (issue 6943).
  * - "Shhh, here comes something." continued: a ferret (1505) comes out at 2311,3511 with the camera on it, walks
  *   two tiles to the trap, plays hunting_ferret_approaching, goes in (9397 and hunting_boxtrap) and the trap
  *   shuts on it (9384 and chinchompa_trapped), then "Ha ha, there you go!" (t2224-2234).
- * - "Ha ha..." continued: the player walks to 2314,3510, faces the trap and dismantles it (hunting_setting_trap_small);
- *   two ticks on the stage is 35 with "You dismantle the trap.", the trap gone, the box trap and ferret given and
- *   hunting_dismantle; three ticks later the scene ends at 2314,3510 and five ticks after that "See, it's all just
- *   a matter of patience." (t2239-2255).
+ * - "Ha ha..." continued: two ticks on the player walks to 2314,3510, down to y 3509 and round the blocked tiles
+ *   (a forced walk: the scene holds their own movement), a tile a tick for six (t2239-2244; local captures
+ *   1002123 and 1002312); then faces the trap and dismantles it (hunting_setting_trap_small, +8); two ticks on the
+ *   stage is 35 with "You dismantle the trap.", the trap gone, the box trap and ferret given and hunting_dismantle;
+ *   three ticks later (+13) the scene ends at 2314,3510 and five ticks after that "See, it's all just a matter of
+ *   patience." (t2247-2255).
  * Not sent (no shared helper here yet): the capture's fov_clamp, area-sound and draw-distance overrides.
  */
 module.exports = function attachEaglesPeakFerret(api, ep) {
   const { state, TEXT, Scenes } = ep;
   const { STAGE, ITEM, NPC } = state;
-  const { Item, Location } = api.core;
+  const { Item, Location, Direction, Flag } = api.core;
+  const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
+  ObstacleRunner.init(api);
 
   const SCENE = "eagles-peak-ferret";
   const CAMP = Object.freeze({
@@ -29,6 +34,15 @@ module.exports = function attachEaglesPeakFerret(api, ep) {
   const TRAP = Object.freeze({ EMPTY: 9380, TRAPPING: 9397, FULL: 9384, x: 2314, y: 3511 });
   const SEQ = Object.freeze({ FERRET_APPROACH: 5191, DISMANTLE: 5212 });
   const SOUND = Object.freeze({ BOX_TRAP: 2627, TRAPPED: 362, DISMANTLE: 2632 });
+  /** The corners of the walk to the trap: (2317,3510) and (2318,3510) are blocked. The last is where they stand. */
+  const TO_TRAP = Object.freeze([[2319, 3509, 0], [2315, 3509, 0], [2314, 3510, 0]]);
+  /** Ticks after the continue: the walk starts, then the dismantle, its message and the scene's end. */
+  const FINISH = Object.freeze({ WALK: 2, DISMANTLE: 8, CAUGHT: 10, END: 13, CAMERA: 18 });
+  /** human_crawling_ready and human_crawling, the pair Nickolaus's crouched form (1483) uses. */
+  const CROUCH_READY = 845;
+  const CROUCH_WALK = 844;
+  /** Stand, turn, walk, walk back, walk left, walk right, run. */
+  const CROUCHED = Object.freeze([CROUCH_READY, ...new Array(6).fill(CROUCH_WALK)]);
 
   const LINES = Object.freeze({
     COME_WITH_ME: "Come with me and I'll show you.",
@@ -41,6 +55,11 @@ module.exports = function attachEaglesPeakFerret(api, ep) {
   const PAUSE = Object.freeze({ START: 9, FERRET: 11, FINISH: 17 });
 
   const inScene = (player) => Scenes.get(player)?.name === SCENE;
+
+  function setPose(player, animations) {
+    player.setRenderAnimations(animations);
+    player.getUpdateFlag().flag(Flag.APPEARANCE);
+  }
 
   function sceneLoc(scene, id) {
     if (scene.trap) {
@@ -55,12 +74,15 @@ module.exports = function attachEaglesPeakFerret(api, ep) {
     if (state.stage(player) < STAGE.DISGUISE_GIVEN || state.stage(player) >= STAGE.FERRET_CAUGHT) return;
     Scenes.fade(player, true, 15);
     ep.later(player, 1, () => {
-      const scene = Scenes.open(player, SCENE, CAMP.bounds, { canTeleport: () => false },
+      // The walk to the trap is finished before the scene moves the player out: left running, a logout's task sweep
+      // would finish it afterwards and save them inside the copy.
+      const scene = Scenes.open(player, SCENE, CAMP.bounds, { canTeleport: () => false, beforeEnd: () => ObstacleRunner.completeNow(player) },
         { instance: CAMP.instance, at: CAMP.at, exit: CAMP.exit });
       Scenes.controls(player, true, true);
       Scenes.hideTabs(player);
       Scenes.actor(scene, NPC.NICKOLAUS_CRAWL, [2319, 3511, 0], [TRAP.x, TRAP.y]);
       Scenes.face(player, [TRAP.x, TRAP.y]);
+      setPose(player, CROUCHED);
       sceneLoc(scene, TRAP.EMPTY);
       Scenes.camera(player, [2313, 3506, 400], [TRAP.x, TRAP.y, 25], { rate: 0, rate2: 100 });
       Scenes.fade(player, false, 50);
@@ -99,7 +121,9 @@ module.exports = function attachEaglesPeakFerret(api, ep) {
     const scene = Scenes.get(player);
     if (!inScene(player)) return;
     Scenes.later(scene, 1, () => {
-      scene.ferret = Scenes.actor(scene, NPC.FERRET, [2311, 3511, 0], [2312, 3511]);
+      // Facing the trap, not a tile on its way: the real client holds a face tile until the walk ends, so a tile
+      // the ferret passes would turn it round as it arrives.
+      scene.ferret = Scenes.actor(scene, NPC.FERRET, [2311, 3511, 0], [TRAP.x, TRAP.y], { direction: Direction.EAST.getId() });
       Scenes.camera(player, [2310, 3515, 425], [2312, 3513, 300], { rate: 0, rate2: 100 });
       Scenes.walk(scene.ferret, [2313, 3511, 0]);
     });
@@ -124,12 +148,12 @@ module.exports = function attachEaglesPeakFerret(api, ep) {
     const scene = Scenes.get(player);
     if (!inScene(player)) return;
     scene.finishing = true;
-    Scenes.walk(player, [2314, 3510, 0]);
-    Scenes.later(scene, 6, () => {
+    walkToTrap(player, scene);
+    Scenes.later(scene, FINISH.DISMANTLE, () => {
       Scenes.face(player, [TRAP.x, TRAP.y]);
       ep.animate(player, SEQ.DISMANTLE);
     });
-    Scenes.later(scene, 8, () => {
+    Scenes.later(scene, FINISH.CAUGHT, () => {
       if (state.stage(player) < STAGE.FERRET_CAUGHT) state.setStage(player, STAGE.FERRET_CAUGHT);
       player.sendMessage(TEXT.TRAP_DISMANTLED);
       sceneLoc(scene, null);
@@ -137,14 +161,30 @@ module.exports = function attachEaglesPeakFerret(api, ep) {
       // In the inventory now if they fit; what does not lands on the real camp when the copy goes (below).
       scene.owed = giveFitting(player, [ITEM.BOX_TRAP, ITEM.FERRET]);
     });
-    Scenes.later(scene, 11, () => {
+    Scenes.later(scene, FINISH.END, () => {
       const owed = scene.owed ?? [];
       Scenes.end(player, false);
       player.moveTo(new Location(...CAMP.exit));
       Scenes.restoreTabs(player);
       for (const itemId of owed) player.getInventory().forceAdd(player, new Item(itemId, 1));
     });
-    ep.later(player, 16, () => player.getPacketSender().sendCameraReset());
+    ep.later(player, FINISH.CAMERA, () => player.getPacketSender().sendCameraReset());
+  }
+
+  /**
+   * The scene holds the player's movement, which would drop an ordinary walk: a forced one along live's route, a tile
+   * a tick, with clicks dropped. The scene's hold goes back on as it arrives.
+   */
+  function walkToTrap(player, scene) {
+    const route = TO_TRAP.map((corner) => {
+      const at = Scenes.tileFor(scene, corner);
+      return [at.getX(), at.getY()];
+    });
+    ObstacleRunner.run({ player }, [{ wait: FINISH.WALK }, { walk: route }], {
+      onFinish: () => {
+        if (Scenes.get(player) === scene) player.getMovementQueue().setBlockMovement(true);
+      },
+    });
   }
 
   /** Gives what fits now; returns what did not, for the real camp (live's full-pack case was not recorded: Ours). */
@@ -190,6 +230,7 @@ module.exports = function attachEaglesPeakFerret(api, ep) {
   /** Out of the copy early (a logout, a death): the lesson is played again from its start; nothing was given yet. */
   function ended(player, scene, logout) {
     if (scene.name !== SCENE) return;
+    if (player.getRenderAnimations() === CROUCHED) setPose(player, null);
     if (logout) payOwed(player, scene);
     if (!logout) Scenes.closeFade(player);
   }

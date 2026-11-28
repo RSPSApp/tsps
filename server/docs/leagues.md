@@ -1773,7 +1773,12 @@ Recipe for Disaster's rescues through that quest, its "Another Cook's Quest" lef
 (`diaryTasks`, the Wiki's lists matched to the diaries plugin's task keys by their text; the
 Desert elite Kalphite Queen head and the Wilderness easy earth warrior have no task there) over
 `diary:task`, before the unlock's own line as recorded, and its Combat Achievements
-(`combatAchievements`, by name) over `combat-achievements:complete`.
+(`combatAchievements`, by name) over `combat-achievements:complete`. A character born in
+Varlamore is treated as having visited it: `varlamore_visited` (the varbit the fairy rings'
+AIS/AJP/CKQ and the charter ships' Varlamore routes gate on) is set at creation, saved in
+`league:varlamore-visited` (varbits are not saved) and sent again at every login, so a character
+made before the rule gets it too; any other character's first visit still comes from the
+quetzals' first Fortis landing.
 
 **Demonic Pacts' League Home Teleport** (`leagueareas/HomeTeleport.LeagueAreaUnlocks.js`, data
 `homeTeleport`; spellbook 218:5; 237/01098, 01107, 01149, 238/01248): Cast asks "Select an

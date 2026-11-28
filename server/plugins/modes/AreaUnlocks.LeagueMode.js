@@ -5,13 +5,18 @@
  * league's thresholds, through the cache's own area interface. Locked areas keep the character
  * out (walking, teleports, respawns) at the granularity of the map squares the data assigns them
  * (data/league-areas.json); Slayer masters leave out tasks in locked areas. Other plugins ask
- * `league:areas` { player } and `league:area-at` { x, y } (docs/leagues.md).
+ * `league:areas` { player } and `league:area-at` { x, y } (docs/leagues.md). A character whose
+ * starting areas include Varlamore has visited it at creation: the `varlamore_visited` varbit the
+ * fairy rings and charter ships gate on is set (saved, since varbits are not) and sent again at
+ * every league login.
  */
 const Common = require("./leagueareas/Common.LeagueAreaUnlocks");
 
 module.exports = {
   register(api) {
     Common.init(api);
+    api.persistAttribute(Common.VISITED_ATTRIBUTE, 0);
+    api.onCustomEvent("league:login", Common.leagueLogin);
     require("./leagueareas/Unlock.LeagueAreaUnlocks")(api);
     require("./leagueareas/Interface.LeagueAreaUnlocks")(api);
     require("./leagueareas/Enforcement.LeagueAreaUnlocks")(api);

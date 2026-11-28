@@ -198,6 +198,8 @@ function finishDissolveBox(player) {
   player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
   QuestRuntime.refreshQuestList(player);
 }
+/** The box closed any other way than its continue (Escape, walking away, another interface). */
+function dissolveBoxClosed({ player }) { if (player) finishDissolveBox(player); }
 function resetComparison({ player }) { LAST_DISTANCE.delete(player); DISSOLVE_BOX.delete(player); }
 /** Making History finished (or reset): the miniquest's row starts (or goes back) at once, not at the next login. */
 function parentStageChanged({ player, key }) {
@@ -283,7 +285,7 @@ module.exports = function attach(pluginApi, makingHistory) {
   api.onCustomEvent("enchanted-key:is-complete", queryComplete);
   api.onCustomEvent("enchanted-key:sync", sync);
   api.onCustomEvent("quest:stage-changed", parentStageChanged);
-  api.onCustomEvent("interface:closed", ({ player }) => { if (player) finishDissolveBox(player); });
+  api.onCustomEvent("interface:closed", dissolveBoxClosed);
   api.onPlayerLogin(resetComparison);
   api.onPlayerLogout(resetComparison);
 };

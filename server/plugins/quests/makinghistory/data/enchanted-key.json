@@ -1,5 +1,5 @@
 {
-  "source": "OSRS Wiki The Enchanted Key: eleven location/reward rows; physical noted ore/essence forms corroborated by rsprox1702 rev226.1 eleven inventory93 deltas. Found-site bits: independently associated 1702 successive varp604 masks with each recorded reward row, matching current242 makinghistory_locstatus bits21..31.",
+  "source": "OSRS Wiki The Enchanted Key: eleven location/reward rows; physical noted ore/essence forms corroborated by rsprox1702 rev226.1 eleven inventory93 deltas. Found-site bits: independently associated 1702 successive varp604 masks with each recorded reward row, matching current242 makinghistory_locstatus bits21..31. Journal places: the quest journal's \"I found some treasure <place>.\" line for each site, listed in wireBit order (rsprox captures local 1002311 rev 243 tick 2140, all eleven; 1702 rev 226, nine).",
   "sites": [
     {
       "key": "rellekka",
@@ -20,7 +20,8 @@
           "amount": 15
         }
       ],
-      "wireBit": 0
+      "wireBit": 0,
+      "journal": "in the Fremennik Province"
     },
     {
       "key": "south-ardougne",
@@ -42,7 +43,8 @@
           "amount": 30
         }
       ],
-      "wireBit": 9
+      "wireBit": 9,
+      "journal": "near the Clock Tower Monastery"
     },
     {
       "key": "west-ardougne",
@@ -63,7 +65,8 @@
           "amount": 20
         }
       ],
-      "wireBit": 7
+      "wireBit": 7,
+      "journal": "near Jorral's Outpost"
     },
     {
       "key": "gnome-stronghold",
@@ -84,7 +87,8 @@
           "amount": 30
         }
       ],
-      "wireBit": 10
+      "wireBit": 10,
+      "journal": "in the Gnome Stronghold"
     },
     {
       "key": "body-altar",
@@ -106,7 +110,8 @@
           "amount": 45
         }
       ],
-      "wireBit": 6
+      "wireBit": 6,
+      "journal": "north of Falador"
     },
     {
       "key": "south-falador",
@@ -126,7 +131,8 @@
           "amount": 1
         }
       ],
-      "wireBit": 2
+      "wireBit": 2,
+      "journal": "south of Falador"
     },
     {
       "key": "mudskipper-point",
@@ -147,7 +153,8 @@
           "amount": 15
         }
       ],
-      "wireBit": 8
+      "wireBit": 8,
+      "journal": "south of Port Sarim"
     },
     {
       "key": "lumbridge-swamp",
@@ -168,7 +175,8 @@
           "amount": 20
         }
       ],
-      "wireBit": 4
+      "wireBit": 4,
+      "journal": "in Lumbridge Swamp"
     },
     {
       "key": "al-kharid",
@@ -190,7 +198,8 @@
           "amount": 1
         }
       ],
-      "wireBit": 3
+      "wireBit": 3,
+      "journal": "north of Al Kharid"
     },
     {
       "key": "south-east-varrock",
@@ -212,7 +221,8 @@
           "amount": 1
         }
       ],
-      "wireBit": 1
+      "wireBit": 1,
+      "journal": "south-east of Varrock"
     },
     {
       "key": "grand-exchange",
@@ -233,7 +243,8 @@
           "amount": 15
         }
       ],
-      "wireBit": 5
+      "wireBit": 5,
+      "journal": "in the Grand Exchange"
     }
   ]
 }

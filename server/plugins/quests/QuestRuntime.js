@@ -384,6 +384,9 @@ function openJournal(player, quest, row = questMetadata(quest, coreApi?.CacheDef
       openOverview(player, { name: row.displayname?.[0] ?? quest.name }, row, start);
       return;
     }
+    // No start text and no journal yet (The Enchanted Key before Making History): nothing to open,
+    // rather than an empty journal.
+    if (lines.length === 0) return;
   }
   const packet = player.getPacketSender();
   const updater = player.getFrameUpdater?.();

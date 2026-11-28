@@ -906,8 +906,16 @@ test('the real Silver merchant runner preserves cancel, banked-key and full-bag 
   const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
   try {
     ctx.api.sendMultiChatboxPrompt = PluginManager.createApi('q071-real-reclaim').sendMultiChatboxPrompt;
-    const start = player => realStartTranscript(ctx.api, player, N.SILVER_MERCHANT,
-      'Silver merchant', 'after-making-history');
+    // Live opens with the silver line and its menu, then "Ask about the outpost." leads into the
+    // after-quest talk (rsprox capture local 1002311 ticks 492-495).
+    const start = player => {
+      const started = realStartTranscript(ctx.api, player, N.SILVER_MERCHANT, 'Silver merchant', 'after-making-history');
+      const manager = player.getDialogueManager();
+      for (let n = 0; n < 5 && manager.isActive() && !MultiChatboxPrompt.getPending(player); n++) manager.advance();
+      assert.deepEqual(MultiChatboxPrompt.getPending(player)?.options, ['Yes please.', 'Ask about the outpost.', 'No thank you.']);
+      MultiChatboxPrompt.handleInterfaceActionClick({ player, buttonId: (219 << 16) | 1, slot: 2 });
+      return started;
+    };
     const drainToMenu = player => {
       const manager = player.getDialogueManager();
       for (let n = 0; n < 20 && manager.isActive() && !MultiChatboxPrompt.getPending(player); n++) manager.advance();

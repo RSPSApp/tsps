@@ -1,14 +1,14 @@
 ---
 quest: Icthlarin's Little Helper
 key: ictlharins_little_helper
-status: in-progress
+status: passed-with-issues
 tested: 2026-11-28
 tester: agent
 model: claude-opus-5-5
 commit: 1e9950566
 cache: osrs-241_2026-10-20
-start: fresh
-travel: travel_to
+start: checkpoint
+travel: travel_to (walks skipped)
 ---
 
 # Icthlarin's Little Helper
@@ -135,7 +135,12 @@ red names while current, struck through in the past tense once done.
 - The swarm's trigger box (3295-3301, 9175-9179), round the four recorded spawns.
 - A full inventory when the past's jar is taken, and flashback 3 with neither the holy symbol nor a free slot:
   "You don't have enough inventory space..." refusals.
-- The salt lake's Collect: no message.
+- The salt lake's Collect (and a bucket used on it): no message.
+- The carpenter's symbol after his "short wait" (Wiki) whether or not the embalmer has his items; the ceremony
+  begins (stage 16, varbit 408) once both are done, at whichever hand-in comes last. The capture did the embalmer
+  first.
+- A second click on the eastern door while the ceremony scene plays is ignored; a scene a logout broke starts again
+  from stage 19.
 
 ## Not covered
 
@@ -145,6 +150,9 @@ red names while current, struck through in the past tense once done.
 - The possessed priest's recovery if the fight takes too long (Wiki: "The priest seems to recover..."; no duration).
 - `cam_smoothreset` after the pit jump: tsps has no such packet, so the camera resets at once.
 - The pyramid's music (Mirage, Hypnotised in a flashback): the copy plays its region's.
+- The town High Priest's question menu: live drops a topic once asked (ticks 1266-1323); ours offers all five each
+  time (the dump's menu has no asked-state).
+- fov_clamp, draw_distance_max_override and hidelocops during the cutscenes: QuestScenes sends none of them.
 
 ## To record
 
@@ -159,4 +167,17 @@ red names while current, struck through in the past tense once done.
 
 ### 2026-11-28 · agent · claude-opus-5-5
 
-- **Start:** see the PR's Testing section for the fresh-agent playthrough.
+- **Start:** fresh account, Gertrude's Cat completed by `::quest` (the requirement), placed by the Wanderer with
+  `::tele`. It died in flashback 1 while the first run was blocked (the pit, fixed); the run went on from that
+  account at stage 4 as a declared checkpoint, re-supplied with a cat and ordinary supplies.
+- **Route:** `travel_to` (walks skipped for the long legs), the rock, every pyramid door, ladder, pit and puzzle by
+  click; the salt lake and suntrap, sap from an evergreen in Burthorpe, linen from Raetul.
+- **Result:** stage 26; 2 Quest points, 4,500 Thieving, 4,000 Agility, 4,000 Woodcutting, the amulet of catspeak,
+  once; kept through a relog and in the saved game. Riddle exits, puzzle Reset, the ladder's leave, a relog inside a
+  flashback and a death in one all behaved.
+- **Found and fixed:** flashback 1's pit did nothing; the ceremony scene broke on a second door click and left the
+  player outside the room; the possessed priest dropped all four potions; the embalmer was not met until a hand-in
+  (Raetul refused); the carpenter's box showed a symbol it didn't give; sap only from trees named Evergreen; the
+  carpenter, embalmer and Sphinx after the quest; a jar message after the jar's return.
+- **Not checked:** clips of the scenes (the vision client's login puts the player outside the pyramid), the carpet
+  ride itself, the Quest Helper overlay.

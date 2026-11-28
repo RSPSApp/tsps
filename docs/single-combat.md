@@ -9,9 +9,11 @@ different reasons, and each has its own response and message.
 | An NPC is fighting someone else | `TARGET_IN_COMBAT` | `Someone else is fighting that.` | The attack stops. |
 | A player is fighting someone else | `TARGET_IN_COMBAT` | `Someone else is already fighting <name>.` | The attack stops. |
 
-An NPC whose target is taken gives it up too. In an rsprox capture (rev 243, Edgeville Dungeon chaos
-druids, #6922), the player switched from one druid to another (tick 192); the new one cast on them at 193 and
-the first kept following them until 199, then stopped. Ours stops at the refusal, a few ticks earlier.
+An NPC whose player target another is fighting gives it up too, but walks in first, as a player does on a
+fought NPC: it keeps following, untold, and drops the target the tick after it arrives in reach (at once if it
+already is). In an rsprox capture (rev 243, Edgeville Dungeon chaos druids, #6922), the player switched from one
+druid to another (tick 192); the new one cast on them at 193, and the first kept following them, was beside them
+at 198 and gave up at 199.
 
 An aggressive NPC that has taken a player but not hit them yet holds them in single-way combat for 8 ticks
 (the PJ timer's length), so a second one doesn't take them while the first walks in (`NpcAggression`). Ours: no

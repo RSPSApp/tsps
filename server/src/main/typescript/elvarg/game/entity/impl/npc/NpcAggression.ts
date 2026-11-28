@@ -13,8 +13,11 @@ import { World } from "../../../World";
 const SINGLE_WAY_HOLD_TICKS = 8;
 
 export class NpcAggression {
-    /** The player each hunter took, and the cycle it took them on. */
-    private static readonly huntedAt = new WeakMap<NPC, { player: Player; cycle: number }>();
+    /**
+     * The index of the player each hunter took, and the cycle it took them on. An index, not the player, so a
+     * world NPC doesn't keep a logged-out player alive; getTarget() === player says which player it is.
+     */
+    private static readonly huntedAt = new WeakMap<NPC, { playerIndex: number; cycle: number }>();
 
     public static process(player: Player) {
         // Wiki (PJ timer): 8 ticks of single-way protection while a monster is attacking,
@@ -53,7 +56,7 @@ export class NpcAggression {
                 continue;
             }
             const hunted = NpcAggression.huntedAt.get(npc);
-            if (hunted?.player === player && cycle - hunted.cycle < SINGLE_WAY_HOLD_TICKS) return true;
+            if (hunted?.playerIndex === player.getIndex() && cycle - hunted.cycle < SINGLE_WAY_HOLD_TICKS) return true;
         }
         return false;
     }
@@ -143,7 +146,7 @@ export class NpcAggression {
                         continue;
                     }
                     npc.getCombat().attack(player);
-                    NpcAggression.huntedAt.set(npc, { player, cycle: World.getProcessCycle() });
+                    NpcAggression.huntedAt.set(npc, { playerIndex: player.getIndex(), cycle: World.getProcessCycle() });
                     // Any ordinary NPC that engages counts, even under multi rules: a hunter on
                     // a single tile next to the multi area must not join it this tick.
                     if (!npc.isMultiCombat()) {

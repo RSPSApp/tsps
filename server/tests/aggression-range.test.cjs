@@ -623,6 +623,29 @@ test("in single-combat, a hunter that cannot reach the player holds them for 8 t
   assert.equal(second.getCombat().getTarget(), s.player, "8 ticks on, the next hunter takes them");
 });
 
+// #6922, rsprox capture (rev 243, Edgeville Dungeon chaos druids): the druid the player switched away from (tick
+// 192) kept walking after them, was beside them at 198 and gave them up at 199.
+test("in single-combat, a hunter whose player another takes walks in and gives up the tick after arriving", (t) => {
+  const at = (dx, dy) => new core.Location(FIELD.x + dx, FIELD.y + dy, 0);
+  const s = scene(t, { spawn: at(0, 3) });
+  const other = secondHunter(t, MUGGER, at(5, 5));
+  s.player.getLocalNpcs = () => [s.npc];
+  NpcAggression.process(s.player);
+  assert.equal(s.npc.getCombat().getTarget(), s.player, "the hunter takes the player");
+  s.player.getCombat().setUnderAttack(other);
+
+  const adjacent = () => s.npc.getLocation().getDistance(s.player.getLocation()) <= 1;
+  let ticks = 0;
+  while (!adjacent() && ticks++ < 10) {
+    s.tick();
+    assert.equal(s.npc.getCombat().getTarget(), s.player, `still walking in (tick ${ticks})`);
+  }
+  assert.ok(adjacent(), "it walked up beside the player");
+  s.tick();
+  assert.equal(s.npc.getCombat().getTarget(), null, "and gave them up the tick after it arrived");
+  assert.equal(s.player.getHitpoints(), s.player.getSkillManager().getMaxLevel(core.Skill.HITPOINTS), "without attacking");
+});
+
 test("in single-combat, an always-multi hunter still engages after a single-combat one", (t) => {
   const at = (dx, dy) => new core.Location(FIELD.x + dx, FIELD.y + dy, 0);
   const s = scene(t, { spawn: at(0, 2) });

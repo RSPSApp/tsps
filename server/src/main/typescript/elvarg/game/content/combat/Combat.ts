@@ -1300,10 +1300,8 @@ export class Combat {
      * the attack resumes once it lands - cancelling here throws the click away, which
      * is what made attacking a new npc feel unresponsive after a kill.
      *
-     * A taken target (TARGET_IN_COMBAT) is not one, for an NPC either: it gives the target up
-     * rather than waiting the other fight out (rsprox capture, rev 243 Edgeville Dungeon chaos
-     * druids, #6922: after the player switched to another druid at tick 192, the first stopped
-     * following them at 199). Ours: it stops at the refusal, a few ticks earlier.
+     * A taken target (TARGET_IN_COMBAT) is not one, for an NPC either: it walks in and gives the
+     * target up on arrival (walksInOnFoughtNpc) rather than waiting the other fight out.
      */
     private isTransientDenial(response: CanAttackResponse): boolean {
         return response === CanAttackResponse.ALREADY_UNDER_ATTACK ||
@@ -1315,7 +1313,11 @@ export class Combat {
      * LostCity player_combat.rs2): the player still walks in. The refusal is said by both
      * checks of the click tick (before and after its step), and again the tick after arrival, where the
      * attack ends. Ranged and magic are refused on the spot, as before (rsprox 2745 t4982).
-     * True while the player keeps walking in.
+     * An NPC whose player target another is fighting walks in the same way, untold, and gives the target
+     * up the tick after it arrives, whatever its style: in reach at once it gives up at once (rsprox
+     * capture rev 243, Edgeville Dungeon chaos druids, #6922: the druid the player switched from at tick
+     * 192 kept walking after them, was beside them at 198 and gave up at 199).
+     * True while the attacker keeps walking in.
      */
     private walksInOnFoughtNpc(
         permission: CanAttackResponse,
@@ -1323,12 +1325,14 @@ export class Combat {
         method: CombatMethod,
         steppedThisCycle = false
     ): boolean {
-        if (permission !== CanAttackResponse.TARGET_IN_COMBAT || !this.character.isPlayer() || !target.isNpc()
-            || method.type() !== CombatType.MELEE) {
+        const npcOnPlayer = this.character.isNpc() && target.isPlayer();
+        const playerOnNpc = this.character.isPlayer() && target.isNpc() && method.type() === CombatType.MELEE;
+        if (permission !== CanAttackResponse.TARGET_IN_COMBAT || !(npcOnPlayer || playerOnNpc)) {
             return false;
         }
         // In reach without having stepped there this cycle: the refusal ends it here.
         if (!steppedThisCycle && CombatRange.canReach(this.character, method, target)) return false;
+        if (npcOnPlayer) return true;
         const cycle = World.getProcessCycle();
         if (this.foughtNpcNoticeGeneration !== this.generation || this.foughtNpcNoticeCycle === cycle) {
             this.foughtNpcNoticeGeneration = this.generation;

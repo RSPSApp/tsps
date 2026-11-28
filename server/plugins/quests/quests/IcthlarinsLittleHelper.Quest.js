@@ -3,7 +3,7 @@
  *
  * Aligned with the user's rsprox capture of a whole run and what the quest unlocks after it (local 1002310,
  * revision 243); the facts each step relies on, with capture ticks, are in
- * docs/quests/icthlarins-little-helper/README.md. The words come from the "Icthlarin's Little Helper"
+ * docs/quests/ictlharins-little-helper/README.md. The words come from the "Icthlarin's Little Helper"
  * transcript page (npc-dialogues.json); the units below pick its variants and do what live did around them.
  *
  * The stage is varbit 418 `ics_little_var` with live's values (26 complete, cache DB row 75 column 19); the

@@ -1,7 +1,7 @@
 // Run after `yarn build`: node --test tests/icthlarins-little-helper-capture.test.cjs
 //
 // Icthlarin's Little Helper against the user's revision 243 capture of a whole run (local 1002310;
-// docs/quests/icthlarins-little-helper): the start and hypnosis, the arrival in Sophanem, the Sphinx's riddle
+// docs/quests/ictlharins-little-helper): the start and hypnosis, the arrival in Sophanem, the Sphinx's riddle
 // and token, the High Priest, Klenter's Pyramid as a private copy (the door, the flashbacks and their item swap,
 // the puzzle, the jars and the apparition, the pit, the sarcophagus), the embalmer, the carpenter, the
 // ceremony scene and the possessed priest, Icthlarin's flashback and the completion, the journal, and live's

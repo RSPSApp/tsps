@@ -1,6 +1,6 @@
 /**
  * Icthlarin's Little Helper: the western door's tile puzzle (interface 147 `icthalarins_tile_game`), as the
- * capture plays it (local 1002310, opened at t1217 and t2282; docs/quests/icthlarins-little-helper).
+ * capture plays it (local 1002310, opened at t1217 and t2282; docs/quests/ictlharins-little-helper).
  *
  * - 25 tiles (components 4-28, ics_1..ics_25), each a varbit (ics_tile1..25, 420-444) with 1 = turned to its
  *   back. `ics_tilechecker` (445) is the same 25 bits as one value. Pressing a tile turns it and the eight

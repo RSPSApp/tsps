@@ -1,6 +1,6 @@
 /**
  * Icthlarin's Little Helper: the quest's state, as live keeps it (the user's rsprox capture of a whole run,
- * local 1002310, revision 243; docs/quests/icthlarins-little-helper).
+ * local 1002310, revision 243; docs/quests/ictlharins-little-helper).
  *
  * - The stage is varbit 418 `ics_little_var` (varp 445 bits 0-4), with live's values (`STAGE`), each set
  *   by the action the capture shows. 26 is complete (cache DB row 75 column 19).

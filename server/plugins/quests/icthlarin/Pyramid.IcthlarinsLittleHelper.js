@@ -1,6 +1,6 @@
 /**
  * Icthlarin's Little Helper: Klenter's Pyramid, as the capture plays it (local 1002310; ticks in
- * docs/quests/icthlarins-little-helper).
+ * docs/quests/ictlharins-little-helper).
  *
  * Every visit is a private copy of the pyramid (live rebuilds the map each time: `build_area`), with its five
  * mummies, the scarab swarm that comes up past them, the pit, the western jar room and the eastern ceremonial

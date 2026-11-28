@@ -1,6 +1,6 @@
 /**
  * Icthlarin's Little Helper: the Wanderer, her tent and the way into Sophanem (stages 0-3), as the capture
- * plays them (local 1002310 t445-t515; docs/quests/icthlarins-little-helper).
+ * plays them (local 1002310 t445-t515; docs/quests/ictlharins-little-helper).
  *
  * - "Yes." to "Start the Icthlarin's Little Helper quest?" starts it (stage 1) and picks the jar (varbit 397).
  * - With a full waterskin and a tinderbox, "Don't blink..." continued is the hypnosis (t485): the hypnotise

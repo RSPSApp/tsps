@@ -1,6 +1,6 @@
 /**
  * Icthlarin's Little Helper: the ceremony, from its supplies to the end (stages 15-26), as the capture plays it
- * (local 1002310; docs/quests/icthlarins-little-helper).
+ * (local 1002310; docs/quests/ictlharins-little-helper).
  *
  * - Supplies (Wiki, not captured: the account brought a bag of salt and a bucket of sap): a bucket filled at
  *   the salt lake (Water 6605, "Collect"), dried on the suntrap (6606, "Use"); sap from a knife on an

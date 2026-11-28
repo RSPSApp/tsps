@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-199 quests · ✅ passed: 24 · ⚠️ passed with issues: 23 · 🔄 in progress: 16 · ❌ failed: 0 · 🔁 needs recheck: 50 · untested: 86
+199 quests · ✅ passed: 24 · ⚠️ passed with issues: 23 · 🔄 in progress: 16 · ❌ failed: 0 · 🔁 needs recheck: 51 · untested: 85
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -37,7 +37,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Cold War | untested |  |  |  |  |
 | [Contact!](contact/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [Cook's Assistant](cooks-assistant/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 1 |
-| [Crab Quest](crab-quest/README.md) | ⚠️ passed with issues | 2026-11-09 | agent | claude-opus-5-5 | 3 |
+| [Crab Quest](crab-quest/README.md) | ⚠️ passed with issues | 2026-11-09 | agent | claude-opus-5-5 | 2 |
 | Creature of Fenkenstrain | untested |  |  |  |  |
 | [Current Affairs](current-affairs/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | Curse of the Empty Lord | untested |  |  |  |  |
@@ -87,7 +87,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Holy Grail](holy-grail/README.md) | 🔁 needs recheck | 2026-11-02 | agent | claude-opus-5-5 | 4 |
 | Hopespear's Will | untested |  |  |  |  |
 | [Horror from the Deep](horror-from-the-deep/README.md) | 🔄 in progress |  | agent |  |  |
-| Icthlarin's Little Helper | untested |  |  |  |  |
+| [Icthlarin's Little Helper](ictlharins-little-helper/README.md) | 🔁 needs recheck | 2026-11-28 | agent | claude-opus-5-5 |  |
 | Imp Catcher | untested |  |  |  |  |
 | [In Aid of the Myreque](in-aid-of-the-myreque/README.md) | untested |  |  |  |  |
 | In Search of Knowledge | untested |  |  |  |  |

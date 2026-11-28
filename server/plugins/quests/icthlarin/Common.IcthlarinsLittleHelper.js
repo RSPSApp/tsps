@@ -92,7 +92,7 @@ function createCommon(api, state) {
     const slot = slotOf(player, fromId);
     if (slot < 0) return false;
     const inventory = player.getInventory();
-    inventory.set(slot, toId >= 0 ? new Item(toId, 1) : null);
+    inventory.set(slot, new Item(toId >= 0 ? toId : -1, toId >= 0 ? 1 : 0));
     inventory.refreshItems();
     return true;
   }
@@ -228,7 +228,7 @@ function createCommon(api, state) {
     const request = { player, itemId, summoned: false, following: false };
     api.emitCustomEvent("pets:summon", request);
     if (!request.following) return false;
-    player.getInventory().set(slot, null);
+    player.getInventory().set(slot, new Item(-1, 0));
     player.getInventory().refreshItems();
     return true;
   }

@@ -84,6 +84,8 @@ function fixture(t, [x, y, z] = [3315, 2849, 0]) {
       p.getMovementQueue().process();
       core.World.getNpcs?.().forEach?.((other) => other?.getMovementQueue?.().process?.());
       core.AreaManager?.process?.(p);
+      // The world update's placement, which the test has no loop for.
+      p.needsPlacement = false;
     }
   };
   const send = async (packet) => { await c.dispatch([packet]); c.processTurnPackets(); };
@@ -226,4 +228,303 @@ test('the hypnosis: "Don\'t blink..." continued blacks out and holds; 4 ticks on
   assert.equal(f.has(I().TINDERBOX), 0);
   f.step(4);
   assert.deepEqual(f.read(), ['box', null, 'You slowly pick yourself off the ground. Your head is pounding, and an irrational sense of guilt nags you.']);
+});
+
+// ---------------------------------------------------------------------------
+// The Sphinx and the High Priest
+// ---------------------------------------------------------------------------
+
+function withCat(f) {
+  const request = { player: f.p, itemId: CAT_ITEM, summoned: false, following: false };
+  PM.emitCustomEvent('pets:summon', request);
+  assert.equal(request.following, true, 'the cat follows');
+  return request.pet;
+}
+
+test('the riddle: "9." and "Totally positive." keep the cat; stage 6 on "Here, I have a token...", the token box (t1406-t1493)', async (t) => {
+  const f = fixture(t, [3300, 2785, 0]);
+  setStage(f, 5);
+  f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2, [VARBIT.KLENTER]: 1, [VARBIT.MET_SPHINX]: 1 });
+  withCat(f);
+  const sphinx = f.npc(4209, [3300, 2783, 0]);
+  await f.clickNpc(sphinx);
+  const lines = await f.talk([1, 2, 1], { stop: (l) => l[2] === 'Here, I have a token that he will know is from me. Take that to him, and I\'m sure he will speak with you.' });
+  assert.deepEqual(lines[0], ['player', 'player', 'Good day.', 588]);
+  assert.deepEqual(lines[1], ['box', null, 'The Sphinx ignores you.']);
+  const riddle = lines.find((l) => l[2]?.startsWith('A husband and wife'));
+  assert.equal(riddle[1], 4209);
+  assert.equal(saved(f)[VARBIT.CAT_SAFE], 1, 'the riddle answered (13883)');
+  assert.equal(stage(f), 6, 'stage 6 as the token line shows');
+  await f.cont();
+  f.step(2);
+  assert.deepEqual(f.read(), ['item', I().SPHINXS_TOKEN, 'The Sphinx gives you a token.']);
+  assert.equal(f.has(I().SPHINXS_TOKEN), 1);
+  assert.equal(saved(f)[VARBIT.TOKEN_RECEIVED], 1);
+});
+
+test('the riddle answered wrong and confirmed: the cat goes to the Sphinx, the talk carries on to the token (Wiki; t1383 shows the confirmation)', async (t) => {
+  const f = fixture(t, [3300, 2785, 0]);
+  setStage(f, 5);
+  f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2, [VARBIT.KLENTER]: 1, [VARBIT.MET_SPHINX]: 1 });
+  withCat(f);
+  const sphinx = f.npc(4209, [3300, 2783, 0]);
+  await f.clickNpc(sphinx);
+  const lines = await f.talk([1, 1, 1]);
+  assert.ok(texts(lines).includes('Your cat shakes it head frantically and starts to scratch your leg.'));
+  assert.equal(saved(f)[414], 1, 'ics_sphinx_robbedcat');
+  assert.equal(f.has(CAT_ITEM), 0);
+  const current = { player: f.p, pet: null };
+  PM.emitCustomEvent('pets:current', current);
+  assert.equal(current.pet, null, 'no cat follows');
+  // Transcript: "...You're a grave robber." carries on into the accusation and the token all the same.
+  assert.equal(stage(f), 6);
+});
+
+test('the High Priest: the token box takes it, stage 7 on "Cats act as guardians..." (t1606-t1700)', async (t) => {
+  const f = fixture(t, [3281, 2770, 0]);
+  setStage(f, 6);
+  f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2, [VARBIT.KLENTER]: 1, [VARBIT.TOKEN_RECEIVED]: 1 });
+  f.give(I().SPHINXS_TOKEN);
+  const priest = f.npc(6192, [3281, 2772, 0]);
+  await f.clickNpc(priest);
+  const lines = await f.talk([], { stop: (l) => l[2]?.startsWith('Cats act as guardians') });
+  const box = lines.find((l) => l[0] === 'item');
+  assert.deepEqual(box, ['item', I().SPHINXS_TOKEN, 'You hand the token to the High Priest.']);
+  assert.equal(f.has(I().SPHINXS_TOKEN), 0);
+  assert.equal(saved(f)[VARBIT.TOKEN_GIVEN], 1);
+  assert.equal(stage(f), 7);
+  assert.equal(lines.find((l) => l[2] === 'You! I will have no dealings with those who plunder the houses of the dead.')?.[1], 6192, 'the multinpc head live sends');
+});
+
+// ---------------------------------------------------------------------------
+// Klenter's Pyramid
+// ---------------------------------------------------------------------------
+
+/** A source tile of the pyramid's copy, as the client clicks it. */
+function tileIn(f, x, y, z = 0) {
+  const area = f.p.getArea?.();
+  assert.ok(area?.sourceTile, 'in the pyramid copy');
+  const tile = area.sourceTile(x, y, z);
+  return [tile.getX(), tile.getY()];
+}
+const clickIn = (f, id, x, y, clickType = 1) => { const [rx, ry] = tileIn(f, x, y); return f.clickLoc(id, rx, ry, clickType); };
+const place = (f, x, y) => { const [rx, ry] = tileIn(f, x, y); f.p.moveTo(new core.Location(rx, ry, 0)); f.step(); };
+
+/** Lights Out over GF(2): the presses (0-24) that clear `board`, each press turning itself and its eight neighbours. */
+function solve(board) {
+  const { turnsFor } = require('../plugins/quests/icthlarin/Puzzle.IcthlarinsLittleHelper')._test;
+  const rows = [];
+  for (let tile = 0; tile < 25; tile++) {
+    let row = 0n;
+    for (let press = 0; press < 25; press++) if (turnsFor(press).includes(tile)) row |= 1n << BigInt(press);
+    if ((board >> tile) & 1) row |= 1n << 25n;
+    rows.push(row);
+  }
+  let r = 0; const pivots = [];
+  for (let col = 0; col < 25 && r < 25; col++) {
+    const pick = rows.findIndex((row, i) => i >= r && (row >> BigInt(col)) & 1n);
+    if (pick < 0) continue;
+    [rows[r], rows[pick]] = [rows[pick], rows[r]];
+    for (let i = 0; i < 25; i++) if (i !== r && (rows[i] >> BigInt(col)) & 1n) rows[i] ^= rows[r];
+    pivots.push(col); r++;
+  }
+  return pivots.filter((col, i) => (rows[i] >> 25n) & 1n);
+}
+function board(f) {
+  let value = 0;
+  for (let i = 0; i < 25; i++) if (f.varbit(420 + i) === 1) value |= 1 << i;
+  return value;
+}
+const pressTile = (f, index) => f.send({ type: 'widget_action', widgetId: (147 << 16) | (4 + index), groupId: 147, childId: 4 + index, buttonNum: 1 });
+
+test('flashback 1: the door\'s deja-vu, the copy, the jar for the unholy symbol in its slot, the sepia (t1033-t1046)', async (t) => {
+  const f = fixture(t, [3294, 2779, 0]);
+  setStage(f, 3);
+  f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2, [VARBIT.KLENTER]: 1 });
+  f.give(4679);
+  const jarSlot = f.slot(4679);
+  await f.clickLoc(6614, 3294, 2778);
+  f.step(2);
+  assert.deepEqual(f.read(), ['box', null, 'As you touch the pyramid door, a sense of deja-vu sweeps over you...']);
+  const from = f.tick();
+  f.step(3 + 2);
+  assert.equal(stage(f), 4);
+  assert.equal(f.varbit(VARBIT.FLASHBACK), 1);
+  assert.deepEqual(sourceOf(f), [3277, 9171, 0]);
+  assert.equal(f.p.getInventory().getItems()[jarSlot]?.getId(), I().UNHOLY_SYMBOL_3, 'the past self holds the unholy symbol');
+  assert.ok(f.since(from).some((e) => e[1] === 'sendSoundEffect' && e[2] === 1164));
+  f.step(4);
+  assert.deepEqual(f.read()?.slice(0, 3), ['player', 'player', 'I must go to the heart of the pyramid... The mistress commands it...']);
+  assert.ok(f.since(from).some((e) => e[1] === 'mountSubInterface' && e[3] === 146), 'the flashback overlay');
+  // Teleports are refused inside it, with live's message (t2015).
+  assert.equal(f.p.getArea().canTeleport(f.p), false);
+  assert.ok(f.log.some((e) => e[1] === 'sendMessage' && e[2] === 'An outside force seems to be blocking your teleport.'));
+
+  // The ladder's "Do you want to leave?": "Yes." ends it early, stage kept, the jar back (t1063-t1078).
+  await f.cont();
+  f.step(2);
+  await clickIn(f, 6645, 3277, 9172);
+  const lines = await f.talk([1]);
+  assert.equal(lines[0][2], 'I must get to the heart of the pyramid...');
+  assert.deepEqual(lines[1], ['options', ['Yes.', 'No.']]);
+  f.step(6);
+  assert.equal(stage(f), 4);
+  assert.equal(f.varbit(VARBIT.FLASHBACK), 0);
+  assert.deepEqual(at(f), [3294, 2781, 0]);
+  assert.equal(f.p.getInventory().getItems()[jarSlot]?.getId(), 4679);
+});
+
+test('flashback 1\'s puzzle: five random presses, the board turned by real presses, solved to stage 5 and outside (t1217-t1247)', async (t) => {
+  const f = fixture(t, [3294, 2779, 0]);
+  setStage(f, 4);
+  f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2, [VARBIT.KLENTER]: 1 });
+  f.give(4679);
+  await f.clickLoc(6614, 3294, 2778);
+  f.step(2); f.step(3 + 2 + 4);
+  await f.cont(); f.step(2);
+  place(f, 3280, 9200);
+  await clickIn(f, 44059, 3280, 9199);
+  f.step(3);
+  assert.ok(f.log.some((e) => e[1] === 'sendInterface' && e[2] === 147), 'the puzzle opens');
+  const scrambled = board(f);
+  assert.notEqual(scrambled, 0);
+  assert.equal(f.log.filter((e) => e[1] === 'sendInterfaceAnimation' && e[2] === ((147 << 16) | 30) && e[3] === 2003).length, 2, 'counter 4 before and after the scramble');
+  const presses = solve(scrambled);
+  for (const press of presses) await pressTile(f, press);
+  assert.equal(board(f), 0);
+  assert.ok(f.log.some((e) => e[1] === 'sendJingle' && e[2] === 192), 'the tile win jingle');
+  f.step(2);
+  assert.equal(stage(f), 5);
+  f.step(6);
+  assert.deepEqual(at(f), [3294, 2781, 0]);
+  const lines = await f.talk();
+  assert.deepEqual(texts(lines), ['I remember! That wanderer, she hypnotised me!',
+    "But... I can't remember why. I needed to get... something. This is so confusing...",
+    'Maybe someone around here can tell me what on Gielinor is going on.']);
+  assert.equal(f.has(4679), 1);
+  assert.equal(f.has(I().UNHOLY_SYMBOL_3), 0);
+});
+
+test('the door at stage 7: no cat, the High Priest\'s reminder; with one, "Hey puss!", stage 8 and inside (t1405-t1418)', async (t) => {
+  const f = fixture(t, [3294, 2779, 0]);
+  setStage(f, 7);
+  f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2, [VARBIT.KLENTER]: 1 });
+  f.give(4679);
+  await f.clickLoc(6614, 3294, 2778);
+  let lines = await f.talk();
+  assert.deepEqual(texts(lines), ['I think the High Priest mentioned something about needing a cat to enter the pyramid.']);
+  withCat(f);
+  await f.clickLoc(6614, 3294, 2778);
+  lines = await f.talk();
+  assert.deepEqual(lines.map((l) => [l[1], l[2]]), [
+    ['player', 'Hey puss! What do you reckon about that cat on the door? Do you think you can open it?'],
+    [1620, 'Meeeow.'],
+  ]);
+  f.step(3);
+  assert.equal(stage(f), 8);
+  assert.deepEqual(sourceOf(f), [3277, 9171, 0]);
+  assert.equal(f.varbit(407), 1, 'the Apmeken jar is gone from its table');
+});
+
+/** Into the pyramid at a stage, through the door with a cat (the present's copy). */
+async function enterPyramid(f, value, vars = {}) {
+  setStage(f, value);
+  f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2, [VARBIT.KLENTER]: 1, ...vars });
+  withCat(f);
+  await f.clickLoc(6614, 3294, 2778);
+  await f.talk();
+  f.step(3);
+  assert.ok(f.p.getArea()?.sourceTile, 'inside the copy');
+}
+
+test('flashback 2: the pit\'s deja-vu, the wrong jar, the apparition, its death, the jar taken, back over the pit (t1964-t2186)', async (t) => {
+  const f = fixture(t, [3294, 2779, 0]);
+  f.give(4679);
+  const jarSlot = f.slot(4679);
+  await enterPyramid(f, 8);
+  place(f, 3292, 9191);
+  await clickIn(f, 6632, 3292, 9194, 1);
+  for (let i = 0; i < 6 && !f.read(); i++) f.step();
+  assert.deepEqual(f.read(), ['box', null, 'As you go to make the jump, another sense of deja-vu sweeps over you...']);
+  f.step(5 + 2);
+  assert.equal(stage(f), 9);
+  assert.deepEqual(sourceOf(f), [3280, 9200, 0]);
+  assert.equal(f.p.getInventory().getItems()[jarSlot]?.getId(), I().UNHOLY_SYMBOL_3);
+  assert.equal(f.has(CAT_ITEM), 1, 'the cat is picked up at the deja-vu');
+  assert.equal(f.varbit(407), 0, 'in the past the jar is on its table');
+  f.step(4);
+  assert.equal(f.read()?.[2], 'I need to get the burial jar for the mistress...');
+  await f.cont(); f.step(2);
+
+  // Back over the pit without the jar: refused (t1995).
+  place(f, 3292, 9197);
+  await clickIn(f, 6633, 3292, 9196, 1);
+  let lines = await f.talk();
+  assert.deepEqual(texts(lines), ['I need to get the burial jar for the mistress...']);
+
+  place(f, 3285, 9194);
+  await clickIn(f, 6636, 3286, 9195); // the lungs
+  lines = await f.talk();
+  assert.deepEqual(texts(lines), ["I don't want this jar."]);
+  await clickIn(f, 6640, 3286, 9193); // the intestines: Apmeken's
+  f.step(2);
+  assert.equal(stage(f), 10);
+  const apparition = core.World.getNpcs().find?.((npc) => npc?.getId() === 4196 && npc.__icthlarinOwner === f.p)
+    ?? [...core.World.getNpcs()].find((npc) => npc?.getId() === 4196 && npc.__icthlarinOwner === f.p);
+  assert.ok(apparition, 'the Apmeken apparition');
+  PM.emitNpcDeath?.({ npc: apparition, npcId: 4196, killer: f.p });
+  assert.equal(stage(f), 11);
+
+  await clickIn(f, 6640, 3286, 9193);
+  f.step(2);
+  assert.deepEqual(f.read(), ['item', 4679, 'You take the burial jar.']);
+  assert.equal(f.varbit(407), 1);
+  assert.equal(f.has(4679), 1);
+  await f.cont(); f.step();
+
+  place(f, 3292, 9197);
+  await clickIn(f, 6633, 3292, 9196, 1);
+  f.step(2 + 2);
+  assert.equal(stage(f), 12);
+  assert.deepEqual(sourceOf(f), [3292, 9192, 0]);
+  assert.equal(f.p.getInventory().getItems()[jarSlot]?.getId(), 4679, 'the present\'s jar back in its slot');
+  assert.equal(f.has(4679), 1, 'the past\'s jar stays in the past');
+  assert.equal(f.has(I().UNHOLY_SYMBOL_3), 0);
+  lines = await f.talk();
+  assert.deepEqual(texts(lines), ['So I really did steal the jar. I need to return it as fast as I can.']);
+});
+
+test('returning the jar: the puzzle again, the room open (13), dropped on the table "You return the burial jar." (14, t2282-t2300)', async (t) => {
+  const f = fixture(t, [3294, 2779, 0]);
+  f.give(4679);
+  await enterPyramid(f, 12);
+  place(f, 3280, 9200);
+  await clickIn(f, 44059, 3280, 9199);
+  f.step(3);
+  for (const press of solve(board(f))) await pressTile(f, press);
+  f.step(2 + 3);
+  assert.equal(stage(f), 13);
+  place(f, 3285, 9194);
+  await f.send({ type: 'inventory_action', slot: f.slot(4679), itemId: 4679, widgetId: 149 << 16, option: 'Drop' });
+  f.step();
+  assert.equal(stage(f), 14);
+  assert.deepEqual(f.read(), ['item', 4679, 'You return the burial jar.']);
+  assert.equal(f.has(4679), 0);
+  assert.equal(f.varbit(407), 0, 'the jar back on its table');
+});
+
+test('the jar dropped anywhere else turns to dust (Wiki, Canopic jar), and the High Priest gives another', async (t) => {
+  const f = fixture(t, [3281, 2770, 0]);
+  setStage(f, 7);
+  f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2, [VARBIT.KLENTER]: 1, [VARBIT.TOKEN_GIVEN]: 1 });
+  f.give(4679);
+  await f.send({ type: 'inventory_action', slot: f.slot(4679), itemId: 4679, widgetId: 149 << 16, option: 'Drop' });
+  f.step();
+  assert.equal(f.has(4679), 0);
+  assert.ok(f.log.some((e) => e[1] === 'sendMessage' && e[2] === 'The burial jar magically turns to dust as you drop it.'));
+  const priest = f.npc(6192, [3281, 2772, 0]);
+  await f.clickNpc(priest);
+  const lines = await f.talk([5]);
+  assert.ok(lines.some((l) => l[0] === 'item' && l[1] === 4679));
+  assert.equal(f.has(4679), 1);
 });

@@ -154,7 +154,7 @@ function createPyramid(api, state, common, { STAGE, VARBIT, JARS }) {
     const v = visit(player) ?? {};
     let slot = presentId ? common.slotOf(player, presentId) : -1;
     if (slot < 0) {
-      slot = player.getInventory().getItems().findIndex((item) => !item);
+      slot = player.getInventory().getItems().findIndex((item) => !item || item.getId() === -1);
       presentId = null;
     }
     if (slot >= 0) {
@@ -176,13 +176,13 @@ function createPyramid(api, state, common, { STAGE, VARBIT, JARS }) {
       if (jar) {
         const items = inventory.getItems();
         for (let i = items.length - 1; i >= 0; i--) {
-          if (i !== swapped.slot && items[i]?.getId() === jar.item) { inventory.set(i, null); break; }
+          if (i !== swapped.slot && items[i]?.getId() === jar.item) { inventory.set(i, new api.core.Item(-1, 0)); break; }
         }
       }
     }
     const symbolSlot = inventory.getItems()[swapped.slot]?.getId() === common.ITEM.UNHOLY_SYMBOL
       ? swapped.slot : common.slotOf(player, common.ITEM.UNHOLY_SYMBOL);
-    if (symbolSlot >= 0) inventory.set(symbolSlot, swapped.presentId ? new api.core.Item(swapped.presentId, 1) : null);
+    if (symbolSlot >= 0) inventory.set(symbolSlot, new api.core.Item(swapped.presentId ?? -1, swapped.presentId ? 1 : 0));
     else if (swapped.presentId) inventory.adds(swapped.presentId, 1);
     inventory.refreshItems();
   }
@@ -624,7 +624,7 @@ function createPyramid(api, state, common, { STAGE, VARBIT, JARS }) {
     const v = visit(player);
     const slot = common.slotOf(player, common.ITEM.UNHOLY_SYMBOL);
     if (slot < 0) return true;
-    player.getInventory().set(slot, null);
+    player.getInventory().set(slot, new Item(-1, 0));
     player.getInventory().refreshItems();
     // The present's holy symbol comes back into this slot when the flashback ends.
     if (v?.swapped) v.swapped.slot = slot;

@@ -368,6 +368,66 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
   }
   const pendingAnswer = new WeakMap();
 
+
+  // ---------------------------------------------------------------------------
+  // The Sphinx's riddle (the dump's two seams)
+  // ---------------------------------------------------------------------------
+
+  const ACCUSED_VARIANT =
+    "figuring-out-what-on-gielinor-is-going-on-being-accused-of-robbing-a-grave-after-answering-the-sphinx-s-riddle";
+  const clone = (step) => JSON.parse(JSON.stringify(step));
+
+  /**
+   * The Wiki gives answers 12 and 14 the "Are you sure?" flow of 7; the dump gives them only a "Same as answering 7"
+   * action, so each plays 7's steps after its own line.
+   */
+  function replaySameAsAnswer(choice) {
+    const options = choice.options ?? [];
+    const byNumber = new Map(options.map((option) => [String(option.text ?? "").replace(/\.$/, "").trim(), option]));
+    return {
+      ...choice,
+      options: options.map((option) => {
+        const only = option.steps?.length === 1 ? option.steps[0] : null;
+        const same = only?.type === "action" && /^Same as answering (\S+?)\b/i.exec(String(only.text ?? ""));
+        const target = same ? byNumber.get(same[1]) : null;
+        if (!target || target === option) return option;
+        const tail = (target.steps ?? []).filter((step, i) => !(i === 0 && typeof step.player === "string"));
+        return { ...option, steps: [{ player: option.text }, ...tail.map(clone)] };
+      }),
+    };
+  }
+
+  /** The riddle's two endings carry on (the Wiki's {{tact|continue}}) into the grave-robbing accusation. */
+  function continuesIntoAccusation(step, previous) {
+    if (step?.type !== "jump" || !/^continue/i.test(String(step.reference ?? "")) || Array.isArray(step.steps)) return false;
+    const text = previous?.type === "line" ? String(previous.text ?? "") : "";
+    return text === "With your grave robbing problem?" || /You're a grave robber\.$/.test(text);
+  }
+
+  function riddle(steps) {
+    if (!Array.isArray(steps)) return steps;
+    return steps.map((step, index) => {
+      if (continuesIntoAccusation(step, steps[index - 1])) {
+        const accused = require("../QuestRuntime").loadTranscripts(api)?.[PAGE]?.variants?.[ACCUSED_VARIANT];
+        return Array.isArray(accused) && accused.length ? { ...step, steps: accused.map(clone) } : step;
+      }
+      if (step.type === "choice") {
+        return replaySameAsAnswer({ ...step, options: (step.options ?? []).map((option) => ({ ...option, steps: riddle(option.steps ?? []) })) });
+      }
+      if (Array.isArray(step.steps)) return { ...step, steps: riddle(step.steps) };
+      return step;
+    });
+  }
+
+  /** Talk-to on the Sphinx while the riddle is asked: the variant with its seams joined. */
+  function sphinxTalkTo(event) {
+    const { player } = event;
+    if (!SPHINX.has(event.npcId) || stage(player) !== STAGE.SEE_SPHINX || get(player, VARBIT.CAT_SAFE)) return false;
+    event.handled = true;
+    common.play(player, event.npcId, "figuring-out-what-on-gielinor-is-going-on-asking-the-sphinx-for-help", riddle, event.npc);
+    return true;
+  }
+
   // ---------------------------------------------------------------------------
   // Lines: live's heads and animations, and the varbits that move with them
   // ---------------------------------------------------------------------------
@@ -422,7 +482,7 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
   }
 
   return {
-    selectVariant, answerCondition, handleAction, handleHook, handleChoice, handleLine, OWNED, KLENTER,
+    selectVariant, answerCondition, handleAction, handleHook, handleChoice, handleLine, sphinxTalkTo, OWNED, KLENTER,
     _test: { BOXES, ON_LINE, lineKey },
   };
 }

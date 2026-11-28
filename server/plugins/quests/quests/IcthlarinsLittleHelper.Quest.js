@@ -142,6 +142,7 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
 
   api.onNpcDialogueVariant(talk.selectVariant);
   api.onNpcDialogueCondition(talk.answerCondition);
+  api.onNpcInteraction("Sphinx", { "Talk-to": talk.sphinxTalkTo });
   api.onCustomEvent("npc-dialogue:hook", talk.handleHook);
   api.onCustomEvent("npc-dialogue:action", action);
   api.onCustomEvent("npc-dialogue:choice", talk.handleChoice);

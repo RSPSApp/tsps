@@ -1738,6 +1738,24 @@ test('COTS door scene spawns the waiting bandits inside the house', () => {
     [[3260, 3400], [3261, 3398], [3261, 3402], [3263, 3399], [3263, 3401]].sort());
 });
 
+test('COTS Unmark puts a marked guard back only while the guards are being marked', () => {
+  const { h, p } = childrenOfTheSun();
+  const { Unmark } = h.namedNpcs.get('Guard');
+  p.setAttribute('quest.children_of_the_sun.guards', 0b1111);
+
+  h.quest.setStage(p, 24);
+  const before = h.npcs.length;
+  assert.equal(Unmark({ player: p, npcId: N.GUARD_191 }), true);
+  assert.equal(h.npcs.length, before, 'no guard is respawned in Varrock Square after the quest');
+  assert.equal(p.getAttribute('quest.children_of_the_sun.guards'), 0b1111, 'the marks are left as they were');
+
+  h.quest.setStage(p, 14);
+  Unmark({ player: p, npcId: N.GUARD_191 });
+  assert.equal(h.npcs.at(-1).getId(), N.GUARD_190, 'the guard offers Mark again');
+  assert.equal(p.getAttribute('quest.children_of_the_sun.guards'), 0b1101);
+  assert.equal(h.quest.getStage(p), 12, 'a bandit is unmarked again');
+});
+
 test('QuestScenes instances: the copy, translated tiles, and walking out, logout, death and a server stop all land on the real map', () => {
   const { createQuestScenes } = require('../plugins/quests/QuestScenes');
   const { h, p } = tp();

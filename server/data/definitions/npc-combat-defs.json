@@ -938,7 +938,8 @@
     "14407": {"name": "Emissary Archer", "projectile": 9, "launchGraphic": 18, "anims": {"attack": 426}},
     "14408": {"name": "Emissary Archer", "projectile": 9, "launchGraphic": 18, "anims": {"attack": 426}},
     "14665": {"name": "Guard", "projectile": 9, "launchGraphic": 18, "anims": {"attack": 426}},
-    "14666": {"name": "Guard", "projectile": 9, "launchGraphic": 18, "anims": {"attack": 426}}
+    "14666": {"name": "Guard", "projectile": 9, "launchGraphic": 18, "anims": {"attack": 426}},
+    "11239": {"name": "Abyssal demon", "anims": {"attack": 1537, "block": 2309, "death": 1538}}
   },
   "refs": {
     "$comment": "Additional NPC combat sequences inferred from cache-backed reference sequence names.",

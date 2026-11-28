@@ -276,3 +276,22 @@ The Wiki put the 1v1 Tournament Guide (11672) and the Duel Guide (11673) on one 
 - Duel Guide at (3368, 3269).
 
 Both now spawn there with `wanderRadius` 0.
+
+## Wilderness Slayer Cave
+
+The cave's monsters have their own NPC ids, and the drop tables are keyed on them. The Wiki import chose the ordinary
+id for three of them (a `{{LocLine}}` row names no version, so it took the id used most), and left out the Wiki pins
+its sparse map square couldn't align.
+
+| Monster | Was | Now |
+| --- | --- | --- |
+| Abyssal demon | 8 × 415 | 8 × 11239 |
+| Dust devil | 9 × 423 | 9 × 11238 |
+| Greater Nechryael | 1 × 7278 | 8 × 11240 |
+| Jelly | none | 14 × 11241 |
+
+The tiles are the Wiki's pins. rsprox captures show 11239 and 11240 in those rooms (11240 on the eight pins); none
+visits the dust devils or jellies. The Wiki lists five jelly colours there (11241-11245) without saying which stands
+where, so all use 11241. No capture fights 11239 or 11241: they take the ordinary monster's block animation
+(`npc-combat-defs.json`, abyssal demon) and sounds (`SOUNDS_AS` in `scripts/mine-npc-combat-sounds.mjs`).
+Check: `node --test tests/wilderness-slayer-cave-npcs.test.cjs`.

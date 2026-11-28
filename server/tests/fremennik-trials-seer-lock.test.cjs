@@ -298,3 +298,13 @@ test("Peer's bank spell banks locked inventory slots too, so the door then lets 
   await openDoor(f);
   assert.ok(atTile(f, INSIDE), JSON.stringify(f.messages));
 });
+
+test("the FIRE riddle reads as live sends it (rsprox 1002313 t6943)", async (t) => {
+  const f = actor(t, { riddle: "FIRE" });
+  await toMenu(f);
+  await choose(f, "Read the riddle");
+  assert.deepEqual(shown(f), { who: "StatementDialogue",
+    text: "My first is in fish, but not in the sea.<br>My second in birds, but not in a tree.<br>My third is in doors, but not in a hall.<br>My last is in everything, but not nothing at all." });
+  await continueLine(f);
+  assert.deepEqual(shown(f), { who: "StatementDialogue", text: "My whole cannot die, as long as it has food.<br>What am I?" });
+});

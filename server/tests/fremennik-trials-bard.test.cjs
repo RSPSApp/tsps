@@ -530,3 +530,14 @@ test("after the Bard's trial Askeladden plays his own talk (rsprox 1002313 t2883
   const f = actor(t, { at: [2660, 3660, 0], bard: 2 });
   assert.equal(variantFor(f, 8402), "the-non-council-members-askeladden");
 });
+
+test("the fleece used on the wheel spins two ticks after arrival (rsprox 1002313 t317 -> t319)", async (t) => {
+  const f = actor(t, { at: WHEEL.stand, items: [I.GOLDEN_FLEECE] });
+  await f.connection.dispatch([{ type: "item_on_object", objectId: WHEEL.id, x: WHEEL.x, y: WHEEL.y, itemId: I.GOLDEN_FLEECE, slot: 0, widgetId: core.Inventory.INTERFACE_ID }]);
+  // Standing at the wheel, the use is handled on the next tick: that is the arrival.
+  const arrived = f.tick + 1;
+  ticks(f, 2);
+  assert.ok(!f.anims.some((a) => a.id === 13138), "no spin on the arrival tick or the one after");
+  for (let i = 0; i < 4 && !f.anims.some((a) => a.id === 13138); i++) tick(f);
+  assert.equal(f.anims.find((a) => a.id === 13138).tick - arrived, 2);
+});

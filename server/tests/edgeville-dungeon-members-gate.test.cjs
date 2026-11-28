@@ -103,6 +103,7 @@ for (const [direction, from, to] of [["north, into the Wilderness", SOUTH, NORTH
     assert.ok(objectAt(OPEN_L, LX, Y + 1) && objectAt(OPEN_R, RX, Y + 1), "the actionless open leaves stand north");
     assert.equal(objectAt(GATE_L, LX, Y), null, "the closed leaf is gone");
     assert.deepEqual(sounds.filter((id) => id === IRON_DOOR_OPEN), [IRON_DOOR_OPEN], "iron_door_open, once");
+    assert.deepEqual(at(player), to, "the opener is across on the opening tick (live 144, 399)");
 
     tick(2);
     assertShut();

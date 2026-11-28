@@ -221,7 +221,6 @@ test('a picked punch the druid cannot walk in for becomes a cast', (t) => {
   const { p, npc } = fight(t, { dy: 3 });
   const method = CombatFactory.getMethod(npc);
   method.bind = null;
-  t.mock.method(druid._test, 'picksBind', () => false);
   t.mock.method(core.Misc, 'randomInclusive', () => 1); // the roll: a punch
   assert.equal(method.pick(npc, p), false, 'a punch was picked');
   for (let i = 0; i < 3; i++) {

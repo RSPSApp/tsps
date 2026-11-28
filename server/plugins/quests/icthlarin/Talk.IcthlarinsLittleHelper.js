@@ -235,7 +235,8 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
     "4TL_gG": { run: (p) => giveJar(p) },
     Pu6Za8: { run: (p) => common.pickUpCat(p) }, // "You pick up your cat." (t466)
     // Klenter's own page after the quest: "Klenter disappears before you can ask him anything." (t3656)
-    o5xGHT: { run: (p) => { if (complete(p)) state.set(p, VARBIT.KLENTER, 0); } },
+    o5xGHT: { statement: true, run: (p) => { if (complete(p)) state.set(p, VARBIT.KLENTER, 0); } },
+    qsHdkK: { statement: true }, // "The spirit tries to converse with you, but you can't understand him." (t3647)
   };
 
   function saltItem(player) {
@@ -314,6 +315,7 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
     const item = box.item?.(event.player);
     box.run?.(event.player);
     if (Number.isInteger(item)) event.box = { items: [item] };
+    else if (box.statement) event.box = { statement: true };
     return true;
   }
 
@@ -420,6 +422,36 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
     });
   }
 
+  /**
+   * Jex is indexed to Contact!'s page, so the variant selector never sees him: his line on this page ("Ah, the
+   * defiler...") plays from the arrival to the token (stages 3-6); from the jar's return his own page answers.
+   */
+  function jexTalkTo(event) {
+    const { player } = event;
+    if (!JEX.has(event.npcId)) return false;
+    const s = stage(player);
+    if (s < STAGE.IN_SOPHANEM || s > STAGE.SEE_HIGH_PRIEST) return false;
+    event.handled = true;
+    common.play(player, event.npcId, "city-of-the-dead-talking-to-jex", undefined, event.npc);
+    return true;
+  }
+
+  /**
+   * Klenter's shade is multinpc 1994 (948 while varbit 449 shows him), which the dialogue index does not list: his
+   * quest talk (t534, t1006-t1026) and, after the quest, his own page's farewell (t3645-t3656).
+   */
+  function klenterTalkTo(event) {
+    const { player } = event;
+    if (!KLENTER.has(event.npcId) || !get(player, VARBIT.KLENTER)) return false;
+    event.handled = true;
+    if (complete(player)) {
+      common.playPage(player, 948, "Klenter", "initial-dialogue-after-finishing-icthlarin-s-little-helper", undefined, event.npc);
+    } else {
+      common.play(player, 948, "city-of-the-dead-talking-to-klenter", undefined, event.npc);
+    }
+    return true;
+  }
+
   /** Talk-to on the Sphinx while the riddle is asked: the variant with its seams joined. */
   function sphinxTalkTo(event) {
     const { player } = event;
@@ -483,7 +515,7 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
   }
 
   return {
-    selectVariant, answerCondition, handleAction, handleHook, handleChoice, handleLine, sphinxTalkTo, OWNED, KLENTER,
+    selectVariant, answerCondition, handleAction, handleHook, handleChoice, handleLine, sphinxTalkTo, jexTalkTo, klenterTalkTo, OWNED, KLENTER,
     _test: { BOXES, ON_LINE, lineKey },
   };
 }

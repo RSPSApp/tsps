@@ -108,6 +108,11 @@ function createCommon(api, state) {
     return startTranscript(api, player, npcId, PAGE, variant, select, npc);
   }
 
+  /** Plays a variant of another page (an NPC's own transcript). */
+  function playPage(player, npcId, page, variant, select, npc = null) {
+    return startTranscript(api, player, npcId, page, variant, select, npc);
+  }
+
   /** `{ text }` messagebox, `{ item, text }` objectbox, then `then` as the last is continued. */
   function chain(player, entries, then) {
     const builder = new DialogueChainBuilder();
@@ -254,7 +259,7 @@ function createCommon(api, state) {
 
   return {
     PAGE, FADE, SOUND, SEQ, SPOTANIM, ITEM, CAT_ITEMS, CAT_NPCS, Location, NpcIdentifiers, ObjectIdentifiers,
-    held, holdsAny, freeSlots, slotOf, replaceInSlot, take, play, chain, mesbox, itemBox, later, fade, flashbackOverlay,
+    held, holdsAny, freeSlots, slotOf, replaceInSlot, take, play, playPage, chain, mesbox, itemBox, later, fade, flashbackOverlay,
     minimap, sfx, seq, sound, animate, hold, release, lock,
     catFollower, hasCat, pickUpCat, dropCat, loseCat, catItemSlot, wearingGhostspeak, hasSupplies,
   };

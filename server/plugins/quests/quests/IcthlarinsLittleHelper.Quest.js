@@ -49,10 +49,11 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
   pyramid.setPuzzle(puzzle);
   pyramid.setCeremonySetup(ceremony.ceremonySetup);
 
-  /** Login: an old save mapped once, every quest varbit sent again. */
+  /** Login: an old save mapped once, every quest varbit sent again, quest items gone once it is complete. */
   function login({ player }) {
     state.migrate(player);
     state.resend(player);
+    if (quest.isComplete(player)) ceremony.clearQuestItems(player);
     refreshQuestList(player);
   }
 
@@ -143,6 +144,8 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
   api.onNpcDialogueVariant(talk.selectVariant);
   api.onNpcDialogueCondition(talk.answerCondition);
   api.onNpcInteraction("Sphinx", { "Talk-to": talk.sphinxTalkTo });
+  api.onNpcInteraction("Jex", { "Talk-to": talk.jexTalkTo });
+  api.onNpcInteraction("Klenter", { "Talk-to": talk.klenterTalkTo });
   api.onCustomEvent("npc-dialogue:hook", talk.handleHook);
   api.onCustomEvent("npc-dialogue:action", action);
   api.onCustomEvent("npc-dialogue:choice", talk.handleChoice);
@@ -160,4 +163,5 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
   api.onNpcDeath(npcDied);
   api.onPlayerDeath(pyramid.died);
   api.onPlayerLogin(login);
+  api.onPlayerLogout(pyramid.logout);
 };

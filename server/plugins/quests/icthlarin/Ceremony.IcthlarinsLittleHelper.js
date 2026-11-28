@@ -264,10 +264,15 @@ function createCeremony(api, state, common, { STAGE, VARBIT, JARS, pyramid, getQ
 
   /** The High Priest's trinket: the amulet, the quest's rewards and scroll, the quest-only items gone. */
   function finish(player) {
+    clearQuestItems(player);
+    getQuest().complete(player);
+  }
+
+  /** The quest's own items go with it (a save from before this cleanup loses them at its next login). */
+  function clearQuestItems(player) {
     for (const jar of JARS) if (jar) removeAll(player, jar.item);
     for (const id of [common.ITEM.TOKEN, common.ITEM.HOLY_SYMBOL, common.ITEM.UNHOLY_SYMBOL, common.ITEM.BUCKET_OF_SAP,
       common.ITEM.PILE_OF_SALT, common.ITEM.BUCKET_OF_SALTWATER, common.ITEM.LINEN]) removeAll(player, id);
-    getQuest().complete(player);
   }
 
   function removeAll(player, itemId) {
@@ -289,7 +294,7 @@ function createCeremony(api, state, common, { STAGE, VARBIT, JARS, pyramid, getQ
 
   return {
     collectWater, useSuntrap, saltwaterOnSuntrap, knifeOnTree, emptyBucket, ceremonySetup, eastDoor, sceneLine,
-    priestDied, finish, handleAction, WATER, SUNTRAP, EVERGREEN, NPC,
+    priestDied, finish, clearQuestItems, handleAction, WATER, SUNTRAP, EVERGREEN, NPC,
   };
 }
 

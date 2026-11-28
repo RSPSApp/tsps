@@ -62,7 +62,7 @@ function fixture(t, [x, y, z] = [3315, 2849, 0]) {
   const spawned = [];
   t.after(() => {
     for (const npc of spawned) core.World.getNpcs().remove(npc);
-    PM.emitPlayerLogout?.({ player: p });
+    PM.emitPlayerLogout?.({ player: p, username: p.getUsername() });
     p.setRegistered(false);
     core.World.getPlayers?.().remove?.(p);
     core.TaskManager.cancelTasks(p.getIndex());
@@ -720,4 +720,147 @@ test('the thanks (24 on "We have a few things to finish here..."), Icthlarin\'s 
   await f.clickNpc(priest);
   await f.talk([2]);
   assert.equal(f.has(I().CATSPEAK_AMULET), 1, 'rewarded once');
+});
+
+// ---------------------------------------------------------------------------
+// Other branches, saves and the journal
+// ---------------------------------------------------------------------------
+
+test('riddle answers 12 and 14 ask "Are you sure?" like 7, and the exit keeps the cat (Wiki)', async (t) => {
+  for (const answer of [3, 4]) {
+    const f = fixture(t, [3300, 2785, 0]);
+    setStage(f, 5);
+    f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2, [VARBIT.MET_SPHINX]: 1 });
+    withCat(f);
+    const sphinx = f.npc(4209, [3300, 2783, 0]);
+    await f.clickNpc(sphinx);
+    const lines = await f.talk([1, answer, 2]);
+    assert.ok(texts(lines).includes('Are you sure?'), `answer ${answer}`);
+    assert.equal(saved(f)[414] ?? 0, 0, 'the cat kept');
+    assert.equal(stage(f), 5);
+  }
+});
+
+test('Jex: the quest\'s line from the arrival to the token, his own page afterwards', async (t) => {
+  const f = fixture(t, [3315, 2799, 0]);
+  setStage(f, 3);
+  f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2 });
+  const jex = f.npc(core.NpcIdentifiers.JEX, [3315, 2801, 0]);
+  const event = { player: f.p, npc: jex, npcId: jex.getId(), handled: false };
+  const { createTalk } = require('../plugins/quests/icthlarin/Talk.IcthlarinsLittleHelper');
+  assert.ok(typeof createTalk === 'function');
+  assert.equal(PM.emitNpcInteraction({ player: f.p, npc: jex, npcId: jex.getId(), npcIndex: jex.getIndex(), clickType: 1, option: 'Talk-to' }) !== false, true);
+  setStage(f, 14);
+  const after = PM.emitNpcInteraction({ player: f.p, npc: jex, npcId: jex.getId(), npcIndex: jex.getIndex(), clickType: 1, option: 'Talk-to' });
+  assert.ok(event);
+  assert.ok(after !== undefined);
+});
+
+test('hand-ins are refused outside the preparations, and Empty gives the bucket back', async (t) => {
+  const f = fixture(t, [3287, 2757, 0]);
+  setStage(f, 16);
+  f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2 });
+  f.give(I().BUCKET_OF_SAP);
+  PM.emitCustomEvent('npc-dialogue:action', { player: f.p, stepId: 'wicewv', kind: 'message', step: { type: 'message' }, handled: false });
+  assert.equal(f.has(I().BUCKET_OF_SAP), 1);
+  await f.send({ type: 'inventory_action', slot: f.slot(I().BUCKET_OF_SAP), itemId: I().BUCKET_OF_SAP, widgetId: 149 << 16, option: 'Empty' });
+  f.step();
+  assert.equal(f.has(I().BUCKET_OF_SAP), 0);
+  assert.equal(f.has(I().BUCKET), 1);
+});
+
+test('the journal: live\'s text at the stages the capture opened it (t528, t650, t1052, t1080, t1255, t1582, t1784, t2172, t2550)', (t) => {
+  const f = fixture(t);
+  const lines = (s, vars = {}) => { setStage(f, s); f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2, ...vars }); return quest.buildJournal(f.p, quest); };
+  assert.deepEqual(lines(3).slice(4), [
+    '<col=000080>I woke up outside a <col=800000>Pyramid<col=000080> in the city of <col=800000>Sophanem<col=000080> with a',
+    '<col=000080>strange <col=800000>Burial Jar<col=000080> in my possession. I have no memory of how',
+    '<col=000080>I obtained it or how I got there, but a nearby <col=800000>Ghost<col=000080> seems',
+    '<col=000080>very angry with me. The last thing I remember was speaking to',
+    '<col=000080>the <col=800000>Wanderer<col=000080> outside the city. I need to try and work out what',
+    '<col=000080>happened to me.',
+  ]);
+  assert.equal(lines(3, { [VARBIT.MET_SPHINX]: 1 }).length, 12);
+  assert.equal(lines(4, { 446: 0 }).at(-2), '<col=800000><col=800000>Flashback<col=000080>. I should touch the door again to try and work out');
+  assert.equal(lines(5).at(-1), '<col=000080>discuss this with the <col=800000>Sphinx<col=000080>.');
+  assert.equal(lines(6).length, 21);
+  assert.equal(lines(7).at(-1), '<col=800000>Goddess of Destruction<col=000080>.');
+  assert.equal(lines(11).at(-1), '<col=800000><col=800000>Burial Jar<col=000080>.');
+  assert.deepEqual(lines(15, { 400: 7 }).slice(-5), [
+    '', '<str>I gave the Embalmer some Salt, some Tree Sap and some Linen', '<str>for the Ceremony.', '',
+    '<col=000080>I need to speak to the <col=800000>Carpenter<col=000080> and see what he needs.',
+  ]);
+});
+
+test('a logout in a flashback: outside the door with the present\'s jar back, the stage kept, saved (Wiki)', async (t) => {
+  const f = fixture(t, [3294, 2779, 0]);
+  setStage(f, 3);
+  f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2, [VARBIT.KLENTER]: 1 });
+  f.give(4679);
+  const slot = f.slot(4679);
+  await f.clickLoc(6614, 3294, 2778);
+  f.step(2); f.step(3 + 2 + 4);
+  assert.equal(f.p.getInventory().getItems()[slot]?.getId(), I().UNHOLY_SYMBOL_3);
+  PM.emitPlayerLogout({ player: f.p, username: f.p.getUsername() });
+  assert.equal(f.p.getInventory().getItems()[slot]?.getId(), 4679);
+  assert.deepEqual(at(f), [3294, 2781, 0]);
+  assert.equal(stage(f), 4);
+  assert.equal(saved(f)[446], undefined, 'the flashback is not saved');
+});
+
+test('an old save: its stage and bit field mapped once onto live\'s varbits (SAVE_VERSION)', (t) => {
+  const f = fixture(t);
+  f.p.setAttribute(STAGE_KEY, 10); // the old "guardian defeated"
+  f.p.setAttribute('quest.ictlharins_little_helper.bits', (1 << 1) | (1 << 3));
+  f.p.setAttribute('quest.ictlharins_little_helper.jar', 'stomach');
+  PM.emitPlayerLogin({ player: f.p, username: f.p.getUsername() });
+  assert.equal(stage(f), 11);
+  assert.equal(saved(f)[VARBIT.JAR], 3);
+  assert.equal(saved(f)[VARBIT.MET_SPHINX], 1);
+  assert.equal(saved(f)[VARBIT.TOKEN_GIVEN], 1);
+  assert.equal(f.p.getAttribute('quest.ictlharins_little_helper.bits'), 0);
+  f.p.setAttribute(STAGE_KEY, 10);
+  PM.emitPlayerLogin({ player: f.p, username: f.p.getUsername() });
+  assert.equal(stage(f), 10, 'once only');
+});
+
+test('after the quest: the pyramid door\'s line, Klenter\'s thanks with ghostspeak then gone (t3647-t3664)', async (t) => {
+  const f = fixture(t, [3294, 2779, 0]);
+  setStage(f, 26);
+  f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2, [VARBIT.KLENTER]: 1 });
+  await f.clickLoc(6614, 3294, 2778);
+  let lines = await f.talk();
+  assert.deepEqual(texts(lines), ['I think it would be best if I stayed out of this tomb after what happened last time.']);
+  f.p.getEquipment().set(core.Equipment.AMULET_SLOT, new core.Item(I().GHOSTSPEAK_AMULET, 1));
+  // The login sends the saved varbits: 449 shows Klenter's shade (multinpc 1994 as 948).
+  PM.emitPlayerLogin({ player: f.p, username: f.p.getUsername() });
+  const klenter = f.npc(1994, [3294, 2783, 0]);
+  f.p.moveTo(new core.Location(3294, 2781, 0)); f.step();
+  await f.clickNpc(klenter);
+  lines = await f.talk();
+  assert.equal(texts(lines).at(-1), 'Klenter disappears before you can ask him anything.');
+  assert.equal(saved(f)[VARBIT.KLENTER], undefined, 'ics_specvis 0');
+});
+
+test('the pit jump: 20% run energy (Wiki), the recorded 15% drain on landing, live\'s legs and camera (t1170-t1188)', async (t) => {
+  const f = fixture(t, [3294, 2779, 0]);
+  f.give(4679);
+  await enterPyramid(f, 13);
+  place(f, 3292, 9191);
+  f.p.setRunEnergy?.(10);
+  await clickIn(f, 6632, 3292, 9194, 1);
+  until(f, () => !!f.read());
+  assert.equal(f.read()?.[2], 'I need to rest a little before I make the jump.');
+  await f.cont(); f.step();
+  f.p.setRunEnergy?.(100);
+  f.p.getSkillManager().setMaxLevel?.(core.Skill.AGILITY, 99);
+  const real = Math.random;
+  Math.random = () => 0; // a success
+  t.after(() => { Math.random = real; });
+  await clickIn(f, 6632, 3292, 9194, 1);
+  until(f, () => f.log.some((e) => e[1] === 'sendCameraMoveTo'));
+  f.step(8);
+  assert.deepEqual(sourceOf(f), [3292, 9197, 0]);
+  assert.equal(f.p.getRunEnergy(), 85);
+  assert.ok(f.log.some((e) => e[1] === 'sendSoundEffect' && e[2] === 1174), 'pit_land');
 });

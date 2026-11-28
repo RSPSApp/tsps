@@ -695,6 +695,11 @@ function createPyramid(api, state, common, { STAGE, VARBIT, JARS }) {
     return location.getX() >= box.minX && location.getX() <= box.maxX && location.getY() >= box.minY && location.getY() <= box.maxY;
   }
 
+  /** A logout inside the copy: out at the door with the present's item back (Wiki, Flashback Mechanics). */
+  function logout({ player }) {
+    if (inPyramid(player)) Scenes.end(player, true);
+  }
+
   /** Wiki (Flashback Mechanics): dying in a flashback costs the cat. */
   function died({ player }) {
     if (!player || !inPyramid(player) || !inFlashback(player)) return;
@@ -713,7 +718,7 @@ function createPyramid(api, state, common, { STAGE, VARBIT, JARS }) {
   return {
     LOC, Scenes, build, inPyramid, inFlashback, visit, syncJarTable, enterFlashback, leaveFlashback, toTown,
     pyramidDoor, catOpensDoor, ladder, leaveFlashbackEarly, pit, westDoor, eastDoor, jarClicked, apparitionDied,
-    sarcophagus, symbolOnSarcophagus, symbolOnTable, dropJar, died, setPuzzle, setCeremonySetup, onlyLines,
+    sarcophagus, symbolOnSarcophagus, symbolOnTable, dropJar, died, logout, setPuzzle, setCeremonySetup, onlyLines,
     restorePresent, EXIT, ENTRY, SOUTH_OF_PIT, EAST_ROOM,
     _test: { jumpChance, resumeAt, TELEPORT_BLOCKED, MUMMIES, SCARAB_ZONE, RECOVERY_ATTRIBUTE },
   };
